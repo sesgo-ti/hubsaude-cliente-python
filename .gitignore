@@ -1,0 +1,40 @@
+# Build output
+target/
+
+# IDE - IntelliJ IDEA
+*.iml
+.idea/
+
+# IDE - Eclipse
+.classpath
+.project
+.settings/
+
+# IDE - VS Code
+.vscode/
+
+# IDE - NetBeans
+nbproject/
+build/
+nbbuild/
+nbdist/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Python
+venv/
+**/__pycache__/
+
+# Logs
+*.log
+
+# Package files
+*.jar
+*.war
+*.ear
+
+# Ignore local environment files
+.env
+.env.local

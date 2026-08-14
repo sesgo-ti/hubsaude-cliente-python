@@ -1,0 +1,152 @@
+########################################################################
+# pyproject.toml
+#
+# Equivalente Python ao "pom.xml" do projeto Java original.
+# Reúne em um único arquivo o que no projeto Java estava espalhado em:
+#   - pom.xml                    -> [project] / [build-system] / dependências
+#   - checkstyle-formatacao.xml  -> [tool.ruff] / [tool.black] (formatação/lint)
+#   - spotbugs-exclude.xml       -> [tool.bandit] / [tool.mypy] (análise estática)
+#   - owasp-suppression.xml      -> supressões do pip-audit (arquivo externo,
+#                                    ver seção de segurança no final)
+#
+# OBS: por enquanto isso é só PLACEHOLDER/ESTRUTURA. As seções abaixo
+# estão comentadas com a intenção de cada uma; preencher conforme o
+# projeto for avançando.
+########################################################################
+
+
+# ------------------------------------------------------------------
+# [build-system]
+# Equivalente ao <build> do pom.xml (motor de build do projeto).
+# Define qual ferramenta empacota/instala o projeto (ex: setuptools,
+# hatchling, poetry-core). Ainda não decidido.
+# ------------------------------------------------------------------
+# [build-system]
+# requires = ["setuptools>=68.0"]
+# build-backend = "setuptools.build_meta"
+
+
+# ------------------------------------------------------------------
+# [project]
+# Equivalente ao bloco <groupId>/<artifactId>/<version>/<dependencies>
+# do pom.xml. Metadados principais do projeto.
+# ------------------------------------------------------------------
+# [project]
+# name = "meu-projeto"
+# version = "0.1.0"
+# description = "Versão Python do projeto Java <nome-original>"
+# readme = "README.md"
+# requires-python = ">=3.11"
+# license = { file = "LICENSE" }
+# authors = [
+#     { name = "TODO" }
+# ]
+#
+# # Equivalente às <dependencies> do pom.xml
+# dependencies = [
+#     # "nome-da-lib>=x.y.z",
+# ]
+#
+# # Equivalente aos profiles/plugins de teste do pom.xml (ex: surefire)
+# [project.optional-dependencies]
+# dev = [
+#     # "pytest",
+#     # "pytest-cov",
+# ]
+
+
+# ------------------------------------------------------------------
+# [tool.setuptools] (ou equivalente do backend escolhido)
+# Equivalente à seção <build><sourceDirectory> do pom.xml, apontando
+# onde fica o código-fonte (pasta "src").
+# ------------------------------------------------------------------
+# [tool.setuptools.packages.find]
+# where = ["src"]
+
+
+# ------------------------------------------------------------------
+# [tool.ruff] / [tool.black]
+# Equivalente ao checkstyle-formatacao.xml (regras de estilo e
+# formatação de código). Ruff cobre lint + formatação; Black cobre
+# só formatação, caso prefira separar.
+# ------------------------------------------------------------------
+# [tool.ruff]
+# line-length = 120
+# src = ["src"]
+#
+# [tool.ruff.lint]
+# select = ["E", "F", "I"]  # TODO: definir regras equivalentes ao checkstyle
+#
+# [tool.black]
+# line-length = 120
+
+
+# ------------------------------------------------------------------
+# [tool.mypy]
+# Sem equivalente direto no Java (tipagem é nativa lá), mas cumpre
+# parte do papel do SpotBugs ao pegar erros antes da execução
+# (verificação estática de tipos).
+# ------------------------------------------------------------------
+# [tool.mypy]
+# python_version = "3.11"
+# strict = true
+# mypy_path = "src"
+
+
+# ------------------------------------------------------------------
+# [tool.bandit]
+# Equivalente ao spotbugs-exclude.xml (análise estática focada em
+# padrões de código inseguro/bugs). Bandit é o análogo mais próximo
+# do SpotBugs no ecossistema Python.
+#
+# ATIVO (diferente das seções acima, esta já está decidida — ver
+# discussão de tooling de segurança).
+# ------------------------------------------------------------------
+# [tool.bandit]
+# Só varre o código de produção, não os testes
+# targets = ["src"]
+# exclude_dirs = ["tests", ".venv", "dist"]
+
+# Supressões globais equivalentes ao spotbugs-exclude.xml.
+# Prefira "# nosec <código> -- justificativa" inline no código a
+# adicionar itens aqui; use esta lista só para casos amplos e
+# comprovadamente aceitáveis em todo o projeto.
+# skips = []  # TODO: inserir o correto (mapear supressões reais do spotbugs-exclude.xml, se ainda fizerem sentido)
+
+# [tool.bandit.assert_used]
+# B101 (uso de "assert"): esperado em arquivos de teste, não em produção
+# skips = ["*_test.py", "test_*.py"]
+
+
+# ------------------------------------------------------------------
+# [tool.pylint]
+# Equivalente ao config/pmd-rules.xml (regras de qualidade/boas
+# práticas de código, code smells, complexidade, etc). No Java isso
+# era papel do PMD; o Ruff cobre mais lint básico/estilo, então o
+# Pylint fica responsável pela parte "boas práticas" que o PMD tinha.
+# ------------------------------------------------------------------
+# [tool.pylint.main]
+# # TODO: mapear regras equivalentes ao pmd-rules.xml
+#
+# [tool.pylint."messages control"]
+# disable = []
+
+
+# ------------------------------------------------------------------
+# Segurança de dependências (equivalente ao owasp-suppression.xml)
+# No Java, o OWASP Dependency-Check escaneia as dependências do
+# pom.xml. No Python, a ferramenta equivalente costuma ser o
+# pip-audit (ou Safety), com supressões em arquivo próprio, não
+# dentro do pyproject.toml:
+#   - owasp-suppression.xml  ->  pip-audit-suppressions.toml (ou .safety-policy.yml)
+# Ainda não criado; apenas anotação de intenção aqui.
+# ------------------------------------------------------------------
+
+
+# ------------------------------------------------------------------
+# [tool.pytest.ini_options]
+# Equivalente à configuração do plugin surefire/failsafe do Maven
+# (execução de testes).
+# ------------------------------------------------------------------
+# [tool.pytest.ini_options]
+# testpaths = ["tests"]
