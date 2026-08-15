@@ -24,8 +24,13 @@ nbdist/
 Thumbs.db
 
 # Python
-venv/
+.venv/
 **/__pycache__/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+*.egg-info/
 
 # Logs
 *.log

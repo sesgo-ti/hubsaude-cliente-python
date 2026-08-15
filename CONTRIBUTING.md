@@ -66,8 +66,9 @@ licença do projeto, conforme o texto integral do DCO. Commits sem
 
 ## Padrões técnicos
 
-- **Python 3.12** (com suporte estendido). Build com **Poetry 1.8+**
-  (ou `pip` + `venv`, conforme o padrão do projeto).
+- **Python 3.12**. Build com **pip + venv** (`python -m venv .venv && pip install -e ".[dev]"`_)
+  — sem gerenciador de pacotes proprietário, para manter
+  a lib acessível a qualquer contribuidor/consumidor.
 - **Linhas**: preferencialmente curtas, máximo de 120 caracteres
   conforme o Ruff/Black centrais.
 - **Docstrings** em pt-BR para a API pública (padrão Google ou
