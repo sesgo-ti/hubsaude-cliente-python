@@ -2,7 +2,7 @@
 SMART Backend Services (``client_credentials`` + ``private_key_jwt``,
 RFC 7523).
 
-O ponto de entrada e o cliente HTTP (a ser portado), que assina o
+O ponto de entrada e o cliente HTTP (ainda a ser implementado), que assina o
 ``client_assertion`` com o material criptografico do estabelecimento e
 negocia o token no authorization server. O pacote reune os
 colaboradores dessa jornada: estrategias de assinatura
