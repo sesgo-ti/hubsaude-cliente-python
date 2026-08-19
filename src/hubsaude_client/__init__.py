@@ -20,11 +20,12 @@ credenciais.
 
 from __future__ import annotations
 
-from hubsaude_client.exceptions import SigningError, SmartTokenError
+from hubsaude_client.exceptions import SmartTokenError
 from hubsaude_client.ports import SigningStrategy
+from hubsaude_client.trace import TraceContext
 
 __all__: list[str] = [
-    "SigningError",
     "SmartTokenError",
     "SigningStrategy",
+    "TraceContext",
 ]
