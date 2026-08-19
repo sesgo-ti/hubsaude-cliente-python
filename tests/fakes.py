@@ -1,4 +1,7 @@
-"""Implementacoes fake dos ports, para testar a Fatia B sem a Fatia A."""
+"""
+Implementacoes fake dos ports, para testar o cliente HTTP/orquestracao
+de token sem depender de uma implementacao real de assinatura.
+"""
 
 from __future__ import annotations
 
