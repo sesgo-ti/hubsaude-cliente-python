@@ -21,6 +21,12 @@ o delay a partir do numero da tentativa que falhou. Ela nao decide *se*
 deve haver retry — isso e responsabilidade de ``client.py``, que so a
 invoca depois de classificar a falha como transitoria (via
 ``ErrorClassifier``) — nem valida ``maxRetries``.
+
+Nota: a normalizacao de ``maxRetries <= 0`` para o default nao vive
+aqui — no ``.java`` de origem ela e responsabilidade de
+``FaultToleranceConfig`` (nao de ``RetryPolicy``, que so calcula o
+delay a partir da tentativa e nem recebe ``maxRetries``). Essa
+validacao esta portada em ``fault_tolerance.py``.
 """
 
 from __future__ import annotations
