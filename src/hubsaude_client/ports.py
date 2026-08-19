@@ -40,7 +40,7 @@ class SigningStrategy(Protocol):
             A assinatura digital em formato raw (nao Base64).
 
         Raises:
-            SigningException: se ocorrer erro durante a assinatura
+            SigningError: se ocorrer erro durante a assinatura
                 (implementacao concreta; nao definida neste modulo).
         """
         ...

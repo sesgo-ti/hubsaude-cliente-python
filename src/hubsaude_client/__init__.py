@@ -14,16 +14,17 @@ sem Protocol proprio) e propagacao de contexto de trace W3C.
 Port de ``hubsaude-cliente-java``.
 
 A biblioteca e distribuida para consumidores externos; suas excecoes de
-dominio (``SmartTokenException``) nao devem vazar detalhes de
+dominio (``SmartTokenError``) nao devem vazar detalhes de
 credenciais.
 """
 
 from __future__ import annotations
 
-from hubsaude_client.exceptions import SmartTokenException
+from hubsaude_client.exceptions import SigningError, SmartTokenError
 from hubsaude_client.ports import SigningStrategy
 
 __all__: list[str] = [
-    "SmartTokenException",
+    "SigningError",
+    "SmartTokenError",
     "SigningStrategy",
 ]
