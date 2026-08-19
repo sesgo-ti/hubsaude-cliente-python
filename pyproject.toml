@@ -21,9 +21,10 @@ description = "Cliente Python SMART Backend Services (client_credentials + priva
 readme = "README.md"
 requires-python = ">=3.12"
 license = { file = "LICENSE" }
-dependencies = ["httpx>=0.27"]
+dependencies = ["httpx>=0.27", "cryptography>=41"]
 
 [project.optional-dependencies]
+hsm = ["python-pkcs11"]
 dev = ["pytest", "pytest-cov", "ruff", "black", "mypy", "bandit", "pip-audit", "import-linter"]
 
 # Equivalente à seção <build><sourceDirectory> do pom.xml, apontando
@@ -115,3 +116,25 @@ skips = ["*_test.py", "test_*.py"]
 # ------------------------------------------------------------------
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+
+# ------------------------------------------------------------------
+# [tool.importlinter]
+# Regra arquitetural: os modulos de assinatura/criptografia nao podem
+# depender do cliente HTTP. Sem pacote proprio (estrutura de modulos
+# achatada, ver ADR sobre layout do pacote) -- por isso os modulos sao
+# listados individualmente e a lista cresce conforme novos modulos de
+# assinatura sao adicionados.
+# ------------------------------------------------------------------
+[tool.importlinter]
+root_package = "hubsaude_client"
+# Necessario porque o modulo proibido (httpx) e externo ao root_package;
+# sem isso, import-linter recusa validar contratos "forbidden" contra
+# pacotes de fora de "hubsaude_client".
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Modulos de assinatura nao dependem de HTTP"
+type = "forbidden"
+source_modules = ["hubsaude_client.algorithms"]
+forbidden_modules = ["httpx"]
