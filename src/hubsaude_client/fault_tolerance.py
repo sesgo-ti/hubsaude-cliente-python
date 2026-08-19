@@ -1,13 +1,12 @@
 """Configuracao imutavel de tolerancia a falhas do cliente.
 
-Portado de ``FaultToleranceConfig.java``.
-
 Agrupa os parametros relacionados a resiliencia (timeouts, TTL da
 assertion e numero de tentativas) numa unica classe coesa. Valores
 invalidos (zero ou negativos) para ``assertion_ttl_seconds`` e
 ``max_retries`` sao automaticamente substituidos pelos defaults de
 ``defaults.py`` — nao de ``client.py`` —, preservando o desacoplamento
-entre a fundacao e a Fatia B descrito no roteiro de port.
+entre os componentes de assinatura/certificados e os de cliente
+HTTP/orquestracao de token desta biblioteca.
 """
 
 from __future__ import annotations
@@ -21,8 +20,6 @@ from hubsaude_client.defaults import DEFAULT_ASSERTION_TTL_SECONDS, DEFAULT_MAX_
 @dataclass(frozen=True)
 class FaultToleranceConfig:
     """Configuracao de tolerancia a falhas para o cliente SMART.
-
-    Equivalente Python do ``record FaultToleranceConfig`` (Java).
 
     Attributes:
         connect_timeout: tempo maximo para estabelecer a conexao TCP.
@@ -40,11 +37,10 @@ class FaultToleranceConfig:
     max_retries: int
 
     def __post_init__(self) -> None:
-        """Normaliza campos invalidos, equivalente ao construtor do record Java.
+        """Normaliza campos invalidos.
 
-        ``connect_timeout``/``request_timeout`` sao obrigatorios (o Java
-        usa ``Objects.requireNonNull``); em Python, a tipagem
-        (``timedelta``, nao ``timedelta | None``) ja documenta o
+        ``connect_timeout``/``request_timeout`` sao obrigatorios; a
+        tipagem (``timedelta``, nao ``timedelta | None``) ja documenta o
         contrato — nenhuma checagem adicional em runtime e feita para
         esses dois campos, pelo mesmo motivo que o resto da lib nao
         valida ``None`` em atributos tipados como nao-opcionais.

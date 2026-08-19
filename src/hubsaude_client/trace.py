@@ -1,7 +1,5 @@
 """Contexto de trace W3C Trace Context, gerado localmente por requisicao.
 
-Portado de TraceContext.java.
-
 O HubSaude deriva o identificador de correlacao de cada requisicao
 exclusivamente do header ``traceparent`` (W3C Trace Context); headers
 como ``X-Correlation-Id`` enviados pelo cliente sao ignorados pelo
@@ -55,8 +53,6 @@ _SPAN_ID_PATTERN = re.compile(r"^(?!0{16}$)[0-9a-f]{16}$")
 class TraceContext:
     """Contexto de trace W3C imutavel, com trace-id e span-id.
 
-    Equivalente Python do ``record TraceContext`` (Java).
-
     Attributes:
         trace_id: identificador do trace — 32 caracteres hexadecimais
             minusculos, nao todo-zeros.
@@ -70,7 +66,7 @@ class TraceContext:
 
     #: Nome do header HTTP de contexto de trace (W3C Trace Context).
     TRACEPARENT_HEADER: ClassVar[str] = "traceparent"
-    # Header público, espelhando TraceContext.TRACEPARENT_HEADER do Java
+    # Nome do header HTTP publico definido pelo W3C Trace Context.
 
     trace_id: str
     span_id: str

@@ -1,7 +1,5 @@
 """Cache thread-safe de tokens por scope, com margem de expiracao e janela LRU.
 
-Portado de ``TokenCacheStrategy.java``.
-
 Colaborador interno (nao faz parte da API publica da biblioteca) que
 concentra a politica de cache: validade com margem de renovacao,
 invalidacao e uma janela LRU de tamanho fixo. Como em ``defaults.py`` /
@@ -9,16 +7,14 @@ invalidacao e uma janela LRU de tamanho fixo. Como em ``defaults.py`` /
 **normalizados** (``strip()``; ``None`` -> string vazia) -- responsabilidade
 do chamador (``client.py``).
 
-Nota de escopo (roadmap de port, tarefa B7): no ``.java`` de origem,
-``TokenCacheStrategy`` tambem concentra o *lock striping* (32
-``ReentrantLock`` fixos, selecionados por ``hash(scope) % 32``) usado para
-garantir *single-flight* de renovacao -- no maximo uma requisicao HTTP em
-voo por scope. Neste port, esse striping foi deliberadamente movido para
-``client.py`` (``SmartTokenClient``, tarefa B8): e la que a decisao de
+Nota de escopo: o *lock striping* (locks fixos selecionados por
+``hash(scope) % N``) usado para garantir *single-flight* de renovacao --
+no maximo uma requisicao HTTP em voo por scope -- fica fora deste modulo
+e e responsabilidade de ``client.py`` (``SmartTokenClient``): e la que a decisao de
 "fazer ou nao a chamada de rede" de fato acontece, e mante-la fora deste
 modulo preserva ``token_cache.py`` como um colaborador puro de cache
 (cache-aside), sem qualquer conhecimento de rede/HTTP ou de politica de
-retry. O single-flight continua garantido de ponta a ponta pela combinacao
+retry. O single-flight sera garantido de ponta a ponta pela combinacao
 dos dois colaboradores: o lock por scope em ``client.py`` serializa as
 renovacoes, e o cache-aside aqui evita que uma thread que esperou o lock
 refaca uma chamada de rede ja resolvida por outra (double-checked
@@ -41,16 +37,13 @@ from hubsaude_client.defaults import (
     DEFAULT_TOKEN_CACHE_MAX_ENTRIES,
 )
 
-#: Fonte de tempo padrao (equivalente a Clock.systemUTC() do Java).
+#: Fonte de tempo padrao (relogio UTC do sistema).
 _DEFAULT_CLOCK: Callable[[], datetime] = lambda: datetime.now(timezone.utc)  # noqa: E731
 
 
 @dataclass(frozen=True)
 class CachedToken:
     """Token de acesso em cache, com o instante de expiracao original.
-
-    Equivalente Python do record aninhado ``TokenCacheStrategy.CachedToken``
-    (Java).
 
     Attributes:
         access_token: token de acesso cacheado.
@@ -63,8 +56,6 @@ class CachedToken:
 
     def is_valid(self, margin_seconds: int, now: datetime) -> bool:
         """Verifica se o token ainda e valido considerando a margem.
-
-        Equivalente Python de ``CachedToken.isValid(int, Instant)`` (Java).
 
         Args:
             margin_seconds: segundos de margem antes da expiracao; uma
@@ -81,8 +72,7 @@ class CachedToken:
     def __repr__(self) -> str:
         """Representacao textual com o token mascarado.
 
-        Evita exposicao acidental do access token em logs/repr, equivalente
-        ao ``toString()`` sobrescrito de ``CachedToken`` (Java).
+        Evita exposicao acidental do access token em logs/repr.
         """
         return f"CachedToken(access_token=[REDACTED], expires_at={self.expires_at!r})"
 
@@ -91,11 +81,9 @@ class CachedToken:
 class CachedTokenResponse:
     """Resposta servida a partir do cache, pronta para o chamador.
 
-    Equivalente Python ao valor retornado por
-    ``TokenCacheStrategy.cachedResponseIfValid`` (Java): reconstroi a
-    resposta a partir da entrada em cache, com ``expires_in`` recalculado
-    como o tempo *restante* no momento da leitura (nao o valor original
-    armazenado em ``store``).
+    Reconstroi a resposta a partir da entrada em cache, com ``expires_in``
+    recalculado como o tempo *restante* no momento da leitura (nao o valor
+    original armazenado em ``store``).
 
     Attributes:
         access_token: token de acesso.
@@ -110,8 +98,8 @@ class CachedTokenResponse:
 class TokenCacheStrategy:
     """Cache de tokens por scope, com margem de expiracao e janela LRU.
 
-    Equivalente Python de ``TokenCacheStrategy`` (Java), restrito a
-    politica de cache (ver nota de escopo no docstring do modulo).
+    Restrito a politica de cache (ver nota de escopo no docstring do
+    modulo).
 
     Estrutura interna: um unico ``collections.OrderedDict`` (chave =
     scope) protegido por um unico ``threading.Lock`` de instancia. A ordem
@@ -145,8 +133,7 @@ class TokenCacheStrategy:
             margin_seconds: margem em segundos para considerar o token
                 proximo da expiracao e forcar renovacao antecipada.
                 Normalizacao de valores invalidos e responsabilidade do
-                chamador (``fault_tolerance.py``/``client.py``), assim
-                como no ``.java`` de origem.
+                chamador (``fault_tolerance.py``/``client.py``).
             max_entries: quantidade maxima de scopes retidos
                 simultaneamente no cache (janela LRU). Deve ser positivo.
             clock: fonte de tempo, substituivel para testes
@@ -168,8 +155,7 @@ class TokenCacheStrategy:
     def cached_if_valid(self, normalized_scope: str) -> CachedTokenResponse | None:
         """Retorna o token em cache para o scope, se habilitado e valido.
 
-        Equivalente Python de ``cachedResponseIfValid`` (Java). Quando a
-        entrada existe mas ja esta invalida (expirada ou dentro da margem
+        Quando a entrada existe mas ja esta invalida (expirada ou dentro da margem
         de renovacao), ela e removida do cache nesta mesma chamada
         (eviction antecipada), evitando reter entradas mortas.
 
@@ -199,8 +185,7 @@ class TokenCacheStrategy:
     def store(self, normalized_scope: str, access_token: str, expires_in: int) -> None:
         """Armazena o token no cache quando habilitado; caso contrario, no-op.
 
-        Equivalente Python de ``store`` (Java). Se, apos a insercao, o
-        numero de entradas exceder ``max_entries``, a entrada usada ha mais
+        Se, apos a insercao, o numero de entradas exceder ``max_entries``, a entrada usada ha mais
         tempo (menos recentemente acessada) e descartada (eviction LRU).
 
         Args:
@@ -221,8 +206,6 @@ class TokenCacheStrategy:
     def invalidate(self, normalized_scope: str) -> None:
         """Invalida o cache para um scope especifico (no-op se ausente).
 
-        Equivalente Python de ``invalidate`` (Java).
-
         Args:
             normalized_scope: scope ja normalizado cujo token deve ser
                 invalidado.
@@ -231,18 +214,14 @@ class TokenCacheStrategy:
             self._entries.pop(normalized_scope, None)
 
     def invalidate_all(self) -> None:
-        """Invalida o cache de tokens de todos os scopes.
-
-        Equivalente Python de ``invalidateAll`` (Java).
-        """
+        """Invalida o cache de tokens de todos os scopes."""
         with self._lock:
             self._entries.clear()
 
     def size(self) -> int:
         """Retorna a quantidade de entradas retidas no momento.
 
-        Equivalente Python de ``size`` (Java); exposto sobretudo para
-        testes do teto da janela LRU.
+        Exposto sobretudo para testes do teto da janela LRU.
 
         Returns:
             Tamanho atual do cache.

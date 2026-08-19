@@ -88,7 +88,7 @@ class TestCacheHabilitado:
         assert bounded.cached_if_valid("scope-3") is not None
 
     def test_mantem_teto_sob_operacoes_concorrentes(self) -> None:
-        """Teste de concorrencia real (obrigatorio pelo roadmap, tarefa B7):
+        """Teste de concorrencia real:
         N threads chamando get/put/invalidate simultaneamente sobre os
         mesmos scopes, confirmando ausencia de excecao/corrupcao de estado.
         """

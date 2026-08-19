@@ -1,13 +1,9 @@
 ########################################################################
 # pyproject.toml
 #
-# Equivalente Python ao "pom.xml" do projeto Java original.
-# Reúne em um único arquivo o que no projeto Java estava espalhado em:
-#   - pom.xml                    -> [project] / [build-system] / dependências
-#   - checkstyle-formatacao.xml  -> [tool.ruff] / [tool.black] (formatação/lint)
-#   - spotbugs-exclude.xml       -> [tool.bandit] / [tool.mypy] (análise estática)
-#   - owasp-suppression.xml      -> supressões do pip-audit (arquivo externo,
-#                                    ver seção de segurança no final)
+# Arquivo central de configuração do projeto: define metadados do
+# pacote, dependências e a configuração das ferramentas de build,
+# lint, formatação, análise estática e testes usadas no repositório.
 ########################################################################
 
 [build-system]
@@ -27,24 +23,22 @@ dependencies = ["httpx>=0.27", "cryptography>=41"]
 hsm = ["python-pkcs11"]
 dev = ["pytest", "pytest-cov", "ruff", "black", "mypy", "bandit", "pip-audit", "import-linter", "tox"]
 
-# Equivalente à seção <build><sourceDirectory> do pom.xml, apontando
-# onde fica o código-fonte (pasta "src").
+# Aponta onde fica o código-fonte do pacote (pasta "src").
 [tool.setuptools.packages.find]
 where = ["src"]
 
 
 # ------------------------------------------------------------------
 # [tool.ruff] / [tool.black]
-# Equivalente ao checkstyle-formatacao.xml (regras de estilo e
-# formatação de código). Ruff cobre lint + formatação; Black cobre
-# só formatação, caso prefira separar.
+# Regras de estilo e formatação de código. Ruff cobre lint +
+# formatação; Black cobre só formatação, caso prefira separar.
 # ------------------------------------------------------------------
 [tool.ruff]
 line-length = 120
 src = ["src"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I"]  # TODO: definir regras equivalentes ao checkstyle
+select = ["E", "F", "I"]  # TODO: revisar e ampliar o conjunto de regras de lint
 
 [tool.black]
 line-length = 120
@@ -53,9 +47,7 @@ target-version = ["py312"]
 
 # ------------------------------------------------------------------
 # [tool.mypy]
-# Sem equivalente direto no Java (tipagem é nativa lá), mas cumpre
-# parte do papel do SpotBugs ao pegar erros antes da execução
-# (verificação estática de tipos).
+# Verificação estática de tipos, para pegar erros antes da execução.
 # ------------------------------------------------------------------
 [tool.mypy]
 python_version = "3.12"
@@ -65,20 +57,19 @@ mypy_path = "src"
 
 # ------------------------------------------------------------------
 # [tool.bandit]
-# Equivalente ao spotbugs-exclude.xml (análise estática focada em
-# padrões de código inseguro/bugs). Bandit é o análogo mais próximo
-# do SpotBugs no ecossistema Python.
+# Análise estática focada em padrões de código inseguro/bugs de
+# segurança.
 # ------------------------------------------------------------------
 [tool.bandit]
 # Só varre o código de produção, não os testes
 targets = ["src"]
 exclude_dirs = ["tests", ".venv", "dist"]
 
-# Supressões globais equivalentes ao spotbugs-exclude.xml.
-# Prefira "# nosec <código> -- justificativa" inline no código a
-# adicionar itens aqui; use esta lista só para casos amplos e
-# comprovadamente aceitáveis em todo o projeto.
-skips = []  # TODO: inserir o correto (mapear supressões reais do spotbugs-exclude.xml, se ainda fizerem sentido)
+# Supressões globais de achados do bandit. Prefira
+# "# nosec <código> -- justificativa" inline no código a adicionar
+# itens aqui; use esta lista só para casos amplos e comprovadamente
+# aceitáveis em todo o projeto.
+skips = []  # TODO: revisar se ha supressoes globais realmente necessarias
 
 [tool.bandit.assert_used]
 # B101 (uso de "assert"): esperado em arquivos de teste, não em produção
@@ -87,32 +78,28 @@ skips = ["*_test.py", "test_*.py"]
 
 # ------------------------------------------------------------------
 # [tool.pylint]
-# Equivalente ao config/pmd-rules.xml (regras de qualidade/boas
-# práticas de código, code smells, complexidade, etc). No Java isso
-# era papel do PMD; o Ruff cobre mais lint básico/estilo, então o
-# Pylint fica responsável pela parte "boas práticas" que o PMD tinha.
+# Regras de qualidade/boas práticas de código, code smells,
+# complexidade, etc. O Ruff cobre mais lint básico/estilo, então o
+# Pylint fica responsável pela parte de boas práticas mais profunda.
 # ------------------------------------------------------------------
 # [tool.pylint.main]
-# # TODO: mapear regras equivalentes ao pmd-rules.xml
+# # TODO: definir o conjunto de regras de boas praticas desejado
 #
 # [tool.pylint."messages control"]
 # disable = []
 
 
 # ------------------------------------------------------------------
-# Segurança de dependências (equivalente ao owasp-suppression.xml)
-# No Java, o OWASP Dependency-Check escaneia as dependências do
-# pom.xml. No Python, a ferramenta equivalente costuma ser o
-# pip-audit (ou Safety), com supressões em arquivo próprio, não
-# dentro do pyproject.toml:
-#   - owasp-suppression.xml  ->  pip-audit-suppressions.toml (ou .safety-policy.yml)
+# Segurança de dependências
+# Escaneamento de vulnerabilidades conhecidas nas dependências do
+# projeto via pip-audit, com supressões em arquivo próprio (não
+# dentro do pyproject.toml): ver pip-audit-suppressions.toml.
 # ------------------------------------------------------------------
 
 
 # ------------------------------------------------------------------
 # [tool.pytest.ini_options]
-# Equivalente à configuração do plugin surefire/failsafe do Maven
-# (execução de testes).
+# Configuração de execução dos testes.
 # ------------------------------------------------------------------
 [tool.pytest.ini_options]
 testpaths = ["tests"]
