@@ -1,7 +1,4 @@
-"""Excecoes de dominio do hubsaude_client.
-
-Portado de SmartTokenException.java e SigningException.java.
-"""
+"""Excecoes de dominio do hubsaude_client."""
 
 from __future__ import annotations
 
@@ -11,12 +8,8 @@ class SmartTokenError(RuntimeError):
 
     Sinaliza falhas de parsing de PEM/JSON ou respostas inesperadas do
     servidor de autorizacao, preservando a causa original (``__cause__``)
-    para facilitar o diagnostico.
-
-    Equivalente Python de ``SmartTokenException`` (Java), que estende
-    ``RuntimeException``. Em Python, o equivalente mais proximo de uma
-    excecao nao-verificada e ``RuntimeError``; o sufixo ``Error`` segue a
-    convencao da stdlib (``ValueError``, ``KeyError``).
+    para facilitar o diagnostico. Segue a convencao da stdlib para
+    excecoes de dominio (sufixo ``Error``, como ``ValueError``/``KeyError``).
     """
 
     def __init__(self, message: str, cause: BaseException | None = None) -> None:
@@ -26,8 +19,7 @@ class SmartTokenError(RuntimeError):
             message: descricao da falha.
             cause: excecao original que motivou esta; ``None`` quando nao
                 ha causa a preservar. Quando fornecida, fica disponivel em
-                ``__cause__`` (equivalente ao construtor com ``Throwable
-                cause`` do Java).
+                ``__cause__`` para facilitar o diagnostico.
         """
         super().__init__(message)
         if cause is not None:
@@ -40,8 +32,6 @@ class SigningError(RuntimeError):
     Usada por implementacoes de ``SigningStrategy`` para encapsular erros
     criptograficos de forma consistente, independente da fonte da chave
     (memoria, HSM, cofre de segredos).
-
-    Equivalente Python de ``SigningException`` (Java).
     """
 
     def __init__(self, message: str, cause: BaseException | None = None) -> None:
