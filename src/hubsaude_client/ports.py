@@ -1,17 +1,15 @@
 """Fronteira (typing.Protocol) entre o cliente HTTP/orquestracao de token
 e a assinatura (carga de PEM, certificados, HSM/PKCS#11, servicos remotos).
 
-Define ``SigningStrategy`` (equivalente a ``SigningStrategy.java``). O
-restante do cliente programa contra este Protocol; implementacoes
-concretas de assinatura so precisam satisfazer essa assinatura.
+Define ``SigningStrategy``. O restante do cliente programa contra este
+Protocol; implementacoes concretas de assinatura so precisam satisfazer
+essa assinatura.
 
-Nota de design: a configuracao TLS/mTLS NAO usa um Protocol proprio.
-No Java, ``TlsSettings``/``SslContextFactory`` sao internos ao builder
-(package-private) e o unico contrato que cruza a fronteira Fatia A /
-Fatia B e um ``javax.net.ssl.SSLContext`` ja pronto. O equivalente
-Python e o proprio ``ssl.SSLContext`` da stdlib, passado diretamente
-como parametro — introduzir um Protocol para isso seria uma abstracao
-sem correspondente real no design original.
+Nota de design: a configuracao TLS/mTLS NAO usa um Protocol proprio. O
+unico contrato que cruza essa fronteira e um ``ssl.SSLContext`` ja
+pronto, passado diretamente como parametro — introduzir um Protocol so
+para isso seria uma abstracao sem necessidade real, ja que a stdlib
+oferece o tipo pronto.
 """
 
 from __future__ import annotations
@@ -23,10 +21,9 @@ from typing import Protocol, runtime_checkable
 class SigningStrategy(Protocol):
     """Estrategia de assinatura digital que abstrai o mecanismo criptografico.
 
-    Equivalente Python de ``SigningStrategy.java``: interface funcional
-    com um unico metodo, permitindo que chaves em memoria, HSM/PKCS#11
-    ou servicos remotos de assinatura sejam intercambiaveis sem alterar
-    o cliente (padrao Strategy).
+    Interface com um unico metodo, permitindo que chaves em memoria,
+    HSM/PKCS#11 ou servicos remotos de assinatura sejam intercambiaveis
+    sem alterar o cliente (padrao Strategy).
     """
 
     def sign(self, data: bytes) -> bytes:
