@@ -123,5 +123,5 @@ include_external_packages = true
 [[tool.importlinter.contracts]]
 name = "Modulos de assinatura nao dependem de HTTP"
 type = "forbidden"
-source_modules = ["hubsaude_client.algorithms"]
+source_modules = ["hubsaude_client.algorithms", "hubsaude_client.pem_loader"]
 forbidden_modules = ["httpx"]
