@@ -32,3 +32,8 @@ DEFAULT_TLS_PROTOCOL: Final[str] = "TLSv1.3"
 #: Algoritmo JWT padrao. RS384 — o Servidor de Autorizacao SMART aceita
 #: apenas RS384 e ES384 (client-assertion-contexto-ig.md Sec3.2).
 DEFAULT_JWT_ALGORITHM: Final[str] = "RS384"
+
+#: Validade padrao (segundos) do access_token quando o campo
+#: ``expires_in`` vem ausente ou invalido na resposta do token endpoint
+#: (ESPECIFICACAO.md RF-03.2). Usado por ``response_guard.py``.
+DEFAULT_EXPIRES_IN_SECONDS: Final[int] = 3600

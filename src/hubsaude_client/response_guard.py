@@ -1,0 +1,240 @@
+"""Valida e sanitiza a resposta bem-sucedida (HTTP 200) do token endpoint:
+impoe um limite de tamanho no corpo lido via streaming (protegendo contra
+corpos anormalmente grandes, maliciosos ou por bug do servidor) e sanitiza
+o campo ``expires_in``, aplicando o padrao documentado quando ausente ou
+invalido.
+
+Porte de ``TokenResponseGuard.java`` (colaborador interno de
+``SmartTokenClient``, Tarefa 2/B4 do roadmap de port Java -> Python). Nao
+faz parte da API publica da biblioteca (nao exportado em ``__init__.py``).
+
+- o valor exato de ``MAX_RESPONSE_BODY_BYTES`` usado em producao no Java
+  (aqui adotado 1 MiB, sem referencia direta -- ver comentario na
+  constante abaixo);
+- se o Java aceita ``expires_in`` como string numerica (aqui aceito, por
+  tolerancia a respostas nao estritamente conformes) ou trata qualquer
+  tipo diferente de inteiro como invalido de imediato.
+
+Validacao de sucesso (RF-03, ``ESPECIFICACAO.md``):
+
+- Exclusivamente HTTP 200 e sucesso -- decidir se a resposta vai para
+  este guard (sucesso) ou para ``ErrorClassifier.http_failure`` (demais
+  status) e responsabilidade do chamador (``client.py``); este modulo
+  nao inspeciona ``response.status_code``.
+- ``access_token`` ausente ou vazio e erro (``SmartTokenError``).
+- ``expires_in`` ausente ou invalido recebe o padrao documentado
+  (``DEFAULT_EXPIRES_IN_SECONDS``, 3600s -- RF-03.2); campos
+  desconhecidos sao ignorados pela validacao mas o corpo JSON cru fica
+  disponivel ao chamador via ``TokenResponse.raw``.
+"""
+
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass
+from typing import Final
+
+import httpx
+
+from hubsaude_client._log import get_logger
+from hubsaude_client.defaults import DEFAULT_EXPIRES_IN_SECONDS
+from hubsaude_client.exceptions import SmartTokenError
+from hubsaude_client.trace import TraceContext
+
+#: Limite maximo padrao do corpo da resposta do token endpoint, em bytes.
+#: Mantido local (nao em defaults.py) porque, no momento deste port,
+#: nenhum outro colaborador da lib le corpo de resposta HTTP com limite
+#: -- discovery.py, que tambem fara isso, ainda nao existe (Tarefa 3/B6
+#: do roadmap). Se um segundo consumidor precisar do mesmo valor, mover
+#: para defaults.py nesse momento (mesmo criterio ja aplicado aqui a
+#: DEFAULT_EXPIRES_IN_SECONDS, que foi para defaults.py por ja nascer
+#: como constante DEFAULT_* neutra).
+MAX_RESPONSE_BODY_BYTES: Final[int] = 1_048_576  # 1 MiB
+
+#: Granularidade de leitura em streaming ao aplicar o limite acima --
+#: menor que MAX_RESPONSE_BODY_BYTES para permitir interromper a leitura
+#: antes de consumir o corpo inteiro quando ele excede o limite.
+_STREAM_CHUNK_SIZE: Final[int] = 8192
+
+#: Logger compartilhado com o restante da lib (ver _log.py): este
+#: colaborador e detalhe interno de implementacao e o contrato de
+#: observabilidade (filtros de log por nome da classe publica) deve
+#: permanecer estavel independente de como a implementacao interna e
+#: dividida em modulos.
+_LOG = get_logger()
+
+
+@dataclass(frozen=True)
+class TokenResponse:
+    """Resposta de sucesso do token endpoint, ja validada e sanitizada.
+
+    Attributes:
+        access_token: token de acesso extraido da resposta (nao vazio).
+        expires_in: validade em segundos, sanitizada -- ausente ou
+            invalida no corpo original vira ``DEFAULT_EXPIRES_IN_SECONDS``.
+        raw: corpo JSON cru da resposta (RF-03.2: campos desconhecidos
+            sao ignorados pela validacao mas permanecem disponiveis aqui
+            para o chamador).
+    """
+
+    access_token: str
+    expires_in: int
+    raw: dict[str, object]
+
+    def __repr__(self) -> str:
+        """Representacao textual com o token mascarado.
+
+        Evita exposicao acidental do access token em logs/repr.
+        """
+        return f"TokenResponse(access_token=[REDACTED], expires_in={self.expires_in})"
+
+
+class TokenResponseGuard:
+    """Guarda de sanidade da resposta de sucesso do token endpoint.
+
+    Colaborador interno de ``SmartTokenClient`` (``client.py``); nao faz
+    parte da API publica da biblioteca.
+    """
+
+    __slots__ = ("_max_response_body_bytes",)
+
+    def __init__(self, max_response_body_bytes: int = MAX_RESPONSE_BODY_BYTES) -> None:
+        """Cria o guard.
+
+        Args:
+            max_response_body_bytes: limite maximo, em bytes, do corpo
+                lido via streaming. Deve ser positivo.
+
+        Raises:
+            ValueError: se ``max_response_body_bytes`` nao for positivo.
+        """
+        if max_response_body_bytes <= 0:
+            raise ValueError(f"max_response_body_bytes deve ser positivo, recebido: {max_response_body_bytes}")
+        self._max_response_body_bytes = max_response_body_bytes
+
+    def read_body(self, response: httpx.Response, trace: TraceContext) -> bytes:
+        """Le o corpo da resposta em streaming, interrompendo assim que
+        ultrapassar o limite configurado -- sem esperar o corpo inteiro
+        chegar (equivalente a ``unwrapBodyLimitViolation`` do ``.java``).
+
+        Args:
+            response: resposta do token endpoint (idealmente obtida com
+                ``stream=True`` no ``httpx.Client``, para que a
+                interrupcao evite consumir a conexao inteira; funciona
+                tambem sobre uma resposta ja lida por completo).
+            trace: contexto de trace W3C enviado na requisicao.
+
+        Returns:
+            O corpo completo, quando dentro do limite.
+
+        Raises:
+            SmartTokenError: quando o corpo excede
+                ``max_response_body_bytes``. A conexao/stream e sempre
+                fechada antes do metodo retornar, mesmo nesse caso.
+        """
+        chunks: list[bytes] = []
+        total = 0
+        try:
+            for chunk in response.iter_bytes(chunk_size=_STREAM_CHUNK_SIZE):
+                total += len(chunk)
+                if total > self._max_response_body_bytes:
+                    _LOG.warning(
+                        "Corpo da resposta do token endpoint truncado apos %d bytes "
+                        "(limite: %d) traceId=%s -- descartando o restante sem processar.",
+                        total,
+                        self._max_response_body_bytes,
+                        trace.trace_id,
+                    )
+                    raise SmartTokenError(
+                        "Corpo da resposta do token endpoint excede o limite maximo de "
+                        f"{self._max_response_body_bytes} bytes (traceId={trace.trace_id})."
+                    )
+                chunks.append(chunk)
+        finally:
+            response.close()
+        return b"".join(chunks)
+
+    def parse_success_response(self, response: httpx.Response, trace: TraceContext) -> TokenResponse:
+        """Le, parseia e valida uma resposta de sucesso (HTTP 200) do
+        token endpoint.
+
+        Args:
+            response: resposta HTTP 200 do token endpoint -- a checagem
+                do status e responsabilidade do chamador (RF-03.1);
+                este metodo assume que ja foi confirmada.
+            trace: contexto de trace W3C enviado na requisicao.
+
+        Returns:
+            A resposta validada, com ``expires_in`` sanitizado.
+
+        Raises:
+            SmartTokenError: o corpo excede o limite de tamanho, nao e
+                JSON valido, nao e um objeto JSON, ou nao contem
+                ``access_token``.
+        """
+        body = self.read_body(response, trace)
+        try:
+            parsed = json.loads(body)
+        except json.JSONDecodeError as exc:
+            raise SmartTokenError(
+                f"Resposta do token endpoint nao e JSON valido (traceId={trace.trace_id}).",
+                exc,
+            ) from exc
+        if not isinstance(parsed, dict):
+            raise SmartTokenError(f"Resposta do token endpoint nao e um objeto JSON (traceId={trace.trace_id}).")
+        access_token = parsed.get("access_token")
+        if not isinstance(access_token, str) or not access_token:
+            raise SmartTokenError(f"Resposta do token endpoint nao contem access_token (traceId={trace.trace_id}).")
+        expires_in = sanitize_expires_in(parsed.get("expires_in"), trace)
+        return TokenResponse(access_token=access_token, expires_in=expires_in, raw=parsed)
+
+
+def sanitize_expires_in(raw_expires_in: object, trace: TraceContext | None = None) -> int:
+    """Sanitiza o campo ``expires_in`` da resposta do token endpoint.
+
+    Ausente (``None``) ou invalido (tipo inesperado, nao numerico, ou
+    ``<= 0``) recebe o padrao ``DEFAULT_EXPIRES_IN_SECONDS`` (RF-03.2);
+    valores numericos validos (incluindo strings numericas, por
+    tolerancia a respostas nao estritamente conformes) sao truncados
+    para ``int`` -- segundos fracionarios nao fazem sentido para o
+    calculo de expiracao do cache de tokens.
+
+    Args:
+        raw_expires_in: valor cru do campo ``expires_in`` no JSON
+            decodificado (``None`` quando ausente).
+        trace: contexto de trace W3C, usado apenas para enriquecer o
+            log de aviso quando o padrao e aplicado por invalidez;
+            opcional para permitir testar esta funcao isoladamente, sem
+            montar um ``TraceContext``.
+
+    Returns:
+        Validade em segundos, sempre positiva.
+    """
+    if raw_expires_in is None:
+        # Ausencia e o caso esperado quando o servidor simplesmente nao
+        # envia o campo (RF-03.2) -- nao e' um valor "invalido" digno de
+        # aviso, apenas a aplicacao silenciosa do padrao.
+        return DEFAULT_EXPIRES_IN_SECONDS
+    if isinstance(raw_expires_in, bool) or not isinstance(raw_expires_in, (int, float, str)):
+        _warn_invalid_expires_in(raw_expires_in, trace)
+        return DEFAULT_EXPIRES_IN_SECONDS
+    try:
+        value = float(raw_expires_in)
+    except ValueError:
+        _warn_invalid_expires_in(raw_expires_in, trace)
+        return DEFAULT_EXPIRES_IN_SECONDS
+    if value <= 0:
+        _warn_invalid_expires_in(raw_expires_in, trace)
+        return DEFAULT_EXPIRES_IN_SECONDS
+    return int(value)
+
+
+def _warn_invalid_expires_in(raw_expires_in: object, trace: TraceContext | None) -> None:
+    """Registra o aviso de substituicao de um ``expires_in`` invalido pelo padrao."""
+    trace_part = f" traceId={trace.trace_id}" if trace is not None else ""
+    _LOG.warning(
+        "expires_in invalido na resposta do token endpoint: %r -- usando padrao de %d segundos.%s",
+        raw_expires_in,
+        DEFAULT_EXPIRES_IN_SECONDS,
+        trace_part,
+    )

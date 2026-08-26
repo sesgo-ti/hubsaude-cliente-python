@@ -27,3 +27,7 @@ def test_tls_protocol() -> None:
 
 def test_jwt_algorithm() -> None:
     assert defaults.DEFAULT_JWT_ALGORITHM == "RS384"
+
+
+def test_expires_in_default() -> None:
+    assert defaults.DEFAULT_EXPIRES_IN_SECONDS == 3600
