@@ -1,19 +1,15 @@
 """Fronteira (typing.Protocol) entre o cliente HTTP/orquestracao de token
 e a assinatura (carga de PEM, certificados, HSM/PKCS#11, servicos remotos).
 
-Define ``SigningStrategy``. O restante do cliente programa contra este
-Protocol; implementacoes concretas de assinatura so precisam satisfazer
-essa assinatura.
-
-Nota de design: a configuracao TLS/mTLS NAO usa um Protocol proprio. O
-unico contrato que cruza essa fronteira e um ``ssl.SSLContext`` ja
-pronto, passado diretamente como parametro — introduzir um Protocol so
-para isso seria uma abstracao sem necessidade real, ja que a stdlib
-oferece o tipo pronto.
+Define ``SigningStrategy`` e ``TlsContextProvider``. O restante do
+cliente programa contra esses Protocols; implementacoes concretas de
+assinatura e de contexto TLS/mTLS so precisam satisfazer as respectivas
+assinaturas.
 """
 
 from __future__ import annotations
 
+import ssl
 from typing import Protocol, runtime_checkable
 
 
@@ -39,5 +35,24 @@ class SigningStrategy(Protocol):
         Raises:
             SigningError: se ocorrer erro durante a assinatura
                 (implementacao concreta; nao definida neste modulo).
+        """
+        ...
+
+
+@runtime_checkable
+class TlsContextProvider(Protocol):
+    """Fornecedor de contexto TLS/mTLS pronto para uso pelo cliente HTTP.
+
+    Abstrai de onde vem o ``ssl.SSLContext`` (certificado/chave em disco,
+    KeyStore, HSM, cofre de segredos) — o cliente HTTP so consome o
+    contexto pronto, sem saber como foi montado.
+    """
+
+    def ssl_context(self) -> ssl.SSLContext:
+        """Monta/retorna o contexto TLS/mTLS pronto para a requisicao.
+
+        Returns:
+            ``ssl.SSLContext`` configurado (certificado de cliente,
+            trust store, protocolo TLS) pronto para uso pelo cliente HTTP.
         """
         ...

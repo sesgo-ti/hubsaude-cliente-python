@@ -7,8 +7,8 @@
 ########################################################################
 
 [build-system]
-requires = ["setuptools>=68.0"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "hubsaude-client"
@@ -23,9 +23,9 @@ dependencies = ["httpx>=0.27", "cryptography>=41"]
 hsm = ["python-pkcs11"]
 dev = ["pytest", "pytest-cov", "ruff", "black", "mypy", "bandit", "pip-audit", "import-linter", "tox"]
 
-# Aponta onde fica o código-fonte do pacote (pasta "src").
-[tool.setuptools.packages.find]
-where = ["src"]
+# Aponta onde fica o código-fonte do pacote (pasta "src") para o build hatchling.
+[tool.hatch.build.targets.wheel]
+packages = ["src/hubsaude_client"]
 
 
 # ------------------------------------------------------------------
