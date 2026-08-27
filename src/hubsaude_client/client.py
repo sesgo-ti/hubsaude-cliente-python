@@ -233,9 +233,19 @@ class SmartTokenClient:
             discovery = SmartConfigurationDiscovery(self._http_client)
             self._token_endpoint = discovery.discover_token_endpoint(fhir_base)
             _LOG.debug("token_endpoint resolvido via descoberta: %s", self._token_endpoint)
-        else:
-            assert token_endpoint is not None  # garantido pelo builder (exclusividade ja validada)
+        elif token_endpoint is not None:
             self._token_endpoint = token_endpoint
+        else:
+            # Inalcancavel: o builder ja garante exclusividade mutua entre
+            # token_endpoint/fhir_base antes de construir este cliente.
+            # Sem "assert" aqui (removido em bytecode otimizado, ver B101,
+            # mesmo criterio ja aplicado em builder.py) -- SmartTokenError
+            # explicito tambem ajuda o narrowing de tipos do mypy.
+            raise SmartTokenError(
+                "estado inesperado: nem token_endpoint nem fhir_base preenchidos"
+                " na construcao de SmartTokenClient (deveria ter sido validado"
+                " pelo builder)"
+            )
 
         self._error_classifier = ErrorClassifier(client_id, self._token_endpoint)
         self._response_guard = TokenResponseGuard()
