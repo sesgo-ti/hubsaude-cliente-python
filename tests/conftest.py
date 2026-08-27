@@ -138,3 +138,32 @@ def fake_expired_cert_pem(tmp_path):
     cert_path = tmp_path / "test_cert_expired.pem"
     cert_path.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
     return cert_path
+
+
+@pytest.fixture
+def fake_not_yet_valid_cert_pem(tmp_path):
+    """Certificado X.509 autoassinado ainda nao valido (not_before no futuro), em disco."""
+    import datetime
+
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.x509.oid import NameOID
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    subject = issuer = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "hubsaude-test-not-yet-valid")])
+    not_before = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=1)
+    not_after = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=10)
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(subject)
+        .issuer_name(issuer)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(not_before)
+        .not_valid_after(not_after)
+        .sign(key, hashes.SHA256())
+    )
+    cert_path = tmp_path / "test_cert_not_yet_valid.pem"
+    cert_path.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+    return cert_path
