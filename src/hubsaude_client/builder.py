@@ -94,7 +94,7 @@ if TYPE_CHECKING:
     # caminho de pacote instalado sem stubs. Silenciado propositalmente
     # ate a Tarefa B8 aterrissar em develop; ver o contrato de kwargs
     # documentado acima, que client.py deve satisfazer quando existir.
-    from hubsaude_client.client import SmartTokenClient  # type: ignore[import-untyped]
+    from hubsaude_client.client import SmartTokenClient
 
 #: TTL RECOMENDADO (RF-01 item 4, "DEVERIA"): o servidor rejeita
 #: exp > iat + 300s. Valores acima disso nao sao rejeitados por este
