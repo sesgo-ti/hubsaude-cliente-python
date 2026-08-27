@@ -20,9 +20,14 @@ integradora (quem precisa ser thread-safe e o ``SmartTokenClient``
 retornado — responsabilidade de ``client.py``, Tarefa B8).
 
 Metodos de conveniencia que, no ``.java``, recebem ``Path``/``KeyStore``
-(carga de PEM, PKCS#12/JKS, trust anchor) pertencem a Fatia A e ainda nao
-tem implementacao concreta nesta base de codigo (ver ``pem_loader.py`` e o
-``# TODO(fatia-a)`` nos metodos abaixo). Por ora, o builder aceita
+(carga de PEM, PKCS#12/JKS, trust anchor) pertencem a Fatia A.
+``private_key_pem()`` ja delega a ``strategy_factory.from_pem_file`` (a
+resolucao e adiada para :meth:`SmartTokenClientBuilder.build`, nao
+acontece na propria chamada -- ver docstring do metodo). Os demais
+(``certificate_pem()``, ``client_key_store()``, ``server_trust_anchor()``)
+ainda nao tem implementacao concreta nesta base de codigo -- dependem do
+lado TLS/mTLS da Fatia A (``ssl_context_factory.py``, ainda nao portado;
+ver ``# TODO(fatia-a)`` nesses metodos abaixo). Ate la, o builder aceita
 diretamente instancias que satisfazem os Protocols ja prontos em
 ``ports.py`` (``SigningStrategy``, ``TlsContextProvider``) — os
 consumidores atuais devem construir essas instancias por fora do builder.
@@ -58,10 +63,11 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from datetime import timedelta
+from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
 
-from hubsaude_client import algorithms
+from hubsaude_client import algorithms, strategy_factory
 from hubsaude_client._log import get_logger
 from hubsaude_client.defaults import (
     DEFAULT_ASSERTION_TTL_SECONDS,
@@ -144,6 +150,8 @@ class SmartTokenClientBuilder:
         "_token_endpoint",
         "_fhir_base",
         "_signing_strategy",
+        "_private_key_pem_path",
+        "_private_key_pem_password",
         "_tls_context_provider",
         "_jwt_algorithm",
         "_key_id",
@@ -164,6 +172,8 @@ class SmartTokenClientBuilder:
         self._token_endpoint: str | None = None
         self._fhir_base: str | None = None
         self._signing_strategy: SigningStrategy | None = None
+        self._private_key_pem_path: Path | None = None
+        self._private_key_pem_password: bytearray | None = None
         self._tls_context_provider: TlsContextProvider | None = None
         self._jwt_algorithm: str = DEFAULT_JWT_ALGORITHM
         self._key_id: str | None = None
@@ -209,9 +219,9 @@ class SmartTokenClientBuilder:
         """Define a estrategia de assinatura do ``client_assertion`` (obrigatorio).
 
         Aceita qualquer implementacao que satisfaca ``ports.SigningStrategy``
-        -- em memoria, PEM ja carregado por fora, HSM/PKCS#11, etc. Os
-        metodos de conveniencia que carregam PEM/KeyStore diretamente ainda
-        nao existem (Fatia A) -- ver os metodos ``# TODO(fatia-a)`` abaixo.
+        -- em memoria, PEM ja carregado por fora, HSM/PKCS#11, etc.
+        Mutuamente exclusivo com :meth:`private_key_pem` -- exatamente um
+        dos dois deve ser informado antes de :meth:`build`.
         """
         self._signing_strategy = signing_strategy
         return self
@@ -315,25 +325,34 @@ class SmartTokenClientBuilder:
     # Metodos de conveniencia (Fatia A) -- ainda nao implementados
     # ------------------------------------------------------------------
 
-    # TODO(fatia-a): implementar quando PemLoader/SslContextFactory
-    # existirem. Deve construir uma SigningStrategy em memoria a partir da
-    # chave PEM (com deteccao automatica de formato -- RF-13) e chamar
-    # self.signing_strategy(...) internamente.
-    def private_key_pem(self, path: object, password: bytes | None = None) -> SmartTokenClientBuilder:
+    def private_key_pem(self, path: Path | str, password: bytearray | None = None) -> SmartTokenClientBuilder:
         """Carrega a chave privada de assinatura a partir de um arquivo PEM.
 
-        Ainda nao implementado -- depende da Fatia A (``pem_loader.py``/
-        estrategia de assinatura em memoria, RF-12/RF-13). Use
-        :meth:`signing_strategy` diretamente por enquanto.
+        Atalho para ``strategy_factory.from_pem_file`` (deteccao automatica
+        de formato -- PKCS#1, PKCS#8 cifrado ou nao, OpenSSL tradicional
+        cifrado -- RF-13) seguido de :meth:`signing_strategy`. Mutuamente
+        exclusivo com :meth:`signing_strategy`.
+
+        A resolucao da chave e' adiada para :meth:`build` (nao acontece
+        nesta chamada) -- por isso o algoritmo JWT usado e' o configurado
+        em :meth:`jwt_algorithm` no momento de :meth:`build`, nao no
+        momento desta chamada; a ordem entre as duas chamadas e'
+        irrelevante (ver nota de design no docstring do modulo).
+
+        Args:
+            path: caminho para o arquivo PEM da chave privada.
+            password: senha para decriptar a chave (``None`` se nao
+                criptografada). E consumida: repassada a ``pem_loader``, que
+                zera o array ao final de :meth:`build`. O chamador nao deve
+                reutiliza-la.
 
         Raises:
-            NotImplementedError: sempre, nesta versao do SDK.
+            SmartTokenError: em :meth:`build`, se o arquivo nao existir, o
+                formato for invalido, ou a senha for incorreta.
         """
-        raise NotImplementedError(
-            "private_key_pem() depende da Fatia A (carregamento de PEM, RF-13)"
-            " e ainda nao esta implementado. Use signing_strategy() com uma"
-            " implementacao propria de ports.SigningStrategy por enquanto."
-        )
+        self._private_key_pem_path = Path(path)
+        self._private_key_pem_password = password
+        return self
 
     # TODO(fatia-a): implementar junto com private_key_pem() -- verificacao
     # de consistencia chave-certificado (RF-15) tambem depende deste metodo.
@@ -398,12 +417,12 @@ class SmartTokenClientBuilder:
         """Valida a configuracao (fail-fast) e constroi o ``SmartTokenClient``.
 
         Ordem de validacao: ``client_id`` -> ``signing_strategy``/
-        ``tls_context_provider`` -> exclusividade e esquema de
-        ``token_endpoint``/``fhir_base`` -> ``jwt_algorithm`` -> timeouts
-        -> ``token_cache_max_entries`` -> ``hub_context``. Nenhuma chamada
-        de rede e feita aqui (a eventual descoberta via ``fhir_base``
-        acontece dentro de ``SmartTokenClient.__init__`` -- ver nota no
-        docstring do modulo).
+        ``private_key_pem``/``tls_context_provider`` -> exclusividade e
+        esquema de ``token_endpoint``/``fhir_base`` -> ``jwt_algorithm`` ->
+        timeouts -> ``token_cache_max_entries`` -> ``hub_context``. Nenhuma
+        chamada de rede e feita aqui (a eventual descoberta via
+        ``fhir_base`` acontece dentro de ``SmartTokenClient.__init__`` --
+        ver nota no docstring do modulo).
 
         Returns:
             Um ``SmartTokenClient`` pronto para uso.
@@ -412,7 +431,7 @@ class SmartTokenClientBuilder:
             SmartTokenError: se qualquer validacao falhar.
         """
         client_id = _require_non_blank(self._client_id, "client_id")
-        signing_strategy = self._require_signing_strategy()
+        signing_strategy = self._resolve_signing_strategy()
         tls_context_provider = self._require_tls_context_provider()
         self._validate_endpoint_config()
         resolved_algorithm = self._resolve_jwt_algorithm()
@@ -465,11 +484,34 @@ class SmartTokenClientBuilder:
     # Validacoes internas
     # ------------------------------------------------------------------
 
+    def _resolve_signing_strategy(self) -> SigningStrategy:
+        """Resolve a estrategia de assinatura efetiva.
+
+        ``signing_strategy()`` e ``private_key_pem()`` sao mutuamente
+        exclusivos -- a resolucao via PEM e adiada ate aqui (nao acontece
+        em :meth:`private_key_pem`) para que a ordem de chamada entre ela e
+        :meth:`jwt_algorithm` seja irrelevante.
+        """
+        if self._private_key_pem_path is not None:
+            if self._signing_strategy is not None:
+                raise SmartTokenError(
+                    "signing_strategy e private_key_pem sao mutuamente exclusivos;" " informe apenas um dos dois"
+                )
+            # Normalizado aqui (mesma logica de _resolve_jwt_algorithm) para que
+            # strategy.jwt_algorithm coincida com o jwt_algorithm efetivo do
+            # cliente, independente da caixa informada em jwt_algorithm().
+            resolved_algorithm = algorithms.resolve(self._jwt_algorithm).jwt_algorithm
+            return strategy_factory.from_pem_file(
+                self._private_key_pem_path, self._private_key_pem_password, resolved_algorithm
+            )
+        return self._require_signing_strategy()
+
     def _require_signing_strategy(self) -> SigningStrategy:
         if self._signing_strategy is None:
             raise SmartTokenError(
                 "signing_strategy e obrigatorio (client_credentials + private_key_jwt"
-                " exige uma estrategia de assinatura do client_assertion)"
+                " exige uma estrategia de assinatura do client_assertion, via"
+                " signing_strategy() ou private_key_pem())"
             )
         if not isinstance(self._signing_strategy, SigningStrategy):
             raise SmartTokenError(

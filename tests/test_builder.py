@@ -24,6 +24,7 @@ import pytest
 from hubsaude_client.builder import HubContext, SmartTokenClientBuilder
 from hubsaude_client.exceptions import SmartTokenError
 from hubsaude_client.fault_tolerance import FaultToleranceConfig
+from hubsaude_client.private_key_signing_strategy import PrivateKeySigningStrategy
 from hubsaude_client.token_cache import TokenCacheStrategy
 
 from .fakes import FakeSigningStrategy, FakeTlsContextProvider
@@ -407,7 +408,6 @@ def test_raises_when_hub_context_versao_has_invalid_format(versao: str) -> None:
 @pytest.mark.parametrize(
     "call",
     [
-        lambda b: b.private_key_pem("chave.pem"),
         lambda b: b.certificate_pem("cert.pem"),
         lambda b: b.client_key_store("store.p12", b"senha"),
         lambda b: b.server_trust_anchor("trust.pem"),
@@ -416,6 +416,65 @@ def test_raises_when_hub_context_versao_has_invalid_format(versao: str) -> None:
 def test_fatia_a_convenience_methods_are_not_implemented(call: Any) -> None:
     with pytest.raises(NotImplementedError):
         call(SmartTokenClientBuilder())
+
+
+# ---------------------------------------------------------------------------
+# private_key_pem() -- delega a strategy_factory.from_pem_file
+# ---------------------------------------------------------------------------
+
+
+def test_private_key_pem_builds_client_from_pem_file(
+    fake_pem_pair, fake_smart_token_client_module: type[_FakeSmartTokenClient]
+) -> None:
+    client = (
+        SmartTokenClientBuilder()
+        .client_id(CLIENT_ID)
+        .token_endpoint(TOKEN_ENDPOINT)
+        .private_key_pem(fake_pem_pair["key"])
+        .tls_context_provider(FakeTlsContextProvider())
+        .build()
+    )
+
+    assert isinstance(client.signing_strategy, PrivateKeySigningStrategy)
+
+
+def test_private_key_pem_resolution_is_deferred_to_build_so_jwt_algorithm_order_is_irrelevant(
+    fake_pem_pair, fake_smart_token_client_module: type[_FakeSmartTokenClient]
+) -> None:
+    client = (
+        SmartTokenClientBuilder()
+        .client_id(CLIENT_ID)
+        .token_endpoint(TOKEN_ENDPOINT)
+        .private_key_pem(fake_pem_pair["key"])
+        .jwt_algorithm("rs256")
+        .tls_context_provider(FakeTlsContextProvider())
+        .build()
+    )
+
+    assert client.jwt_algorithm == "RS256"
+    assert client.signing_strategy.jwt_algorithm == "RS256"
+
+
+def test_private_key_pem_and_signing_strategy_are_mutually_exclusive(fake_pem_pair) -> None:
+    builder = _valid_builder().private_key_pem(fake_pem_pair["key"])
+
+    with pytest.raises(SmartTokenError, match="mutuamente exclusivos"):
+        builder.build()
+
+
+def test_private_key_pem_with_invalid_pem_content_raises_smart_token_error(tmp_path) -> None:
+    garbage_path = tmp_path / "garbage.pem"
+    garbage_path.write_text("nao e um PEM valido")
+    builder = (
+        SmartTokenClientBuilder()
+        .client_id(CLIENT_ID)
+        .token_endpoint(TOKEN_ENDPOINT)
+        .private_key_pem(garbage_path)
+        .tls_context_provider(FakeTlsContextProvider())
+    )
+
+    with pytest.raises(SmartTokenError, match="formato"):
+        builder.build()
 
 
 # ---------------------------------------------------------------------------
