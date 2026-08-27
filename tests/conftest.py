@@ -92,6 +92,62 @@ def fake_ec_pem_pair(tmp_path):
 
 
 @pytest.fixture
+def fake_mismatched_pem_pair(tmp_path, fake_pem_pair):
+    """Certificado de uma chave RSA diferente da chave de fake_pem_pair,
+    para testar deteccao de par chave/certificado inconsistente."""
+    import datetime
+
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.x509.oid import NameOID
+
+    other_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    subject = issuer = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "hubsaude-test-other")])
+    other_cert = (
+        x509.CertificateBuilder()
+        .subject_name(subject)
+        .issuer_name(issuer)
+        .public_key(other_key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(datetime.datetime.now(datetime.timezone.utc))
+        .not_valid_after(datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=1))
+        .sign(other_key, hashes.SHA256())
+    )
+    other_cert_path = tmp_path / "other_cert.pem"
+    other_cert_path.write_bytes(other_cert.public_bytes(serialization.Encoding.PEM))
+    return {"matching_key": fake_pem_pair["key"], "mismatched_cert": other_cert_path}
+
+
+@pytest.fixture
+def fake_mismatched_ec_pem_pair(tmp_path, fake_ec_pem_pair):
+    """Certificado de uma chave EC diferente da chave de fake_ec_pem_pair,
+    para testar deteccao de par chave/certificado EC inconsistente."""
+    import datetime
+
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.x509.oid import NameOID
+
+    other_key = ec.generate_private_key(ec.SECP256R1())
+    subject = issuer = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "hubsaude-test-other-ec")])
+    other_cert = (
+        x509.CertificateBuilder()
+        .subject_name(subject)
+        .issuer_name(issuer)
+        .public_key(other_key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(datetime.datetime.now(datetime.timezone.utc))
+        .not_valid_after(datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=1))
+        .sign(other_key, hashes.SHA256())
+    )
+    other_cert_path = tmp_path / "other_ec_cert.pem"
+    other_cert_path.write_bytes(other_cert.public_bytes(serialization.Encoding.PEM))
+    return {"matching_key": fake_ec_pem_pair["key"], "mismatched_cert": other_cert_path}
+
+
+@pytest.fixture
 def fake_encrypted_pem_key(tmp_path):
     """Chave privada RSA cifrada com senha conhecida, em disco."""
     from cryptography.hazmat.primitives import serialization
@@ -167,3 +223,67 @@ def fake_not_yet_valid_cert_pem(tmp_path):
     cert_path = tmp_path / "test_cert_not_yet_valid.pem"
     cert_path.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
     return cert_path
+
+
+@pytest.fixture
+def fake_pkcs12_bundle(tmp_path):
+    """Bundle PKCS#12 (chave + certificado) autoassinado, cifrado, em disco."""
+    import datetime
+
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.hazmat.primitives.serialization import pkcs12
+    from cryptography.x509.oid import NameOID
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    subject = issuer = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "hubsaude-test-pkcs12")])
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(subject)
+        .issuer_name(issuer)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(datetime.datetime.now(datetime.timezone.utc))
+        .not_valid_after(datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=1))
+        .sign(key, hashes.SHA256())
+    )
+    password = b"p12-senha-123"
+    p12_bytes = pkcs12.serialize_key_and_certificates(
+        b"hubsaude-client", key, cert, None, serialization.BestAvailableEncryption(password)
+    )
+    p12_path = tmp_path / "bundle.p12"
+    p12_path.write_bytes(p12_bytes)
+    return {"path": p12_path, "bytes": p12_bytes, "password": password}
+
+
+@pytest.fixture
+def fake_pkcs12_bundle_without_key(tmp_path):
+    """Bundle PKCS#12 valido mas sem chave privada (so certificado)."""
+    import datetime
+
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.hazmat.primitives.serialization import pkcs12
+    from cryptography.x509.oid import NameOID
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    subject = issuer = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "hubsaude-test-pkcs12-no-key")])
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(subject)
+        .issuer_name(issuer)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(datetime.datetime.now(datetime.timezone.utc))
+        .not_valid_after(datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=1))
+        .sign(key, hashes.SHA256())
+    )
+    password = b"p12-sem-chave-123"
+    p12_bytes = pkcs12.serialize_key_and_certificates(
+        b"hubsaude-client-no-key", None, cert, None, serialization.BestAvailableEncryption(password)
+    )
+    p12_path = tmp_path / "bundle_no_key.p12"
+    p12_path.write_bytes(p12_bytes)
+    return {"path": p12_path, "password": password}
