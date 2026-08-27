@@ -61,6 +61,17 @@ def test_validate_minimum_key_size_rejects_weak_rsa() -> None:
         pem_loader.validate_minimum_key_size(weak_key, "teste")
 
 
+def test_validate_minimum_key_size_rejects_weak_ec() -> None:
+    weak_key = ec.generate_private_key(ec.SECP192R1())
+    with pytest.raises(SmartTokenError, match="192 bits"):
+        pem_loader.validate_minimum_key_size(weak_key, "teste")
+
+
+def test_load_private_key_password_for_unencrypted_key_raises(fake_pem_pair) -> None:
+    with pytest.raises(SmartTokenError, match="nao criptografada"):
+        pem_loader.load_private_key(fake_pem_pair["key"], bytearray(b"senha-desnecessaria"))
+
+
 def test_load_certificate(fake_pem_pair) -> None:
     cert = pem_loader.load_certificate(fake_pem_pair["cert"])
     assert cert.subject.rfc4514_string() == "CN=hubsaude-test-client"
@@ -69,6 +80,11 @@ def test_load_certificate(fake_pem_pair) -> None:
 def test_load_certificate_expired_raises(fake_expired_cert_pem) -> None:
     with pytest.raises(SmartTokenError, match="expirado"):
         pem_loader.load_certificate(fake_expired_cert_pem)
+
+
+def test_load_certificate_not_yet_valid_raises(fake_not_yet_valid_cert_pem) -> None:
+    with pytest.raises(SmartTokenError, match="ainda nao e valido"):
+        pem_loader.load_certificate(fake_not_yet_valid_cert_pem)
 
 
 def test_load_certificate_from_string_not_a_certificate_raises(fake_pem_pair) -> None:
