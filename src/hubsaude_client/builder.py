@@ -32,6 +32,19 @@ diretamente instancias que satisfazem os Protocols ja prontos em
 ``ports.py`` (``SigningStrategy``, ``TlsContextProvider``) — os
 consumidores atuais devem construir essas instancias por fora do builder.
 
+PKCS#11/HSM (``strategy_factory.from_pkcs11``, Fatia A) ja esta disponivel
+mas, assim como no ``.java`` original (ver o segundo exemplo da classe
+abaixo), **nao tem um metodo de conveniencia dedicado no builder** -- o
+proprio Java so o expoe via ``.signingStrategy(SigningStrategyFactory
+.fromPkcs11(...))``, nunca um ``.pkcs11(...)`` fluente. A forma de uso e
+identica em Python, ja funcional hoje:
+
+    SmartTokenClientBuilder()
+        .signing_strategy(strategy_factory.from_pkcs11(
+            pkcs11_module_path=..., token_label=..., key_label=..., user_pin=...,
+        ))
+        ...
+
     SmartTokenClient(
         client_id: str,
         token_endpoint: str | None,      # mutuamente exclusivo c/ fhir_base
@@ -219,9 +232,10 @@ class SmartTokenClientBuilder:
         """Define a estrategia de assinatura do ``client_assertion`` (obrigatorio).
 
         Aceita qualquer implementacao que satisfaca ``ports.SigningStrategy``
-        -- em memoria, PEM ja carregado por fora, HSM/PKCS#11, etc.
-        Mutuamente exclusivo com :meth:`private_key_pem` -- exatamente um
-        dos dois deve ser informado antes de :meth:`build`.
+        -- em memoria, PEM ja carregado por fora, HSM/PKCS#11 (via
+        ``strategy_factory.from_pkcs11``), etc. Mutuamente exclusivo com
+        :meth:`private_key_pem` -- exatamente um dos dois deve ser
+        informado antes de :meth:`build`.
         """
         self._signing_strategy = signing_strategy
         return self
