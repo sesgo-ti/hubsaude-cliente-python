@@ -21,13 +21,20 @@ from typing import Any
 
 import pytest
 
+from hubsaude_client import strategy_factory
 from hubsaude_client.builder import HubContext, SmartTokenClientBuilder
 from hubsaude_client.exceptions import SmartTokenError
 from hubsaude_client.fault_tolerance import FaultToleranceConfig
+from hubsaude_client.pkcs11_signing_strategy import Pkcs11SigningStrategy
 from hubsaude_client.private_key_signing_strategy import PrivateKeySigningStrategy
 from hubsaude_client.token_cache import TokenCacheStrategy
 
 from .fakes import FakeSigningStrategy, FakeTlsContextProvider
+from .pkcs11_softhsm_helper import (
+    _pkcs11_lib,  # noqa: F401  (fixture, used transitively by softhsm2_token)
+    softhsm2_available,
+    softhsm2_token,  # noqa: F401  (fixture)
+)
 
 CLIENT_ID = "cliente-teste"
 TOKEN_ENDPOINT = "https://auth.example/token"
@@ -475,6 +482,47 @@ def test_private_key_pem_with_invalid_pem_content_raises_smart_token_error(tmp_p
 
     with pytest.raises(SmartTokenError, match="formato"):
         builder.build()
+
+
+# ---------------------------------------------------------------------------
+# signing_strategy() com PKCS#11 -- prova de conexao Fatia A <-> Fatia B.
+#
+# strategy_factory.from_pkcs11 (Task 7) nao tem metodo de conveniencia
+# dedicado no builder (nem o .java original tem -- ver docstring do modulo);
+# e usado via signing_strategy(strategy_factory.from_pkcs11(...)), o mesmo
+# caminho de qualquer SigningStrategy customizada. Este teste roda contra um
+# token SoftHSM2 real (nao mock), provando que o resultado de from_pkcs11 e
+# aceito pelo builder de ponta a ponta.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(not softhsm2_available(), reason="SoftHSM2 nao disponivel no ambiente")
+def test_signing_strategy_accepts_pkcs11_strategy_end_to_end(
+    softhsm2_token,  # noqa: F811
+    fake_smart_token_client_module: type[_FakeSmartTokenClient],
+) -> None:
+    pkcs11_strategy = strategy_factory.from_pkcs11(
+        pkcs11_module_path=softhsm2_token["module_path"],
+        token_label=softhsm2_token["token_label"],
+        key_label=softhsm2_token["key_label"],
+        user_pin=softhsm2_token["user_pin"],
+        jwt_algorithm="RS256",
+    )
+
+    client = (
+        SmartTokenClientBuilder()
+        .client_id(CLIENT_ID)
+        .token_endpoint(TOKEN_ENDPOINT)
+        .signing_strategy(pkcs11_strategy)
+        .tls_context_provider(FakeTlsContextProvider())
+        .build()
+    )
+
+    assert isinstance(client.signing_strategy, Pkcs11SigningStrategy)
+    assert client.signing_strategy.jwt_algorithm == "RS256"
+    # A chave nunca sai do hardware -- prova indireta: assinar pelo objeto
+    # que o builder efetivamente guardou funciona (delega ao token real).
+    assert len(client.signing_strategy.sign(b"header.payload")) > 0
 
 
 # ---------------------------------------------------------------------------
