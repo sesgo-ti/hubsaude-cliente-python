@@ -129,5 +129,6 @@ source_modules = [
     "hubsaude_client.private_key_signing_strategy",
     "hubsaude_client.key_certificate_consistency",
     "hubsaude_client.strategy_factory",
+    "hubsaude_client.pkcs11_signing_strategy",
 ]
 forbidden_modules = ["httpx"]
