@@ -20,6 +20,7 @@ from cryptography.hazmat.primitives.serialization import pkcs12
 from hubsaude_client import pem_loader
 from hubsaude_client.defaults import DEFAULT_JWT_ALGORITHM
 from hubsaude_client.exceptions import SmartTokenError
+from hubsaude_client.pkcs11_signing_strategy import Pkcs11SigningStrategy
 from hubsaude_client.ports import SigningStrategy
 from hubsaude_client.private_key_signing_strategy import PrivateKeySigningStrategy
 
@@ -112,3 +113,57 @@ def from_pkcs12(data: bytes | Path, password: bytes, jwt_algorithm: str = DEFAUL
         raise SmartTokenError("Bundle PKCS#12 nao contem chave privada")
     pem_loader.validate_minimum_key_size(private_key, "pkcs12")
     return PrivateKeySigningStrategy(private_key, jwt_algorithm)
+
+
+def from_pkcs11(
+    pkcs11_module_path: str | Path,
+    token_label: str,
+    key_label: str,
+    user_pin: str,
+    jwt_algorithm: str = DEFAULT_JWT_ALGORITHM,
+) -> SigningStrategy:
+    """Cria estrategia para HSM/smart token via PKCS#11.
+
+    A chave privada nunca sai do hardware: o objeto retornado guarda apenas
+    um handle de sessao e a referencia a chave no token.
+
+    Args:
+        pkcs11_module_path: caminho para a biblioteca PKCS#11 do fabricante
+            (ex: ``/usr/lib/softhsm/libsofthsm2.so``).
+        token_label: rotulo do token/slot.
+        key_label: rotulo da chave privada no token.
+        user_pin: PIN de acesso ao token.
+        jwt_algorithm: algoritmo JWT (JWA) a usar na assinatura.
+
+    Returns:
+        Estrategia de assinatura que usa o hardware.
+
+    Raises:
+        SmartTokenError: se o PIN for invalido, a sessao nao puder ser
+            aberta, ou a chave nao for encontrada no token.
+    """
+    # Import local, nao no topo do modulo: python-pkcs11 e dependencia
+    # opcional (extra "hsm" em pyproject.toml), com bindings nativos que a
+    # maioria dos consumidores nao instala. strategy_factory.py e um unico
+    # arquivo com todas as factories -- um import no topo faria qualquer
+    # uso de from_pem_file/from_pkcs12 (sem PKCS#11) falhar com
+    # ModuleNotFoundError para quem nao instalou o extra. Diferente do
+    # .java, que resolve PKCS#11 via SunPKCS11 (provider embutido na JVM,
+    # sem dependencia de terceiros).
+    import pkcs11 as pkcs11_lib
+
+    lib = pkcs11_lib.lib(str(pkcs11_module_path))
+    token = lib.get_token(token_label=token_label)
+    try:
+        session = token.open(user_pin=user_pin)
+    except pkcs11_lib.PKCS11Error as exc:
+        raise SmartTokenError(f"Falha ao abrir sessao PKCS#11 (PIN incorreto?): {exc}", exc) from exc
+    try:
+        key = session.get_key(label=key_label, object_class=pkcs11_lib.ObjectClass.PRIVATE_KEY)
+    except pkcs11_lib.NoSuchKey as exc:
+        session.close()
+        raise SmartTokenError(f"Chave nao encontrada no token PKCS#11: {key_label}", exc) from exc
+    except Exception as exc:
+        session.close()
+        raise SmartTokenError(f"Falha ao acessar chave PKCS#11: {exc}", exc) from exc
+    return Pkcs11SigningStrategy(session, key, jwt_algorithm)
