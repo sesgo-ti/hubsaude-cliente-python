@@ -42,10 +42,11 @@ from hubsaude_client.exceptions import SmartTokenError
 from hubsaude_client.trace import TraceContext
 
 #: Limite maximo padrao do corpo da resposta do token endpoint, em bytes.
-#: Mantido local (nao em defaults.py) porque, no momento deste port,
-#: nenhum outro colaborador da lib le corpo de resposta HTTP com limite
-#: -- discovery.py, que tambem fara isso, ainda nao existe (Tarefa 3/B6
-#: do roadmap). Se um segundo consumidor precisar do mesmo valor, mover
+#: Mantido local (nao em defaults.py): ``discovery.py`` (Tarefa 3/B6, ja
+#: concluida) le o corpo da resposta de descoberta via
+#: ``response.json()`` diretamente, sem limite de tamanho em streaming --
+#: nao e um segundo consumidor deste valor. Continua sem outro
+#: colaborador da lib que precise do mesmo limite; se isso mudar, mover
 #: para defaults.py nesse momento (mesmo criterio ja aplicado aqui a
 #: DEFAULT_EXPIRES_IN_SECONDS, que foi para defaults.py por ja nascer
 #: como constante DEFAULT_* neutra).

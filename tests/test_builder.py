@@ -1,13 +1,19 @@
 """Testes de ``builder.SmartTokenClientBuilder``.
 
-Nota sobre ``client.py`` (Tarefa B8, ainda nao implementado nesta base de
-codigo): ``build()`` faz um import tardio de
+Nota sobre o fake de ``client.py``: ``build()`` faz um import tardio de
 ``hubsaude_client.client.SmartTokenClient`` (ver docstring de
-``builder.py``). Para testar a construcao minima valida sem depender da
-Tarefa B8, os testes injetam um modulo fake em ``sys.modules`` antes de
-chamar ``build()`` -- ver fixture ``fake_smart_token_client_module``. Os
-testes de validacao (fail-fast) nao precisam dessa fixture: todos levantam
-``SmartTokenError`` antes de ``build()`` alcancar o import tardio.
+``builder.py``, que explica o motivo -- quebrar um ciclo de import real
+entre os dois modulos). Para testar a construcao minima valida sem
+acoplar os testes do builder aos detalhes internos da implementacao
+real de ``SmartTokenClient`` (rede, threads, etc.), os testes injetam
+um modulo fake em ``sys.modules`` antes de chamar ``build()`` -- ver
+fixture ``fake_smart_token_client_module``. Isso mantem os testes deste
+modulo focados exclusivamente na responsabilidade do builder (validacao
+fail-fast e montagem dos kwargs); o comportamento do
+``SmartTokenClient`` real e testado a parte, em ``test_client.py``. Os
+testes de validacao (fail-fast) nao precisam dessa fixture: todos
+levantam ``SmartTokenError`` antes de ``build()`` alcancar o import
+tardio.
 """
 
 from __future__ import annotations
@@ -45,7 +51,8 @@ FHIR_BASE = "https://fhir.example/r4"
 class _FakeSmartTokenClient:
     """Substituto de ``client.SmartTokenClient`` para os testes deste
     modulo -- captura os kwargs recebidos de ``builder.build()`` para
-    inspecao, sem exigir a implementacao real (Tarefa B8).
+    inspecao, sem exigir a implementacao real (isola dos detalhes
+    internos de ``SmartTokenClient`` -- ver docstring do modulo).
     """
 
     client_id: str
@@ -65,8 +72,8 @@ def fake_smart_token_client_module(monkeypatch: pytest.MonkeyPatch) -> type[_Fak
     """Injeta um ``hubsaude_client.client`` fake em ``sys.modules``.
 
     Permite testar ``SmartTokenClientBuilder.build()`` de ponta a ponta
-    (import tardio incluido) sem depender de ``client.py`` (Tarefa B8,
-    ainda nao implementado nesta base de codigo).
+    (import tardio incluido) isolado dos detalhes internos da
+    implementacao real de ``client.py`` -- ver docstring do modulo.
     """
     fake_module = types.ModuleType("hubsaude_client.client")
     fake_module.SmartTokenClient = _FakeSmartTokenClient  # type: ignore[attr-defined]

@@ -108,16 +108,14 @@ from hubsaude_client.tls_settings import TlsSettings
 from hubsaude_client.token_cache import TokenCacheStrategy
 
 if TYPE_CHECKING:
-    # So resolvido por mypy/type checkers -- ver nota de dependencia
-    # futura no docstring do modulo. Nao importar em runtime aqui.
+    # So resolvido por mypy/type checkers -- nao importar em runtime aqui.
     #
-    # client.py ainda nao existe nesta base de codigo (Tarefa B8, depois
-    # desta -- B9 -- no roadmap): o pacote instalado (editable ou sdist)
-    # nao expoe esse submodulo nem um marcador py.typed para ele, entao
-    # mypy nao consegue resolver o import como "de codigo-fonte" e cai no
-    # caminho de pacote instalado sem stubs. Silenciado propositalmente
-    # ate a Tarefa B8 aterrissar em develop; ver o contrato de kwargs
-    # documentado acima, que client.py deve satisfazer quando existir.
+    # client.py importa HubContext deste modulo (builder.py) sob o
+    # proprio TYPE_CHECKING dele -- um import em runtime nos dois
+    # sentidos criaria um ciclo real (builder.py -> client.py ->
+    # builder.py). Por isso este import fica restrito a type checking, e
+    # o import em runtime de SmartTokenClient (usado em build(), abaixo)
+    # e tardio -- dentro do metodo, nao no topo do modulo.
     from hubsaude_client.client import SmartTokenClient
 
 #: TTL RECOMENDADO (RF-01 item 4, "DEVERIA"): o servidor rejeita
@@ -524,12 +522,10 @@ class SmartTokenClientBuilder:
             self._fhir_base,
         )
 
-        # Import tardio: ver nota de dependencia futura no docstring do
-        # modulo (B9 e sequenciado antes de B8 no roadmap).
-        # Sem "# type: ignore" aqui: mypy so emite import-untyped uma vez
-        # por modulo (ja reportado/silenciado no import sob TYPE_CHECKING
-        # acima); repetir o ignore neste import em runtime dispara
-        # "Unused type: ignore comment" (unused-ignore) em modo strict.
+        # Import tardio (dentro do metodo, nao no topo do modulo): evita o
+        # ciclo real de import com client.py, que importa HubContext deste
+        # modulo sob o proprio TYPE_CHECKING dele -- ver comentario junto
+        # ao import sob TYPE_CHECKING no topo deste arquivo.
         from hubsaude_client.client import SmartTokenClient as _SmartTokenClient
 
         return _SmartTokenClient(
