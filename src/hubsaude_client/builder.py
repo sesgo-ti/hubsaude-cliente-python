@@ -23,14 +23,22 @@ Metodos de conveniencia que, no ``.java``, recebem ``Path``/``KeyStore``
 (carga de PEM, PKCS#12/JKS, trust anchor) pertencem a Fatia A.
 ``private_key_pem()`` ja delega a ``strategy_factory.from_pem_file`` (a
 resolucao e adiada para :meth:`SmartTokenClientBuilder.build`, nao
-acontece na propria chamada -- ver docstring do metodo). Os demais
-(``certificate_pem()``, ``client_key_store()``, ``server_trust_anchor()``)
-ainda nao tem implementacao concreta nesta base de codigo -- dependem do
-lado TLS/mTLS da Fatia A (``ssl_context_factory.py``, ainda nao portado;
-ver ``# TODO(fatia-a)`` nesses metodos abaixo). Ate la, o builder aceita
+acontece na propria chamada -- ver docstring do metodo). ``certificate_pem()``
+e ``server_trust_anchor()`` ainda nao tem implementacao concreta nesta
+base de codigo -- dependem do lado TLS/mTLS da Fatia A
+(``ssl_context_factory.py``, ainda nao portado; ver ``# TODO(fatia-a)``
+nesses metodos abaixo). ``client_key_store()`` tambem permanece
+``# TODO(fatia-a)`` neste builder, mas por um motivo mais estreito: a
+Fatia A ja tem ``strategy_factory.from_pkcs12`` (carrega chave+certificado
+de um bundle PKCS#12 e retorna uma ``SigningStrategy``) — falta apenas o
+lado TLS/mTLS (montar o ``ssl.SSLContext``/``TlsContextProvider`` a
+partir do mesmo bundle) para este metodo poder delegar aos dois em vez de
+levantar ``NotImplementedError``. Ate isso existir, o builder aceita
 diretamente instancias que satisfazem os Protocols ja prontos em
 ``ports.py`` (``SigningStrategy``, ``TlsContextProvider``) — os
-consumidores atuais devem construir essas instancias por fora do builder.
+consumidores atuais devem construir essas instancias por fora do builder
+(para PKCS#12, a metade de assinatura ja pode vir de
+``strategy_factory.from_pkcs12`` combinada com :meth:`signing_strategy`).
 
     SmartTokenClient(
         client_id: str,
@@ -84,16 +92,14 @@ from hubsaude_client.ports import SigningStrategy, TlsContextProvider
 from hubsaude_client.token_cache import TokenCacheStrategy
 
 if TYPE_CHECKING:
-    # So resolvido por mypy/type checkers -- ver nota de dependencia
-    # futura no docstring do modulo. Nao importar em runtime aqui.
+    # So resolvido por mypy/type checkers -- nao importar em runtime aqui.
     #
-    # client.py ainda nao existe nesta base de codigo (Tarefa B8, depois
-    # desta -- B9 -- no roadmap): o pacote instalado (editable ou sdist)
-    # nao expoe esse submodulo nem um marcador py.typed para ele, entao
-    # mypy nao consegue resolver o import como "de codigo-fonte" e cai no
-    # caminho de pacote instalado sem stubs. Silenciado propositalmente
-    # ate a Tarefa B8 aterrissar em develop; ver o contrato de kwargs
-    # documentado acima, que client.py deve satisfazer quando existir.
+    # client.py importa HubContext deste modulo (builder.py) sob o
+    # proprio TYPE_CHECKING dele -- um import em runtime nos dois
+    # sentidos criaria um ciclo real (builder.py -> client.py ->
+    # builder.py). Por isso este import fica restrito a type checking, e
+    # o import em runtime de SmartTokenClient (usado em build(), abaixo)
+    # e tardio -- dentro do metodo, nao no topo do modulo.
     from hubsaude_client.client import SmartTokenClient
 
 #: TTL RECOMENDADO (RF-01 item 4, "DEVERIA"): o servidor rejeita
@@ -372,22 +378,31 @@ class SmartTokenClientBuilder:
             " enquanto."
         )
 
-    # TODO(fatia-a): implementar quando houver suporte a KeyStore
-    # (PKCS#12/JKS) do lado de assinatura (RF-12 item 2).
+    # TODO(fatia-a): o lado de assinatura ja existe
+    # (strategy_factory.from_pkcs12, PKCS#12) -- falta o lado TLS/mTLS
+    # (montar TlsContextProvider/ssl.SSLContext a partir do mesmo bundle,
+    # incluindo suporte a JKS) para este metodo poder delegar aos dois em
+    # vez de levantar NotImplementedError.
     def client_key_store(self, path: object, password: bytes, alias: str | None = None) -> SmartTokenClientBuilder:
         """Carrega chave e certificado de cliente a partir de um KeyStore
         (PKCS#12/JKS).
 
-        Ainda nao implementado -- depende da Fatia A (RF-12 item 2). Use
-        :meth:`signing_strategy` e :meth:`tls_context_provider` diretamente
-        por enquanto.
+        Ainda nao implementado *neste builder* -- falta o lado TLS/mTLS da
+        Fatia A que montaria o ``TlsContextProvider`` a partir do mesmo
+        bundle. O lado de assinatura ja existe
+        (``strategy_factory.from_pkcs12``, apenas PKCS#12 por enquanto):
+        combine-o com :meth:`signing_strategy` e informe
+        :meth:`tls_context_provider` separadamente por enquanto.
 
         Raises:
             NotImplementedError: sempre, nesta versao do SDK.
         """
         raise NotImplementedError(
-            "client_key_store() depende da Fatia A (suporte a KeyStore"
-            " PKCS#12/JKS, RF-12) e ainda nao esta implementado."
+            "client_key_store() ainda nao esta implementado neste builder --"
+            " falta o lado TLS/mTLS da Fatia A para o mesmo bundle PKCS#12/JKS."
+            " Para o lado de assinatura, use"
+            " strategy_factory.from_pkcs12(path, password) com signing_strategy(),"
+            " e informe tls_context_provider() separadamente."
         )
 
     # TODO(fatia-a): implementar junto com a configuracao TLS/mTLS
@@ -459,12 +474,10 @@ class SmartTokenClientBuilder:
             self._fhir_base,
         )
 
-        # Import tardio: ver nota de dependencia futura no docstring do
-        # modulo (B9 e sequenciado antes de B8 no roadmap).
-        # Sem "# type: ignore" aqui: mypy so emite import-untyped uma vez
-        # por modulo (ja reportado/silenciado no import sob TYPE_CHECKING
-        # acima); repetir o ignore neste import em runtime dispara
-        # "Unused type: ignore comment" (unused-ignore) em modo strict.
+        # Import tardio (dentro do metodo, nao no topo do modulo): evita o
+        # ciclo real de import com client.py, que importa HubContext deste
+        # modulo sob o proprio TYPE_CHECKING dele -- ver comentario junto
+        # ao import sob TYPE_CHECKING no topo deste arquivo.
         from hubsaude_client.client import SmartTokenClient as _SmartTokenClient
 
         return _SmartTokenClient(
