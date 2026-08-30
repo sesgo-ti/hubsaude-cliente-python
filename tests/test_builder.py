@@ -13,11 +13,11 @@ testes de validacao (fail-fast) nao precisam dessa fixture: todos levantam
 from __future__ import annotations
 
 import logging
+import ssl
 import sys
 import types
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Any
 
 import pytest
 
@@ -408,24 +408,6 @@ def test_raises_when_hub_context_versao_has_invalid_format(versao: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Metodos de conveniencia da Fatia A (ainda nao implementados)
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    "call",
-    [
-        lambda b: b.certificate_pem("cert.pem"),
-        lambda b: b.client_key_store("store.p12", b"senha"),
-        lambda b: b.server_trust_anchor("trust.pem"),
-    ],
-)
-def test_fatia_a_convenience_methods_are_not_implemented(call: Any) -> None:
-    with pytest.raises(NotImplementedError):
-        call(SmartTokenClientBuilder())
-
-
-# ---------------------------------------------------------------------------
 # private_key_pem() -- delega a strategy_factory.from_pem_file
 # ---------------------------------------------------------------------------
 
@@ -481,6 +463,153 @@ def test_private_key_pem_with_invalid_pem_content_raises_smart_token_error(tmp_p
     )
 
     with pytest.raises(SmartTokenError, match="formato"):
+        builder.build()
+
+
+# ---------------------------------------------------------------------------
+# certificate_pem() -- exige private_key_pem(), verifica consistencia (RF-15)
+# ---------------------------------------------------------------------------
+
+
+def test_certificate_pem_builds_client_with_tls_settings_provider(
+    fake_pem_pair, fake_smart_token_client_module: type[_FakeSmartTokenClient]
+) -> None:
+    client = (
+        SmartTokenClientBuilder()
+        .client_id(CLIENT_ID)
+        .token_endpoint(TOKEN_ENDPOINT)
+        .private_key_pem(fake_pem_pair["key"])
+        .certificate_pem(fake_pem_pair["cert"])
+        .build()
+    )
+    context = client.tls_context_provider.ssl_context()
+    assert isinstance(context, ssl.SSLContext)
+
+
+def test_certificate_pem_without_private_key_pem_raises(fake_pem_pair) -> None:
+    builder = (
+        SmartTokenClientBuilder()
+        .client_id(CLIENT_ID)
+        .token_endpoint(TOKEN_ENDPOINT)
+        .signing_strategy(FakeSigningStrategy())
+        .certificate_pem(fake_pem_pair["cert"])
+    )
+    with pytest.raises(SmartTokenError, match="certificate_pem exige private_key_pem"):
+        builder.build()
+
+
+def test_certificate_pem_with_mismatched_certificate_raises(fake_mismatched_pem_pair) -> None:
+    builder = (
+        SmartTokenClientBuilder()
+        .client_id(CLIENT_ID)
+        .token_endpoint(TOKEN_ENDPOINT)
+        .private_key_pem(fake_mismatched_pem_pair["matching_key"])
+        .certificate_pem(fake_mismatched_pem_pair["mismatched_cert"])
+    )
+    # Nota: o desvio abaixo (match="nao corresponde", nao "consistencia") esta
+    # documentado no relatorio desta task -- key_certificate_consistency.
+    # verify_strategy() (Task 5, ja existe) levanta SmartTokenError com a
+    # mensagem exata "Chave privada nao corresponde ao certificado: assinatura
+    # invalida" no caminho InvalidSignature, que nao contem a substring
+    # "consistencia" (essa so aparece no log de debug de sucesso e na
+    # mensagem generica de excecao inesperada, nenhum dos dois exercitado
+    # aqui).
+    with pytest.raises(SmartTokenError, match="nao corresponde"):
+        builder.build()
+
+
+# ---------------------------------------------------------------------------
+# client_key_store() -- PKCS#12: fornece assinatura E certificado de cliente
+# ---------------------------------------------------------------------------
+
+
+def test_client_key_store_builds_client_with_signing_and_tls(
+    fake_pkcs12_bundle, fake_smart_token_client_module: type[_FakeSmartTokenClient]
+) -> None:
+    client = (
+        SmartTokenClientBuilder()
+        .client_id(CLIENT_ID)
+        .token_endpoint(TOKEN_ENDPOINT)
+        .client_key_store(fake_pkcs12_bundle["path"], fake_pkcs12_bundle["password"])
+        .build()
+    )
+    assert isinstance(client.signing_strategy, PrivateKeySigningStrategy)
+    context = client.tls_context_provider.ssl_context()
+    assert isinstance(context, ssl.SSLContext)
+
+
+def test_client_key_store_and_private_key_pem_are_mutually_exclusive(fake_pkcs12_bundle, fake_pem_pair) -> None:
+    builder = (
+        SmartTokenClientBuilder()
+        .client_id(CLIENT_ID)
+        .token_endpoint(TOKEN_ENDPOINT)
+        .private_key_pem(fake_pem_pair["key"])
+        .client_key_store(fake_pkcs12_bundle["path"], fake_pkcs12_bundle["password"])
+        .tls_context_provider(FakeTlsContextProvider())
+    )
+    with pytest.raises(SmartTokenError, match="mutuamente exclusivos"):
+        builder.build()
+
+
+def test_client_key_store_and_certificate_pem_are_mutually_exclusive(fake_pkcs12_bundle, fake_pem_pair) -> None:
+    builder = (
+        SmartTokenClientBuilder()
+        .client_id(CLIENT_ID)
+        .token_endpoint(TOKEN_ENDPOINT)
+        .client_key_store(fake_pkcs12_bundle["path"], fake_pkcs12_bundle["password"])
+        .certificate_pem(fake_pem_pair["cert"])
+    )
+    with pytest.raises(SmartTokenError, match="mutuamente exclusivos"):
+        builder.build()
+
+
+# ---------------------------------------------------------------------------
+# server_trust_anchor() -- Path/str ou x509.Certificate em memoria
+# ---------------------------------------------------------------------------
+
+
+def test_server_trust_anchor_with_path_builds_client(
+    fake_pem_pair, fake_smart_token_client_module: type[_FakeSmartTokenClient]
+) -> None:
+    # Nota: nao usa _valid_builder() aqui (desvio do brief documentado no
+    # relatorio) -- _valid_builder() ja chama .tls_context_provider(...), o
+    # que colidiria com server_trust_anchor() (mutuamente exclusivos, ver
+    # test_server_trust_anchor_and_tls_context_provider_are_mutually_exclusive
+    # abaixo, que usa _valid_builder() de proposito para exercitar exatamente
+    # esse conflito).
+    client = (
+        SmartTokenClientBuilder()
+        .client_id(CLIENT_ID)
+        .token_endpoint(TOKEN_ENDPOINT)
+        .signing_strategy(FakeSigningStrategy())
+        .server_trust_anchor(fake_pem_pair["cert"])
+        .build()
+    )
+    context = client.tls_context_provider.ssl_context()
+    assert isinstance(context, ssl.SSLContext)
+
+
+def test_server_trust_anchor_with_certificate_object_builds_client(
+    fake_pem_pair, fake_smart_token_client_module: type[_FakeSmartTokenClient]
+) -> None:
+    from hubsaude_client import pem_loader
+
+    cert = pem_loader.load_certificate(fake_pem_pair["cert"])
+    client = (
+        SmartTokenClientBuilder()
+        .client_id(CLIENT_ID)
+        .token_endpoint(TOKEN_ENDPOINT)
+        .signing_strategy(FakeSigningStrategy())
+        .server_trust_anchor(cert)
+        .build()
+    )
+    context = client.tls_context_provider.ssl_context()
+    assert isinstance(context, ssl.SSLContext)
+
+
+def test_server_trust_anchor_and_tls_context_provider_are_mutually_exclusive(fake_pem_pair) -> None:
+    builder = _valid_builder().server_trust_anchor(fake_pem_pair["cert"])
+    with pytest.raises(SmartTokenError, match="mutuamente exclusivos"):
         builder.build()
 
 

@@ -20,17 +20,22 @@ integradora (quem precisa ser thread-safe e o ``SmartTokenClient``
 retornado — responsabilidade de ``client.py``, Tarefa B8).
 
 Metodos de conveniencia que, no ``.java``, recebem ``Path``/``KeyStore``
-(carga de PEM, PKCS#12/JKS, trust anchor) pertencem a Fatia A.
-``private_key_pem()`` ja delega a ``strategy_factory.from_pem_file`` (a
-resolucao e adiada para :meth:`SmartTokenClientBuilder.build`, nao
-acontece na propria chamada -- ver docstring do metodo). Os demais
-(``certificate_pem()``, ``client_key_store()``, ``server_trust_anchor()``)
-ainda nao tem implementacao concreta nesta base de codigo -- dependem do
-lado TLS/mTLS da Fatia A (``ssl_context_factory.py``, ainda nao portado;
-ver ``# TODO(fatia-a)`` nesses metodos abaixo). Ate la, o builder aceita
-diretamente instancias que satisfazem os Protocols ja prontos em
-``ports.py`` (``SigningStrategy``, ``TlsContextProvider``) — os
-consumidores atuais devem construir essas instancias por fora do builder.
+(carga de PEM, PKCS#12/JKS, trust anchor) pertencem a Fatia A -- todos ja
+ligados nesta base de codigo. ``private_key_pem()`` delega a
+``strategy_factory.from_pem_file``/``SigningSettings``;
+``certificate_pem()`` e ``server_trust_anchor()`` delegam a
+``pem_loader``/``TlsSettings`` (``ssl_context_factory.py``, Fatia A);
+``client_key_store()`` delega a
+``strategy_factory.load_pkcs12_key_and_certificate`` para prover, de um
+unico bundle PKCS#12, tanto a estrategia de assinatura quanto o
+certificado de cliente para mTLS. Em todos os casos a resolucao efetiva e
+adiada para :meth:`SmartTokenClientBuilder.build` -- nao acontece na
+propria chamada do metodo de conveniencia (ver docstring de cada um). O
+builder continua aceitando, como via alternativa/escape hatch, instancias
+que satisfazem diretamente os Protocols de ``ports.py``
+(``SigningStrategy``, ``TlsContextProvider``) via :meth:`signing_strategy`
+e :meth:`tls_context_provider` -- util quando a fonte de credenciais nao
+se encaixa nos atalhos acima (ex.: cofre de segredos remoto).
 
 PKCS#11/HSM (``strategy_factory.from_pkcs11``, Fatia A) ja esta disponivel
 mas, assim como no ``.java`` original (ver o segundo exemplo da classe
@@ -74,13 +79,17 @@ resolvido via descoberta nao e' revalidado aqui.
 from __future__ import annotations
 
 import re
+import ssl
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
 
-from hubsaude_client import algorithms, strategy_factory
+from cryptography import x509
+from cryptography.hazmat.primitives.asymmetric.types import PrivateKeyTypes
+
+from hubsaude_client import algorithms, key_certificate_consistency, pem_loader, strategy_factory
 from hubsaude_client._log import get_logger
 from hubsaude_client.defaults import (
     DEFAULT_ASSERTION_TTL_SECONDS,
@@ -94,6 +103,8 @@ from hubsaude_client.defaults import (
 from hubsaude_client.exceptions import SmartTokenError
 from hubsaude_client.fault_tolerance import FaultToleranceConfig
 from hubsaude_client.ports import SigningStrategy, TlsContextProvider
+from hubsaude_client.settings import SigningSettings
+from hubsaude_client.tls_settings import TlsSettings
 from hubsaude_client.token_cache import TokenCacheStrategy
 
 if TYPE_CHECKING:
@@ -149,6 +160,22 @@ class HubContext:
     versao: str
 
 
+class _TlsSettingsProvider:
+    """Adapta TlsSettings (Task 8) ao Protocol TlsContextProvider exigido
+    pelo builder -- os nomes de metodo divergem de proposito
+    (``TlsSettings.resolve_ssl_context()`` vs
+    ``TlsContextProvider.ssl_context()``, ver ``ports.py``).
+    """
+
+    __slots__ = ("_settings",)
+
+    def __init__(self, settings: TlsSettings) -> None:
+        self._settings = settings
+
+    def ssl_context(self) -> ssl.SSLContext:
+        return self._settings.resolve_ssl_context()
+
+
 class SmartTokenClientBuilder:
     """Builder fluente e publico do ``SmartTokenClient``.
 
@@ -177,6 +204,11 @@ class SmartTokenClientBuilder:
         "_token_cache_max_entries",
         "_hub_context_ig",
         "_hub_context_versao",
+        "_certificate_pem_path",
+        "_client_key_store_path",
+        "_client_key_store_password",
+        "_server_trust_anchor_path",
+        "_server_trust_anchor_cert",
     )
 
     def __init__(self) -> None:
@@ -199,6 +231,11 @@ class SmartTokenClientBuilder:
         self._token_cache_max_entries: int = DEFAULT_TOKEN_CACHE_MAX_ENTRIES
         self._hub_context_ig: str | None = None
         self._hub_context_versao: str | None = None
+        self._certificate_pem_path: Path | None = None
+        self._client_key_store_path: Path | None = None
+        self._client_key_store_password: bytes | None = None
+        self._server_trust_anchor_path: Path | None = None
+        self._server_trust_anchor_cert: x509.Certificate | None = None
 
     # ------------------------------------------------------------------
     # Metodos encadeaveis (fluent setters)
@@ -244,9 +281,10 @@ class SmartTokenClientBuilder:
         """Define o fornecedor de contexto TLS/mTLS (obrigatorio).
 
         Aceita qualquer implementacao que satisfaca
-        ``ports.TlsContextProvider``. Os metodos de conveniencia que montam
-        esse contexto a partir de certificado/chave em disco ainda nao
-        existem (Fatia A) -- ver os metodos ``# TODO(fatia-a)`` abaixo.
+        ``ports.TlsContextProvider``. Mutuamente exclusivo com os metodos de
+        conveniencia ``certificate_pem``/``client_key_store``/
+        ``server_trust_anchor`` -- se nenhum deles for usado, este metodo
+        continua obrigatorio.
         """
         self._tls_context_provider = tls_context_provider
         return self
@@ -336,7 +374,7 @@ class SmartTokenClientBuilder:
         return self
 
     # ------------------------------------------------------------------
-    # Metodos de conveniencia (Fatia A) -- ainda nao implementados
+    # Metodos de conveniencia (Fatia A)
     # ------------------------------------------------------------------
 
     def private_key_pem(self, path: Path | str, password: bytearray | None = None) -> SmartTokenClientBuilder:
@@ -368,60 +406,71 @@ class SmartTokenClientBuilder:
         self._private_key_pem_password = password
         return self
 
-    # TODO(fatia-a): implementar junto com private_key_pem() -- verificacao
-    # de consistencia chave-certificado (RF-15) tambem depende deste metodo.
-    def certificate_pem(self, path: object) -> SmartTokenClientBuilder:
+    def certificate_pem(self, path: Path | str) -> SmartTokenClientBuilder:
         """Carrega o certificado de cliente (mTLS) a partir de um arquivo PEM.
 
-        Ainda nao implementado -- depende da Fatia A (RF-11/RF-14). Use
-        :meth:`tls_context_provider` diretamente por enquanto.
+        So faz sentido combinado com :meth:`private_key_pem` -- e o mesmo par
+        chave/certificado usado tanto para assinar o ``client_assertion``
+        quanto para a apresentacao do certificado de cliente no handshake TLS.
+        A resolucao (incluindo a verificacao de consistencia chave-certificado,
+        RF-15, via ``key_certificate_consistency.verify_strategy``) e adiada
+        para :meth:`build`.
+
+        Args:
+            path: caminho para o arquivo PEM do certificado.
 
         Raises:
-            NotImplementedError: sempre, nesta versao do SDK.
+            SmartTokenError: em :meth:`build`, se ``private_key_pem`` nao tiver
+                sido informado, se o certificado nao puder ser carregado, ou se
+                nao corresponder a chave privada configurada.
         """
-        raise NotImplementedError(
-            "certificate_pem() depende da Fatia A (validacao de certificado,"
-            " RF-14) e ainda nao esta implementado. Use tls_context_provider()"
-            " com uma implementacao propria de ports.TlsContextProvider por"
-            " enquanto."
-        )
+        self._certificate_pem_path = Path(path)
+        return self
 
-    # TODO(fatia-a): implementar quando houver suporte a KeyStore
-    # (PKCS#12/JKS) do lado de assinatura (RF-12 item 2).
-    def client_key_store(self, path: object, password: bytes, alias: str | None = None) -> SmartTokenClientBuilder:
-        """Carrega chave e certificado de cliente a partir de um KeyStore
-        (PKCS#12/JKS).
+    def client_key_store(self, path: Path | str, password: bytes, alias: str | None = None) -> SmartTokenClientBuilder:
+        """Carrega chave e certificado de cliente a partir de um bundle PKCS#12.
 
-        Ainda nao implementado -- depende da Fatia A (RF-12 item 2). Use
-        :meth:`signing_strategy` e :meth:`tls_context_provider` diretamente
-        por enquanto.
+        Atalho para ``strategy_factory.load_pkcs12_key_and_certificate``: o
+        mesmo bundle fornece tanto a estrategia de assinatura do
+        ``client_assertion`` quanto o certificado de cliente para mTLS.
+        Mutuamente exclusivo com :meth:`private_key_pem`/:meth:`signing_strategy`
+        (fonte de assinatura) e com :meth:`certificate_pem` (ja fornece seu
+        proprio certificado).
+
+        Args:
+            path: caminho para o arquivo PKCS#12 (``.p12``/``.pfx``).
+            password: senha do bundle.
+            alias: aceito por paridade com a API ``.java``; sem efeito aqui --
+                ``cryptography.hazmat...pkcs12.load_key_and_certificates`` nao
+                indexa por alias (API de base da biblioteca, nao escolha deste
+                projeto -- ver docstring de ``strategy_factory``).
 
         Raises:
-            NotImplementedError: sempre, nesta versao do SDK.
+            SmartTokenError: em :meth:`build`, se a senha for incorreta, o
+                arquivo for invalido, ou o bundle nao contiver chave/certificado.
         """
-        raise NotImplementedError(
-            "client_key_store() depende da Fatia A (suporte a KeyStore"
-            " PKCS#12/JKS, RF-12) e ainda nao esta implementado."
-        )
+        self._client_key_store_path = Path(path)
+        self._client_key_store_password = password
+        return self
 
-    # TODO(fatia-a): implementar junto com a configuracao TLS/mTLS
-    # (RF-10 item 3 -- trust anchor customizado).
-    def server_trust_anchor(self, path: object) -> SmartTokenClientBuilder:
+    def server_trust_anchor(self, trust_anchor: Path | str | x509.Certificate) -> SmartTokenClientBuilder:
         """Define um trust anchor customizado (substitui o trust store padrao).
 
-        Ainda nao implementado -- depende da Fatia A (RF-10 item 3). Use
-        :meth:`tls_context_provider` com um ``ssl.SSLContext`` ja
-        configurado por enquanto.
+        Aceita um caminho de arquivo PEM ou um certificado ``x509.Certificate``
+        ja em memoria (ex: obtido dinamicamente em testes de integracao) -- as
+        duas sobrecargas do ``.java`` colapsadas num unico metodo, via
+        dispatch por tipo. Uso pretendido: homologacao/simuladores locais, nao
+        producao (que deve confiar no trust store padrao do sistema).
 
-        Raises:
-            NotImplementedError: sempre, nesta versao do SDK.
+        Args:
+            trust_anchor: caminho do certificado PEM, ou o certificado ja
+                carregado em memoria.
         """
-        raise NotImplementedError(
-            "server_trust_anchor() depende da Fatia A (configuracao TLS/mTLS,"
-            " RF-10) e ainda nao esta implementado. Use tls_context_provider()"
-            " com um ssl.SSLContext ja configurado com o trust anchor"
-            " desejado por enquanto."
-        )
+        if isinstance(trust_anchor, x509.Certificate):
+            self._server_trust_anchor_cert = trust_anchor
+        else:
+            self._server_trust_anchor_path = Path(trust_anchor)
+        return self
 
     # ------------------------------------------------------------------
     # build()
@@ -445,8 +494,10 @@ class SmartTokenClientBuilder:
             SmartTokenError: se qualquer validacao falhar.
         """
         client_id = _require_non_blank(self._client_id, "client_id")
-        signing_strategy = self._resolve_signing_strategy()
-        tls_context_provider = self._require_tls_context_provider()
+        signing_strategy, client_key, client_cert_from_key_store = self._resolve_signing_material()
+        tls_context_provider = self._resolve_tls_context_provider(
+            signing_strategy, client_key, client_cert_from_key_store
+        )
         self._validate_endpoint_config()
         resolved_algorithm = self._resolve_jwt_algorithm()
         self._validate_timeouts()
@@ -498,27 +549,116 @@ class SmartTokenClientBuilder:
     # Validacoes internas
     # ------------------------------------------------------------------
 
-    def _resolve_signing_strategy(self) -> SigningStrategy:
-        """Resolve a estrategia de assinatura efetiva.
+    def _resolve_signing_material(self) -> tuple[SigningStrategy, PrivateKeyTypes | None, x509.Certificate | None]:
+        """Resolve a estrategia de assinatura efetiva e, quando aplicavel, o
+        material reaproveitavel para mTLS (chave/certificado carregados da
+        mesma fonte).
 
-        ``signing_strategy()`` e ``private_key_pem()`` sao mutuamente
-        exclusivos -- a resolucao via PEM e adiada ate aqui (nao acontece
-        em :meth:`private_key_pem`) para que a ordem de chamada entre ela e
-        :meth:`jwt_algorithm` seja irrelevante.
+        ``signing_strategy()``, ``private_key_pem()`` e ``client_key_store()``
+        sao mutuamente exclusivos entre si -- exatamente uma fonte de
+        assinatura deve ser informada antes de :meth:`build`.
+
+        Returns:
+            A estrategia efetiva; a chave privada em memoria reaproveitavel
+            para mTLS (``None`` quando a estrategia veio de HSM/cofre de
+            segredos, que nunca expoe a chave); e o certificado de cliente
+            ja resolvido quando a fonte foi ``client_key_store`` (``None``
+            nos demais casos -- ``certificate_pem`` resolve o certificado
+            separadamente em :meth:`_resolve_tls_context_provider`).
         """
-        if self._private_key_pem_path is not None:
-            if self._signing_strategy is not None:
+        sources = (self._signing_strategy, self._private_key_pem_path, self._client_key_store_path)
+        if sum(source is not None for source in sources) > 1:
+            raise SmartTokenError(
+                "signing_strategy, private_key_pem e client_key_store sao mutuamente"
+                " exclusivos; informe apenas um dos tres"
+            )
+
+        if self._client_key_store_path is not None:
+            # _client_key_store_password e sempre preenchida junto com
+            # _client_key_store_path (as duas so sao atribuidas juntas, em
+            # client_key_store()) -- o None aqui e inalcancavel na pratica,
+            # mas mypy nao faz narrowing entre campos distintos; SmartTokenError
+            # explicito narrowa o tipo para o restante do bloco.
+            if self._client_key_store_password is None:
                 raise SmartTokenError(
-                    "signing_strategy e private_key_pem sao mutuamente exclusivos;" " informe apenas um dos dois"
+                    "estado interno inconsistente: client_key_store_path definido" " sem client_key_store_password"
                 )
+            resolved_algorithm = algorithms.resolve(self._jwt_algorithm).jwt_algorithm
+            client_key, client_cert = strategy_factory.load_pkcs12_key_and_certificate(
+                self._client_key_store_path, self._client_key_store_password
+            )
+            strategy = strategy_factory.from_private_key(client_key, resolved_algorithm)
+            return strategy, client_key, client_cert
+
+        if self._private_key_pem_path is not None:
             # Normalizado aqui (mesma logica de _resolve_jwt_algorithm) para que
             # strategy.jwt_algorithm coincida com o jwt_algorithm efetivo do
             # cliente, independente da caixa informada em jwt_algorithm().
             resolved_algorithm = algorithms.resolve(self._jwt_algorithm).jwt_algorithm
-            return strategy_factory.from_pem_file(
-                self._private_key_pem_path, self._private_key_pem_password, resolved_algorithm
+            resolved = SigningSettings(
+                private_key_pem=self._private_key_pem_path,
+                private_key_password=self._private_key_pem_password,
+                jwt_algorithm=resolved_algorithm,
+            ).resolve()
+            return resolved.strategy, resolved.client_key, None
+
+        return self._require_signing_strategy(), None, None
+
+    def _resolve_tls_context_provider(
+        self,
+        signing_strategy: SigningStrategy,
+        client_key: PrivateKeyTypes | None,
+        client_cert_from_key_store: x509.Certificate | None,
+    ) -> TlsContextProvider:
+        """Resolve o fornecedor de contexto TLS/mTLS efetivo.
+
+        ``tls_context_provider()`` e os metodos de conveniencia
+        (``certificate_pem``/``client_key_store``/``server_trust_anchor``)
+        sao mutuamente exclusivos entre si -- quando nenhum dos ultimos e
+        usado, ``tls_context_provider()`` continua obrigatorio
+        (comportamento inalterado).
+        """
+        convenience_used = (
+            self._certificate_pem_path is not None
+            or client_cert_from_key_store is not None
+            or self._server_trust_anchor_path is not None
+            or self._server_trust_anchor_cert is not None
+        )
+        if not convenience_used:
+            return self._require_tls_context_provider()
+        if self._tls_context_provider is not None:
+            raise SmartTokenError(
+                "tls_context_provider e os metodos de conveniencia TLS"
+                " (certificate_pem/client_key_store/server_trust_anchor) sao"
+                " mutuamente exclusivos; informe apenas uma forma"
             )
-        return self._require_signing_strategy()
+
+        client_certificate = client_cert_from_key_store
+        if self._certificate_pem_path is not None:
+            if client_cert_from_key_store is not None:
+                raise SmartTokenError(
+                    "certificate_pem e client_key_store sao mutuamente exclusivos"
+                    " (client_key_store ja fornece seu proprio certificado)"
+                )
+            if client_key is None:
+                raise SmartTokenError(
+                    "certificate_pem exige private_key_pem tambem (mTLS precisa"
+                    " da chave e do certificado do mesmo par)"
+                )
+            client_certificate = pem_loader.load_certificate(self._certificate_pem_path)
+            # RF-15: confirma que a chave carregada por private_key_pem() de
+            # fato corresponde a este certificado antes de aceitar a
+            # configuracao -- no-op silencioso para estrategias customizadas
+            # (nao PrivateKeySigningStrategy, ver key_certificate_consistency).
+            key_certificate_consistency.verify_strategy(signing_strategy, client_certificate)
+
+        settings = TlsSettings(
+            client_certificate=client_certificate,
+            client_private_key=client_key if client_certificate is not None else None,
+            server_trust_anchor_path=self._server_trust_anchor_path,
+            server_trust_anchor_cert=self._server_trust_anchor_cert,
+        )
+        return _TlsSettingsProvider(settings)
 
     def _require_signing_strategy(self) -> SigningStrategy:
         if self._signing_strategy is None:
