@@ -287,3 +287,20 @@ def fake_pkcs12_bundle_without_key(tmp_path):
     p12_path = tmp_path / "bundle_no_key.p12"
     p12_path.write_bytes(p12_bytes)
     return {"path": p12_path, "password": password}
+
+
+@pytest.fixture
+def fake_pkcs12_bundle_without_certificate(tmp_path):
+    """Bundle PKCS#12 valido mas sem certificado (so chave privada)."""
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.hazmat.primitives.serialization import pkcs12
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    password = b"p12-sem-certificado-123"
+    p12_bytes = pkcs12.serialize_key_and_certificates(
+        b"hubsaude-client-no-cert", key, None, None, serialization.BestAvailableEncryption(password)
+    )
+    p12_path = tmp_path / "bundle_no_cert.p12"
+    p12_path.write_bytes(p12_bytes)
+    return {"path": p12_path, "password": password}
