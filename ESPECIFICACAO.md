@@ -117,15 +117,22 @@ sequenceDiagram
 ```
 
 Este é o fluxo-alvo do SDK completo. **Nesta base de código, o
-orquestrador (`App->>SDK->>AS`) ainda não existe** — o que está
-implementado hoje são colaboradores isolados que o orquestrador vai
-compor.
+orquestrador (`App->>SDK->>AS`) já existe** como
+`client.SmartTokenClient` (construído por
+`builder.SmartTokenClientBuilder`), compondo os colaboradores descritos
+nas seções seguintes. A configuração TLS/mTLS efetiva
+(`tls_context_provider`) já tem implementações concretas de
+`ports.TlsContextProvider` (`ssl_context_factory.py`, acessíveis via
+`builder.certificate_pem()`/`client_key_store()`/`server_trust_anchor()`);
+quem integra pode fornecer a própria implementação do Protocol apenas
+para casos fora desses três (ex.: rotação dinâmica de certificado a
+partir de um cofre).
 
 ## 6. Requisitos funcionais
 
 ### 6.1 Autenticação SMART Backend Services
 
-#### RF-01 — Construção do `client_assertion` (JWT) — ❌ Não implementado
+#### RF-01 — Construção do `client_assertion` (JWT) — ✅ Implementado
 
 1. O SDK DEVE construir um JWS compacto (`header.payload.assinatura`),
    com cada parte codificada em **Base64URL sem padding** (RFC 7515).
@@ -156,11 +163,18 @@ compor.
 7. Um novo assertion DEVE ser gerado a cada requisição real ao token
    endpoint (nunca reutilizado).
 
-*Status atual:* nenhum código monta ou assina um `client_assertion`.
-Existe apenas a peça criptográfica de baixo nível reaproveitável por
-esse requisito quando ele for implementado — ver RF-16.
+*Como implementado:* `client.SmartTokenClient._build_client_assertion()`
+monta o JWS compacto (header `alg`/`typ`, `kid` opcional; payload
+`iss`/`sub`/`aud`/`iat`/`exp`/`jti`/`hub_ctx` opcional) e assina via
+`signing_strategy.sign(...)` (port `ports.SigningStrategy`, item 6 da
+lista acima). Um `jti` novo (`uuid.uuid4()`) é gerado a cada tentativa
+real de requisição, inclusive em retries (item 7). O TTL (item 4) é
+apenas avisado em log por `builder.py` quando excede o recomendado — o
+servidor de autorização é quem de fato rejeitaria um `exp` acima do
+limite, então isto não é validado como erro fail-fast (`DEVERIA`,
+RFC 2119).
 
-#### RF-02 — Requisição de token — ❌ Não implementado
+#### RF-02 — Requisição de token — ✅ Implementado
 
 1. O SDK DEVE enviar `POST` ao token endpoint com
    `Content-Type: application/x-www-form-urlencoded`, contendo
@@ -172,9 +186,12 @@ esse requisito quando ele for implementado — ver RF-16.
    ([W3C Trace Context](https://www.w3.org/TR/trace-context/)), com um
    par trace-id/span-id novo por tentativa (inclusive retries).
 
-*Status atual:* nenhuma requisição HTTP é feita pelo SDK ainda; a peça
-de geração do `traceparent` que essa requisição vai usar já existe — ver
-RF-02 na coluna de status abaixo e a seção 6.4.
+*Como implementado:* `client.SmartTokenClient._fetch_token()` envia
+`POST` (via `httpx.Client`) com os campos do form body (item 1),
+respeitando `connect_timeout`/`request_timeout` de
+`FaultToleranceConfig` (item 2, configurados no `httpx.Timeout` do
+cliente) e incluindo `traceparent` com um `TraceContext` novo por
+tentativa, inclusive retries (item 3).
 
 #### RF-02b — Geração do contexto de trace (`traceparent`) — ✅ Implementado
 
@@ -191,10 +208,10 @@ RF-02 na coluna de status abaixo e a seção 6.4.
 
 *Como implementado:* `trace.TraceContext`, com `generate()` para criar
 um novo par e `traceparent()` para montar o header. O envio efetivo
-desse header numa requisição HTTP (RF-02.3) ainda depende do
-orquestrador inexistente.
+desse header numa requisição HTTP (RF-02.3) já acontece em
+`client.SmartTokenClient` e em `discovery.SmartConfigurationDiscovery`.
 
-#### RF-03 — Tratamento da resposta — ❌ Não implementado
+#### RF-03 — Tratamento da resposta — ✅ Implementado
 
 1. Exclusivamente **HTTP 200** DEVE ser tratado como sucesso.
 2. Na resposta de sucesso, o SDK DEVE extrair `access_token` (ausência
@@ -204,7 +221,18 @@ orquestrador inexistente.
 4. Qualquer outro status ≠ 200 DEVE resultar em erro com o status e o
    corpo sanitizado (ver [RNF-02](#rnf-02--sanitização-de-logs-e-mensagens-de-erro)).
 
-*Status atual:* não há código que envie ou interprete uma resposta HTTP.
+*Como implementado:* `client.SmartTokenClient._fetch_token()` só
+delega a `response_guard.TokenResponseGuard.parse_success_response()`
+quando `response.status_code == 200` (item 1); qualquer outro status
+vai para `error_classifier.ErrorClassifier.http_failure()` (itens 3–4),
+que loga em nível `WARNING` para 429 (sem retry, pois retry só ocorre
+em falha de transporte — ver RF-07) e `ERROR` para os demais, com o
+corpo sanitizado por `error_classifier.sanitize_error_response()`.
+`TokenResponseGuard.parse_success_response()` extrai `access_token`
+(erro se ausente/vazio), sanitiza `expires_in` com o padrão
+`DEFAULT_EXPIRES_IN_SECONDS` (3600) quando ausente/inválido, ignora
+campos desconhecidos na validação mas preserva o corpo cru em
+`TokenResponse.raw` (item 2).
 
 ### 6.2 Cache e concorrência
 
@@ -228,11 +256,12 @@ orquestrador inexistente.
 *Como implementado:* `token_cache.TokenCacheStrategy`
 (`cached_if_valid`, `store`, `invalidate`, `invalidate_all`, `size`),
 com `CachedToken`/`CachedTokenResponse`. A normalização do scope
-(item 1) é responsabilidade documentada do chamador — ainda inexistente
-— não desta classe. Uma entrada inválida encontrada em `cached_if_valid`
-é removida na mesma chamada (*eviction* antecipada).
+(item 1) é responsabilidade do chamador (`client.SmartTokenClient._normalize_scope`,
+`strip()`; `None` -> string vazia) — não desta classe. Uma entrada
+inválida encontrada em `cached_if_valid` é removida na mesma chamada
+(*eviction* antecipada).
 
-#### RF-05 — *Single-flight* por scope — ❌ Não implementado
+#### RF-05 — *Single-flight* por scope — ✅ Implementado
 
 1. Requisições concorrentes pelo **mesmo scope** NÃO DEVEM disparar
    obtenções simultâneas ao AS; apenas uma requisição em voo por scope,
@@ -242,23 +271,31 @@ com `CachedToken`/`CachedTokenResponse`. A normalização do scope
 3. A implementação PODE usar *lock striping* para manter memória O(1)
    em relação ao número de scopes distintos.
 
-*Status atual:* por design, este requisito é responsabilidade do
-orquestrador HTTP (inexistente), não do cache — ver nota de escopo no
-código de `token_cache.py`.
+*Como implementado:* `client.SmartTokenClient` mantém
+`_scope_locks: list[threading.Lock]` de tamanho fixo
+(`_SCOPE_LOCK_STRIPES = 32`), selecionado por
+`hash(scope) % _SCOPE_LOCK_STRIPES` (item 3). Em
+`obtain_token_response()`, um *miss* de cache adquire o lock do stripe
+e reconsulta o cache antes de ir à rede (*double-checked locking*, item
+2), garantindo no máximo uma requisição em voo por scope na prática
+(item 1). Isso é responsabilidade de `client.py`, não de
+`token_cache.py` — ver nota de escopo no código de `token_cache.py`.
 
-#### RF-06 — Invalidação de cache — ✅ Implementado (como operação de cache)
+#### RF-06 — Invalidação de cache — ✅ Implementado
 
 1. O SDK DEVE permitir invalidar todo o cache.
 2. O SDK DEVE permitir invalidar o cache de um scope específico
    (aplicando a mesma normalização de RF-04.1).
 
 *Como implementado:* `TokenCacheStrategy.invalidate(scope)` e
-`invalidate_all()`. Ainda não exposto como método de uma API pública de
-cliente (essa API não existe), apenas como método da classe de cache.
+`invalidate_all()`, expostos na API pública do cliente via
+`client.SmartTokenClient.invalidate_cache(scope=None)` — `None` invalida
+tudo (item 1); um scope explícito é normalizado e invalida só aquela
+entrada (item 2).
 
 ### 6.3 Resiliência
 
-#### RF-07 — Retry com backoff exponencial — ⚠️ Parcial
+#### RF-07 — Retry com backoff exponencial — ✅ Implementado
 
 1. São **falhas transitórias**, elegíveis a retry: timeout de conexão,
    timeout de requisição HTTP e recusa/queda de conexão TCP.
@@ -271,26 +308,47 @@ cliente (essa API não existe), apenas como método da classe de cache.
 5. Esgotadas as tentativas, o SDK DEVE falhar com erro que informe o
    número de tentativas e preserve a causa original.
 
-*Como implementado:* apenas o cálculo do atraso (item 4) existe, em
+*Como implementado:* o cálculo do atraso (item 4) está em
 `retry.compute_retry_delay_seconds(attempt)`. A classificação de falha
-transitória (itens 1–2), o laço de tentativas e o esgotamento com erro
-final (itens 3, 5) dependem do orquestrador HTTP, ainda inexistente. A
-normalização de `max_retries` não positivo já existe, mas em outro
-componente — ver RF-18.
+transitória (itens 1–2) é feita por
+`error_classifier.ErrorClassifier.retriable_or_reraise()`/
+`error_classifier.is_transient_network_failure()` — qualquer resposta
+HTTP efetivamente recebida (inclusive 429/5xx) é tratada por
+`http_failure()` e nunca chega ao laço de retry. O laço de tentativas e
+o esgotamento com erro final (itens 3, 5) estão em
+`client.SmartTokenClient._fetch_token()`, que preserva a causa original
+(`raise ... from last_exc`). A normalização de `max_retries` não
+positivo continua em outro componente — ver RF-18.
 
-#### RF-08 — Diagnóstico de rejeição de certificado de cliente (mTLS) — ❌ Não implementado
+#### RF-08 — Diagnóstico de rejeição de certificado de cliente (mTLS) — ⚠️ Parcial
 
 1. Quando uma falha de I/O indicar, heuristicamente, que o servidor
    rejeitou o certificado de cliente após o handshake mTLS, o SDK DEVE
    falhar imediatamente (sem retry) com mensagem diagnóstica.
 2. Essa heurística DEVE apenas enriquecer a mensagem de erro.
 
-*Status atual:* não há, ainda, nenhuma conexão TLS/mTLS estabelecida
-pelo SDK.
+*Como implementado:* a heurística em si já existe e está testada —
+`error_classifier.is_likely_client_certificate_rejection()` reconhece
+fragmentos de alerta TLS típicos desse cenário (`bad_record_mac`,
+`certificate_revoked`, `certificate_expired`, etc., excluindo
+`ssl.SSLCertVerificationError`, que é rejeição do certificado do
+*servidor*, não do cliente) e `ErrorClassifier.retriable_or_reraise()`
+falha imediatamente, sem retry, com mensagem diagnóstica (itens 1–2).
+Há um ponto em aberto documentado no próprio código
+(`# TODO(duvida)` em `error_classifier.py`): o equivalente Python de
+`AEADBadTagException` (Java) não existe como exceção própria no stack
+`ssl`/OpenSSL — a implementação assume que o sintoma equivalente do
+lado do cliente (`bad_record_mac` após o `Finished`) já é coberto pela
+heurística acima, mas isso não foi confirmado contra o comportamento
+real do `.java`. O que falta para tirar o "Parcial": mesmo com
+`ports.TlsContextProvider` já implementado (`ssl_context_factory.py`,
+ver RF-10/RF-11), a heurística só foi exercitada com exceções
+`ssl.SSLError` simuladas em teste, nunca contra uma conexão mTLS real
+com certificado rejeitado de fato — validação end-to-end pendente.
 
 ### 6.4 Descoberta de endpoint
 
-#### RF-09 — Descoberta via `.well-known/smart-configuration` — ❌ Não implementado
+#### RF-09 — Descoberta via `.well-known/smart-configuration` — ✅ Implementado
 
 1. Alternativamente a um token endpoint explícito, o SDK DEVE aceitar
    uma URL base FHIR e resolver o endpoint via
@@ -301,11 +359,19 @@ pelo SDK.
 4. Resposta ≠ 200 ou sem `token_endpoint` DEVE resultar em erro.
 5. A resolução DEVE ocorrer uma única vez, na construção do cliente.
 
-*Status atual:* não há construção de cliente nem chamada de descoberta.
+*Como implementado:* `discovery.SmartConfigurationDiscovery.discover_token_endpoint()`
+resolve `<fhir_base>/.well-known/smart-configuration` (item 1) sobre um
+`httpx.Client` recebido por injeção — nunca criado internamente —, o
+mesmo usado pelo restante do cliente (item 3). A exclusividade mútua
+entre `token_endpoint`/`fhir_base` (item 2) é validada em
+`builder.SmartTokenClientBuilder._validate_endpoint_config()`.
+`client.SmartTokenClient.__init__()` invoca a descoberta uma única vez,
+quando `fhir_base` é informado (item 5). Resposta ≠ 200 ou sem
+`token_endpoint` válido resulta em `SmartTokenError` (item 4).
 
 ### 6.5 TLS e mTLS
 
-#### RF-10 — Protocolo TLS e confiança no servidor — ❌ Não implementado
+#### RF-10 — Protocolo TLS e confiança no servidor — ✅ Implementado
 
 1. O protocolo TLS DEVE ser configurável; o padrão DEVE ser **TLS 1.3**.
 2. Sem trust anchor customizado, o SDK DEVE validar o servidor pelo
@@ -314,11 +380,20 @@ pelo SDK.
    trust store padrão.
 4. O SDK NÃO DEVE oferecer na API pública um modo "confiar em tudo".
 
-*Status atual:* a constante `DEFAULT_TLS_PROTOCOL = "TLSv1.3"` já existe
-em `defaults.py`, mas nenhum código constrói ou configura um contexto
-TLS.
+*Como implementado:* `ssl_context_factory.build_ssl_context()` monta um
+`ssl.SSLContext(PROTOCOL_TLS_CLIENT)` com `minimum_version`/`maximum_version`
+fixados no protocolo resolvido (`tls_protocol`, padrão
+`defaults.DEFAULT_TLS_PROTOCOL = "TLSv1.3"`; `TLSv1.2` também aceito —
+item 1). Sem `server_trust_anchor_path`/`trusted_cert`, chama
+`context.load_default_certs(ssl.Purpose.SERVER_AUTH)` (trust store
+padrão, item 2); com um dos dois, carrega o certificado informado via
+`context.load_verify_locations(cadata=...)`, após validar seu período
+de validade (`pem_loader.check_certificate_validity`, item 3). Acessível
+via `builder.server_trust_anchor(caminho_ou_certificado)`. Nenhum modo
+que desative a verificação do servidor é exposto na API pública (item
+4).
 
-#### RF-11 — mTLS (TLS mútuo) — ❌ Não implementado
+#### RF-11 — mTLS (TLS mútuo) — ✅ Implementado
 
 1. Quando houver chave privada e certificado do cliente disponíveis, o
    SDK DEVE apresentar o certificado de cliente se o servidor o
@@ -330,11 +405,21 @@ TLS.
 4. Na ausência de material de cliente, o SDK DEVE operar com TLS
    unidirecional, sem erro.
 
-*Status atual:* nenhum código de configuração mTLS existe.
+*Como implementado:* `ssl_context_factory.build_ssl_context()` só
+carrega o certificado de cliente
+(`context.load_cert_chain`, via arquivo temporário de vida curta —
+`ssl.SSLContext.load_cert_chain` exige caminho real, e o material chega
+em memória) quando `client_key`/`client_cert` são ambos fornecidos
+(itens 1, 4); a apresentação em si, condicionada à solicitação do
+servidor no handshake, é comportamento nativo do `ssl.SSLContext`
+(item 2, não reimplementado pela lib). O material chega em memória —
+carregado de PEM (`builder.certificate_pem()` + `.private_key_pem()`)
+ou de PKCS#12 (`builder.client_key_store()`, via
+`strategy_factory.load_pkcs12_key_and_certificate`) — cobrindo o item 3.
 
 ### 6.6 Material criptográfico
 
-#### RF-12 — Fontes de chave (estratégia de assinatura) — ⚠️ Parcial
+#### RF-12 — Fontes de chave (estratégia de assinatura) — ✅ Implementado
 
 1. O SDK DEVE abstrair a assinatura em uma **estratégia** com um único
    contrato: `sign(bytes) -> bytes` (assinatura crua, não codificada),
@@ -345,13 +430,20 @@ TLS.
    explícito.
 4. A estratégia DEVE ser segura para chamada concorrente.
 
-*Como implementado:* apenas o contrato existe —
-`ports.SigningStrategy`, um `typing.Protocol` com o método
-`sign(data: bytes) -> bytes`, verificável estruturalmente via
-`isinstance`. Nenhuma implementação concreta (memória, PEM, PKCS#12,
-HSM) está presente; item 2 e 3 permanecem pendentes.
+*Como implementado:* o contrato é `ports.SigningStrategy` (item 1),
+implementado por `PrivateKeySigningStrategy` (memória, PEM em arquivo,
+PEM em string, PKCS#12 — via `strategy_factory.from_private_key`/
+`from_pem_file`/`from_pem_string`/`from_pkcs12`) e por
+`Pkcs11SigningStrategy` (HSM/smart token — `strategy_factory.from_pkcs11`,
+que nunca extrai a chave do hardware, guardando só um handle de sessão
+PKCS#11), cobrindo o item 2 (JKS explicitamente não é suportado — não é
+um formato nativo do ecossistema Python; PKCS#12 cobre o caso
+equivalente). Chave/certificado ausente, PIN ou senha incorretos
+resultam em `SmartTokenError` explícito em todas as factories (item 3).
+As implementações não mantêm estado mutável compartilhado além da chave
+já carregada (imutável após construção) ou do handle PKCS#11 (item 4).
 
-#### RF-13 — Formatos de chave PEM — ❌ Não implementado
+#### RF-13 — Formatos de chave PEM — ✅ Implementado
 
 1. O SDK DEVE aceitar, com detecção automática de formato: PKCS#8 não
    criptografado, PKCS#1 RSA, PKCS#8 criptografado e OpenSSL tradicional
@@ -361,28 +453,50 @@ HSM) está presente; item 2 e 3 permanecem pendentes.
 3. Arquivo vazio, ilegível ou de formato não suportado DEVE resultar em
    erro que identifique a fonte.
 
-*Status atual:* nenhum carregador de PEM existe. `tests/conftest.py` já
-disponibiliza uma fixture (`fake_pem_pair`) com um par certificado/chave
-PEM autoassinado gerado em memória, preparada para uso quando este
-requisito for implementado.
+*Como implementado:* `pem_loader.load_private_key`/
+`load_private_key_from_string` delegam a
+`cryptography...serialization.load_pem_private_key`, que detecta os 4
+formatos automaticamente sem parsing manual por tipo de header PEM
+(item 1); o módulo concentra o trabalho em mensagens de erro corretas
+por causa (`SmartTokenError` distinguindo senha ausente, incorreta, ou
+formato não suportado, incluindo a fonte — arquivo ou `<string>` — na
+mensagem, itens 2–3). `tests/conftest.py` disponibiliza a fixture
+`fake_pem_pair` (par certificado/chave PEM autoassinado gerado em
+memória) usada pelos testes desse caminho.
 
-#### RF-14 — Validação de certificado — ❌ Não implementado
+#### RF-14 — Validação de certificado — ✅ Implementado
 
 1. Certificados X.509 fornecidos DEVEM ser validados na carga: parse
    bem-sucedido e período de validade corrente.
 2. Certificado expirado, ainda não válido, ou arquivo sem certificado
    X.509 DEVEM resultar em erro que identifique o arquivo e a condição.
 
-*Status atual:* nenhum código de validação de certificado existe.
+*Como implementado:* `pem_loader.load_certificate` faz o parse (item 1)
+e `pem_loader.check_certificate_validity` confere o período de validade
+corrente contra `datetime.now(timezone.utc)`, usado tanto no carregamento
+direto de certificado (`builder.certificate_pem()`) quanto no bundle
+PKCS#12 (`strategy_factory.load_pkcs12_key_and_certificate`) e no trust
+anchor de servidor (`ssl_context_factory._configure_trust`). Falhas
+resultam em `SmartTokenError` identificando o arquivo/fonte e a condição
+(expirado, ainda não válido, parse malsucedido — item 2).
 
-#### RF-15 — Consistência chave–certificado — ❌ Não implementado
+#### RF-15 — Consistência chave–certificado — ✅ Implementado
 
 1. Quando chave privada e certificado forem fornecidos diretamente, o
    SDK DEVE verificar na construção que formam um par válido.
 2. A verificação DEVE suportar ao menos chaves RSA e EC.
 3. Falha na verificação DEVE impedir a construção do cliente.
 
-*Status atual:* nenhum código de verificação existe.
+*Como implementado:* `key_certificate_consistency.verify_strategy`
+compara a chave pública derivada da `SigningStrategy`/chave privada
+carregada com a chave pública do certificado (RSA e EC — item 2),
+invocada por `builder._resolve_tls_context_provider()` sempre que
+`certificate_pem()` é usado junto de `private_key_pem()` (item 1). Uma
+falha de correspondência levanta `SmartTokenError` em `build()`,
+impedindo a construção do cliente (item 3). Para bundles PKCS#12
+(`client_key_store()`), a consistência é garantida estruturalmente —
+chave e certificado vêm do mesmo arquivo — sem necessidade de
+verificação cruzada adicional.
 
 #### RF-16 — Algoritmos de assinatura — ✅ Implementado
 
@@ -405,27 +519,36 @@ para ECDSA, curva e `signature_length`) para os 9 algoritmos, com erro
 desconhecido. `algorithms.encode_p1363`/`decode_p1363` fazem a
 conversão DER ↔ `R||S` exigida pelo item 4, usando `cryptography`
 (`utils.decode_dss_signature`/`encode_dss_signature`). O padrão
-`RS384` já está declarado em `defaults.DEFAULT_JWT_ALGORITHM`, mas
-nenhum componente ainda o consome (item 1 depende da configuração do
-cliente, inexistente). O uso efetivo desses parâmetros para assinar um
-JWT (itens 1 e 3, na prática) depende de RF-01 e RF-12, ainda
-pendentes.
+`RS384` está declarado em `defaults.DEFAULT_JWT_ALGORITHM` e já é
+consumido: `builder.SmartTokenClientBuilder.jwt_algorithm()` permite
+sobrescrevê-lo e `_resolve_jwt_algorithm()` valida o valor final via
+`algorithms.resolve()` (item 2); `client.SmartTokenClient._build_client_assertion()`
+usa o resultado para montar o header `alg` (item 3) e para assinar o
+JWS, incluindo a conversão P1363 para `ES*` (item 4, RF-01).
 
 ### 6.7 API pública
 
-#### RF-17 — Operações mínimas — ❌ Não implementado
+#### RF-17 — Operações mínimas — ✅ Implementado
 
 O SDK DEVE expor, com nomes idiomáticos da linguagem: `obtainToken(scope)`,
 `obtainTokenResponse(scope)`, `invalidateCache()`/`invalidateCache(scope)`,
 `getTokenEndpoint()`, `getJwtAlgorithm()`, construção validada
 (builder/kwargs) e uma operação de liberação de recursos.
 
-*Status atual:* o módulo público (`hubsaude_client/__init__.py`)
-reexporta apenas `SmartTokenError`, `SigningStrategy` e `TraceContext`
-— os colaboradores de mais baixo nível já implementados. Nenhuma classe
-de cliente com as operações acima existe.
+*Como implementado:* `client.SmartTokenClient` expõe `obtain_token(scope)`,
+`obtain_token_response(scope)` (retorna `TokenResult`),
+`invalidate_cache(scope=None)`, `get_token_endpoint()`,
+`get_jwt_algorithm()` e `close()` (idempotente, também disponível via
+`with SmartTokenClient(...) as c:`). A construção validada é
+`builder.SmartTokenClientBuilder` (métodos encadeáveis +
+`build()` fail-fast). Nomes em `snake_case`, idiomático em Python — o
+módulo público (`hubsaude_client/__init__.py`) continua reexportando
+apenas `SmartTokenError`, `SigningStrategy` e `TraceContext`; os
+consumidores importam `SmartTokenClient`/`SmartTokenClientBuilder`
+diretamente de `hubsaude_client.client`/`hubsaude_client.builder`,
+mesma convenção já usada pelos demais colaboradores internos.
 
-#### RF-18 — Validações de configuração — ⚠️ Parcial
+#### RF-18 — Validações de configuração — ✅ Implementado
 
 Na construção, o SDK DEVE aplicar validações como: exclusividade entre
 `tokenEndpoint`/`fhirBase`; presença de `clientId`; exclusividade entre
@@ -433,19 +556,21 @@ estratégia de assinatura e chave PEM; normalização de valores não
 positivos de TTL/`maxRetries`/margem do cache; rejeição de
 `tokenCacheMaxEntries` ≤ 0; rejeição de timeouts nulos.
 
-*Como implementado:* dois agrupamentos de configuração já existem e já
-aplicam parte destas regras isoladamente:
-- `fault_tolerance.FaultToleranceConfig` — normaliza
-  `assertion_ttl_seconds` e `max_retries` não positivos para os
-  padrões (`__post_init__`); `connect_timeout`/`request_timeout` são
-  obrigatórios por tipagem, sem validação adicional em runtime.
-- `token_cache.TokenCacheStrategy` — rejeita `max_entries <= 0` com
-  `ValueError` no construtor.
-
-As demais validações (exclusividade `tokenEndpoint`/`fhirBase`,
-`clientId` obrigatório, exclusividade de estratégia de assinatura)
-pressupõem uma classe de configuração/builder de cliente que ainda não
-existe.
+*Como implementado:* `builder.SmartTokenClientBuilder.build()`
+orquestra, fail-fast, todas as validações: `client_id` obrigatório
+(`_require_non_blank`); exclusividade entre `signing_strategy`/
+`private_key_pem` (`_resolve_signing_strategy`); `tls_context_provider`
+obrigatório e conforme o Protocol; exclusividade e esquema `https` de
+`token_endpoint`/`fhir_base` (`_validate_endpoint_config`); algoritmo
+JWT válido (`_resolve_jwt_algorithm`, via `algorithms.resolve`);
+timeouts positivos (`_validate_timeouts`); `token_cache_max_entries`
+positivo (`_validate_token_cache_max_entries`); e formato de
+`hub_context` (`_build_hub_context`). A normalização (em vez de
+rejeição) de TTL/`max_retries` não positivos continua em
+`fault_tolerance.FaultToleranceConfig.__post_init__`, e a rejeição de
+`max_entries` não positivo também é reforçada em
+`token_cache.TokenCacheStrategy.__init__` (defesa em profundidade,
+`ValueError`, além do `SmartTokenError` do builder).
 
 #### RF-19 — Modelo de erros — ✅ Implementado
 
@@ -459,27 +584,39 @@ existe.
 *Como implementado:* `exceptions.SmartTokenError(RuntimeError)` e
 `exceptions.SigningError(RuntimeError)`, ambas aceitando uma mensagem
 obrigatória e uma causa original opcional (`cause`), disponibilizada em
-`__cause__` quando fornecida. Uso atual de `SmartTokenError`:
-algoritmo JWT não reconhecido (`algorithms.resolve`). Nenhum caso de
-uso ainda manipula segredos, então o item "sem expor segredos" não tem,
-hoje, um cenário de teste que o exercite.
+`__cause__` quando fornecida. `SmartTokenError` agora é usada em toda a
+Fatia B — algoritmo JWT não reconhecido (`algorithms.resolve`),
+respostas inesperadas do token endpoint (`response_guard.py`), falhas
+de rede/HTTP e suspeita de rejeição de certificado de cliente
+(`error_classifier.py`), falha de descoberta (`discovery.py`) e
+validações de configuração (`builder.py`). O item "sem expor segredos"
+já tem cenário de teste: `error_classifier.sanitize_error_response()`
+redige `access_token`/`token` (JSON e form-encoded) antes de truncar o
+corpo em mensagens de erro, e `TokenResult`/`TokenResponse`/`CachedToken`
+mascaram o token em `__repr__`.
 
 ## 7. Requisitos não funcionais
 
-#### RNF-01 — Thread-safety e ciclo de vida — ⚠️ Parcial
+#### RNF-01 — Thread-safety e ciclo de vida — ✅ Implementado
 
 A instância do cliente DEVE ser thread-safe e reutilizável pelo ciclo de
 vida da aplicação, com fechamento idempotente que aguarda operações em
 voo e invalida o cache antes de liberar recursos.
 
-*Status atual:* não há uma instância de cliente com ciclo de vida
-próprio. Individualmente, `TokenCacheStrategy` já é thread-safe (todo
-acesso à estrutura interna é protegido por um único `threading.Lock` de
+*Como implementado:* `client.SmartTokenClient` é pensado como singleton
+por processo. Um `_ReadersWriterLock` privado (sem equivalente direto
+no stdlib) protege o ciclo de vida: `obtain_token`/`obtain_token_response`
+tomam o lock de leitura (fan-out concorrente entre scopes distintos);
+`close()` toma o lock de escrita, concedido só após todas as leituras em
+voo terminarem, invalida todo o cache e fecha o `httpx.Client` interno —
+chamadas subsequentes a `close()` são no-op (`self._closed`).
+Individualmente, `TokenCacheStrategy` já é thread-safe (todo acesso à
+estrutura interna é protegido por um único `threading.Lock` de
 instância) e `FaultToleranceConfig`/`TraceContext`, por serem
 dataclasses imutáveis, são seguras para compartilhamento entre threads
 após construídas.
 
-#### RNF-02 — Sanitização de logs e mensagens de erro — ❌ Não implementado
+#### RNF-02 — Sanitização de logs e mensagens de erro — ✅ Implementado
 
 1. Tokens, chaves privadas e senhas NÃO DEVEM aparecer em logs nem em
    mensagens de exceção.
@@ -489,20 +626,34 @@ após construídas.
 3. Logs DEVEM usar a infraestrutura padrão da plataforma, em níveis
    apropriados (debug/info/warn/error).
 
-*Status atual:* o SDK ainda não registra logs nem constrói mensagens de
-erro a partir de corpos de resposta HTTP, pois nenhuma requisição HTTP é
-feita. `CachedToken.__repr__` já mascara o `access_token`
-(`[REDACTED]`) para evitar exposição acidental em `repr()`/logs, o que
-é consistente com o espírito deste requisito, embora aplicado apenas ao
-cache.
+*Como implementado:* `error_classifier.sanitize_error_response()`
+redige `access_token`/`token` (JSON e form-encoded) *antes* de truncar
+o corpo em `_MAX_ERROR_RESPONSE_LENGTH` (500 caracteres), usada tanto
+em `ErrorClassifier.http_failure()` quanto em
+`discovery.SmartConfigurationDiscovery` (itens 1–2). Todos os
+colaboradores de Fatia B (`client.py`, `error_classifier.py`,
+`response_guard.py`, `discovery.py`) usam o logger compartilhado
+`_log.get_logger()` (nunca `logging.getLogger(__name__)`), em níveis
+`debug`/`warning`/`error` apropriados ao evento (item 3).
+`CachedToken.__repr__`/`TokenResult.__repr__`/`TokenResponse.__repr__`
+mascaram o `access_token` (`[REDACTED]`) para evitar exposição
+acidental em `repr()`/logs.
 
-#### RNF-03 — Higiene de segredos em memória — ❌ Não implementado
+#### RNF-03 — Higiene de segredos em memória — ⚠️ Parcial
 
 Senhas e PINs DEVEM ser recebidos em estruturas mutáveis da plataforma e
 limpos (zerados) após o uso, quando a plataforma permitir.
 
-*Status atual:* não aplicável ainda — nenhum código do SDK recebe senha
-ou PIN.
+*Como implementado:* `builder.private_key_pem(path, password:
+bytearray | None)` recebe a senha da chave PEM como `bytearray`
+(mutável) e `pem_loader._clear_password` zera o conteúdo após o uso —
+sucesso ou erro — em `_load_private_key_from_bytes`. As demais senhas
+(`client_key_store()`/`from_pkcs12`, PIN de `from_pkcs11`) ainda são
+recebidas como `bytes`/`str` — estruturas imutáveis do Python, que não
+podem ser zeradas em memória da mesma forma; permanece pendente avaliar
+se vale a pena expor essas duas também como `bytearray` (PIN de HSM é
+tipicamente de vida curta e já não fica retido pela lib após abrir a
+sessão, o que reduz a urgência desse caso específico).
 
 #### RNF-04 — Dependências mínimas — ✅ Implementado (nesta fase)
 
@@ -511,24 +662,29 @@ admitindo dependências pontuais apenas para lacunas reais. NÃO DEVE
 depender de frameworks de aplicação.
 
 *Status atual:* as dependências de execução declaradas são um cliente
-HTTP e uma biblioteca de criptografia; desta última, apenas a parte de
-assinatura ECDSA (conversão DER/`R||S`) é hoje efetivamente usada, em
-`algorithms.py`. A biblioteca de cliente HTTP está declarada mas ainda
-não é importada por nenhum módulo. Uma dependência opcional para
-HSM/PKCS#11 está declarada para uso futuro. Nenhuma dependência de
-framework de aplicação é usada.
+HTTP e uma biblioteca de criptografia. `httpx` já é importado por
+`client.py`, `discovery.py`, `response_guard.py` e `error_classifier.py`
+(Fatia B); da biblioteca de criptografia, além da parte de assinatura
+ECDSA (conversão DER/`R||S`, `algorithms.py`), a Fatia A também já usa
+`cryptography` para carga de PEM/PKCS#12 e verificação de par
+chave-certificado. Uma dependência opcional para HSM/PKCS#11 está
+declarada para uso futuro. Nenhuma dependência de framework de
+aplicação é usada.
 
-#### RNF-05 — Desempenho — ⚠️ Parcial
+#### RNF-05 — Desempenho — ✅ Implementado (estruturalmente)
 
 Com cache habilitado, chamadas repetidas por scope DEVEM ser servidas
 sem I/O de rede enquanto o token for válido; a estrutura de locks DEVE
 ter memória constante.
 
-*Status atual:* como não há orquestrador de rede, não há, hoje, uma
-chamada real de obtenção de token a ser evitada pelo cache. O cache em
-si (`TokenCacheStrategy`) já atende à política de servir do cache
-quando válido; a garantia de memória constante da estrutura de locks é
-responsabilidade do futuro *single-flight* (RF-05), ainda pendente.
+*Como implementado:* `client.SmartTokenClient.obtain_token_response()`
+consulta `TokenCacheStrategy.cached_if_valid()` antes de qualquer I/O de
+rede, servindo do cache sem nova requisição enquanto o token for válido.
+A estrutura de *lock striping* (`_scope_locks`, tamanho fixo
+`_SCOPE_LOCK_STRIPES = 32`) tem memória O(1) em relação ao número de
+scopes distintos (RF-05). Nenhum teste de carga real foi conduzido
+ainda — a garantia é estrutural, verificada pelos testes unitários de
+`test_client.py`/`test_token_cache.py`.
 
 #### RNF-06 — Testes e cobertura — ✅ Implementado (para o que existe)
 
@@ -536,15 +692,22 @@ responsabilidade do futuro *single-flight* (RF-05), ainda pendente.
    externos.
 2. Cobertura mínima de linha: **85%**, aplicada como *gate*.
 
-*Status atual:* a suíte de testes cobre integralmente os componentes já
-implementados (algoritmos, protocolo de assinatura, cache de tokens,
-cálculo de retry, configuração de tolerância a falhas, contexto de
-trace, exceções, constantes padrão), sem dependência de serviços
-externos, com o *gate* de 85% de cobertura de linha configurado em
-`tox.ini` (`pytest --cov-fail-under=85`). Os casos de teste mínimos que
-dependem de componentes não implementados (JWT, form body, resposta
-HTTP, single-flight, mTLS, descoberta, PEM, certificado) ainda não têm
-como existir.
+*Status atual:* a suíte de testes cobre os componentes de Fatia B já
+implementados (JWT/`client_assertion`, requisição/resposta HTTP,
+single-flight, retry, classificação de erro, descoberta, invalidação de
+cache, validações do builder — `test_client.py`, `test_builder.py`,
+`test_discovery.py`, `test_error_classifier.py`,
+`test_response_guard.py`) além dos já existentes na fundação
+(algoritmos, protocolo de assinatura, cache de tokens, cálculo de
+retry, configuração de tolerância a falhas, contexto de trace, exceções,
+constantes padrão), sem dependência de serviços externos (`httpx.MockTransport`
+em vez de rede real), com o *gate* de 85% de cobertura de linha
+configurado em `tox.ini` (`pytest --cov-fail-under=85`). Os casos de
+teste que dependem de uma implementação concreta de mTLS (Fatia A) —
+handshake real com certificado de cliente contra um servidor de
+verdade — ainda não têm como existir, já que só o *port*
+`ports.TlsContextProvider` e um fake de teste (`FakeTlsContextProvider`)
+existem hoje.
 
 #### RNF-07 — Documentação — ⚠️ Parcial
 
@@ -552,10 +715,16 @@ API pública documentada no formato da plataforma, incluindo exemplos de
 uso por fonte de chave e a recomendação de circuit breaker externo.
 
 *Status atual:* todo o código implementado tem docstrings em
-português cobrindo módulo, classes e métodos públicos. `README.md` e os
-documentos em `docs/` (`integracao-enterprise.md`,
-`troubleshooting.md`) já têm a estrutura de seções planejada (títulos),
-mas o conteúdo ainda não foi escrito.
+português cobrindo módulo, classes e métodos públicos. `docs/troubleshooting.md`
+já tem conteúdo completo (guia de diagnóstico de confiança de
+certificado SSL/TLS, com detecção via OpenSSL/Python/Java/C#/Node.js).
+`README.md` já reflete o estado real do cliente HTTP/builder e das
+fontes de chave/TLS (Fatia A e B). `docs/integracao-enterprise.md`
+continua vazio (0 bytes) — é onde a regra "uma única renovação após
+401", citada como possível conteúdo futuro em `client.py`, e a
+recomendação de circuit breaker externo deveriam ser documentadas.
+Uma tabela de erros específicos da lib (README, seção
+"Troubleshooting") também ainda não foi escrita.
 
 #### RNF-08 — Licença, versionamento e release — ⚠️ Parcial
 
@@ -563,9 +732,12 @@ Licença permissiva; SemVer; publicação disparada por tag; artefato
 acompanhado de SBOM quando o ecossistema suportar.
 
 *Status atual:* o pacote está versionado como `0.1.0`
-(`pyproject.toml`); há um arquivo `LICENSE`, porém vazio nesta revisão
-do repositório. Não há automação de release nem geração de SBOM
-configuradas ainda.
+(`pyproject.toml`); o arquivo `LICENSE` contém o texto completo da
+Apache License 2.0. Não há automação de release nem geração de SBOM
+configuradas ainda — isso, junto com metadados de publicação
+(`authors`/`classifiers`/`urls` em `[project]`, `__version__` exposto,
+`CHANGELOG.md`, `py.typed`, `NOTICE`), é tratado como pendência de
+**publicação**, fora do escopo do roadmap de código.
 
 ## 8. Parâmetros de configuração
 
@@ -574,22 +746,29 @@ configuração unificada de cliente:
 
 | Parâmetro | Padrão | Onde já existe | Observações |
 |-----------|--------|-----------------|-------------|
-| `assertionTtlSeconds` | 60 | `FaultToleranceConfig` | ≤ 0 → padrão |
-| `maxRetries` | 3 | `FaultToleranceConfig` | ≤ 0 → padrão; laço de tentativas ainda não existe |
-| `connectTimeout` | 10 s | `FaultToleranceConfig` | obrigatório; ainda não usado por um cliente HTTP |
-| `requestTimeout` | 30 s | `FaultToleranceConfig` | obrigatório; ainda não usado por um cliente HTTP |
-| `enableTokenCache` | `true` (semântica) | `TokenCacheStrategy(enabled=...)` | flag obrigatória no construtor, sem padrão implícito |
-| `tokenCacheMarginSeconds` | 30 | `TokenCacheStrategy` | |
-| `tokenCacheMaxEntries` | 1.000 | `TokenCacheStrategy` | deve ser positivo; descarte LRU por scope |
-| `jwtAlgorithm` | `RS384` | `defaults.DEFAULT_JWT_ALGORITHM`, `algorithms.resolve` | constante declarada; nenhum componente de configuração ainda a consome como parâmetro |
-| `tlsProtocol` | `TLSv1.3` | `defaults.DEFAULT_TLS_PROTOCOL` | constante declarada; nenhuma configuração TLS existe ainda |
+| `assertionTtlSeconds` | 60 | `FaultToleranceConfig`, `builder.assertion_ttl_seconds()` | ≤ 0 → padrão; consumido por `client._build_client_assertion()` |
+| `maxRetries` | 3 | `FaultToleranceConfig`, `builder.max_retries()` | ≤ 0 → padrão; laço de tentativas em `client._fetch_token()` |
+| `connectTimeout` | 10 s | `FaultToleranceConfig`, `builder.connect_timeout()` | obrigatório; usado no `httpx.Timeout` de `client.SmartTokenClient` |
+| `requestTimeout` | 30 s | `FaultToleranceConfig`, `builder.request_timeout()` | obrigatório; usado no `httpx.Timeout` de `client.SmartTokenClient` |
+| `enableTokenCache` | `true` (semântica) | `TokenCacheStrategy(enabled=...)`, `builder.enable_token_cache()` | flag obrigatória no construtor da estratégia; o builder já a define com padrão `True` |
+| `tokenCacheMarginSeconds` | 30 | `TokenCacheStrategy`, `builder.token_cache_margin_seconds()` | |
+| `tokenCacheMaxEntries` | 1.000 | `TokenCacheStrategy`, `builder.token_cache_max_entries()` | deve ser positivo; descarte LRU por scope |
+| `jwtAlgorithm` | `RS384` | `defaults.DEFAULT_JWT_ALGORITHM`, `algorithms.resolve`, `builder.jwt_algorithm()` | consumido em `client._build_client_assertion()` (header `alg`) e na assinatura |
+| `tlsProtocol` | `TLSv1.3` | `defaults.DEFAULT_TLS_PROTOCOL`, `ssl_context_factory.build_ssl_context()` | `TLSv1.2` também suportado; consumido via `builder.server_trust_anchor()`/`certificate_pem()`/`client_key_store()` |
 
-Parâmetros do contrato completo (`tokenEndpoint`, `fhirBase`, `clientId`,
-`privateKeyPem`, `privateKeyPassword`, `signingStrategy`,
-`certificatePem`, `clientKeyStore`, `serverTrustAnchor`, `keyId`,
-`hubContext`) ainda não têm nenhum ponto de configuração nesta base de
-código — dependem das classes descritas como não implementadas na
-seção 6.
+Os demais parâmetros do contrato completo já têm ponto de configuração
+no `builder.SmartTokenClientBuilder`: `tokenEndpoint`/`fhirBase`
+(mutuamente exclusivos, `token_endpoint()`/`fhir_base()`), `clientId`
+(`client_id()`), `privateKeyPem`/`privateKeyPassword`
+(`private_key_pem()`, delega a `strategy_factory.from_pem_file`),
+`signingStrategy` (`signing_strategy()`), `keyId` (`key_id()`) e
+`hubContext` (`hub_context(ig, versao)`). `certificatePem`
+(`certificate_pem()`), `clientKeyStore` (`client_key_store()`) e
+`serverTrustAnchor` (`server_trust_anchor()`) também já têm
+implementação concreta no builder, apoiada em
+`ssl_context_factory.py`/`key_certificate_consistency.py`; quem precisa
+de uma fonte TLS fora desses três continua podendo fornecer a própria
+`TlsContextProvider` via `tls_context_provider()`.
 
 ## 9. Diretrizes de implementação já adotadas
 
@@ -604,36 +783,54 @@ seção 6.
   RF-16.4.
 - **Concorrência do cache:** um único lock de instância protege toda a
   estrutura de dados do cache; o *single-flight* de renovação (RF-05) é
-  deliberadamente responsabilidade de outro componente (o futuro
-  orquestrador), por design documentado no próprio módulo de cache.
+  deliberadamente responsabilidade de outro componente
+  (`client.SmartTokenClient`, *lock striping* + *double-checked
+  locking*), por design documentado no próprio módulo de cache.
 
 ## 10. Rastreabilidade — requisito → implementação
 
 | Requisito | Símbolo de código | Status |
 |-----------|--------------------|--------|
-| RF-01 | — | ❌ |
-| RF-02 | — | ❌ |
+| RF-01 | `client.SmartTokenClient._build_client_assertion()` | ✅ |
+| RF-02 | `client.SmartTokenClient._fetch_token()` | ✅ |
 | RF-02b (trace) | `trace.TraceContext` | ✅ |
-| RF-03 | — | ❌ |
+| RF-03 | `response_guard.TokenResponseGuard`, `error_classifier.ErrorClassifier.http_failure()` | ✅ |
 | RF-04 | `token_cache.TokenCacheStrategy`, `CachedToken`, `CachedTokenResponse` | ✅ |
-| RF-05 | — | ❌ |
-| RF-06 | `token_cache.TokenCacheStrategy.invalidate()`/`.invalidate_all()` | ✅ (como operação de cache) |
-| RF-07 | `retry.compute_retry_delay_seconds()` | ⚠️ |
-| RF-08 | — | ❌ |
-| RF-09 | — | ❌ |
-| RF-10 | `defaults.DEFAULT_TLS_PROTOCOL` (constante apenas) | ❌ |
-| RF-11 | — | ❌ |
-| RF-12 | `ports.SigningStrategy` | ⚠️ |
-| RF-13 | — | ❌ |
-| RF-14 | — | ❌ |
-| RF-15 | — | ❌ |
+| RF-05 | `client.SmartTokenClient` (`_scope_locks`, *double-checked locking*) | ✅ |
+| RF-06 | `client.SmartTokenClient.invalidate_cache()` (delega a `TokenCacheStrategy`) | ✅ |
+| RF-07 | `client.SmartTokenClient._fetch_token()`, `error_classifier.py`, `retry.compute_retry_delay_seconds()` | ✅ |
+| RF-08 | `error_classifier.is_likely_client_certificate_rejection()` | ⚠️ (heurística pronta e testada; ainda não exercitada contra um handshake mTLS real, só contra `ssl.SSLError` simulado) |
+| RF-09 | `discovery.SmartConfigurationDiscovery` | ✅ |
+| RF-10 | `ssl_context_factory.build_ssl_context()` | ✅ |
+| RF-11 | `ssl_context_factory.build_ssl_context()` (mesma função, `load_cert_chain` condicional) | ✅ |
+| RF-12 | `ports.SigningStrategy`, `PrivateKeySigningStrategy`, `Pkcs11SigningStrategy`, `strategy_factory.py` | ✅ |
+| RF-13 | `pem_loader.load_private_key()` / `load_private_key_from_string()` | ✅ |
+| RF-14 | `pem_loader.load_certificate()`, `pem_loader.check_certificate_validity()` | ✅ |
+| RF-15 | `key_certificate_consistency.verify_strategy()` | ✅ |
 | RF-16 | `algorithms.resolve()`, `algorithms.encode_p1363()`, `algorithms.decode_p1363()` | ✅ |
-| RF-17 | `__init__.py` (reexporta apenas os colaboradores abaixo) | ❌ |
-| RF-18 | `FaultToleranceConfig.__post_init__`, `TokenCacheStrategy.__init__` | ⚠️ |
+| RF-17 | `client.SmartTokenClient`, `builder.SmartTokenClientBuilder` | ✅ |
+| RF-18 | `builder.SmartTokenClientBuilder.build()`, `FaultToleranceConfig.__post_init__`, `TokenCacheStrategy.__init__` | ✅ |
 | RF-19 | `exceptions.SmartTokenError`, `exceptions.SigningError` | ✅ |
-| RNF-02 | `CachedToken.__repr__` (mascaramento parcial) | ❌ (geral) |
+| RNF-01 | `client.SmartTokenClient` (`_ReadersWriterLock`) | ✅ |
+| RNF-02 | `error_classifier.sanitize_error_response()`, `CachedToken`/`TokenResult`/`TokenResponse.__repr__` | ✅ |
+| RNF-03 | `pem_loader._clear_password()`, `builder.private_key_pem()` | ⚠️ (só a senha do PEM é `bytearray` zerado; senha de `client_key_store()`/`from_pkcs12` e PIN de `from_pkcs11` continuam `bytes`/`str`) |
 | RNF-04 | `pyproject.toml` → `[tool.importlinter]` | ✅ |
+| RNF-05 | `client.SmartTokenClient` (cache-aside + lock striping O(1)) | ✅ (estrutural) |
 | RNF-06 | `tox.ini` (`pytest --cov-fail-under=85`) | ✅ |
+| RNF-07 | `docs/troubleshooting.md`, docstrings, `README.md` | ⚠️ (`docs/integracao-enterprise.md` vazio; tabela de erros do README ainda não escrita) |
+| RNF-08 | `pyproject.toml` (`version = "0.1.0"`), `LICENSE` | ⚠️ (versionado e licenciado; falta automação de release e SBOM — fora do escopo do roadmap de código, ver `zPENDENCIAS-PUBLICACAO.md`) |
+
+> **Nota sobre RF-10 a RF-15 (Fatia A):** a tabela acima reflete o
+> código verificado nesta rodada — `pem_loader.py`,
+> `ssl_context_factory.py`, `strategy_factory.py` e
+> `key_certificate_consistency.py` existem, estão implementados e têm
+> cobertura de teste (100% nos três primeiros). A Fatia A está
+> concluída junto com a Fatia B; não há mais requisito funcional
+> "não revisado" nesta base. O que resta é validação end-to-end (RF-08,
+> handshake mTLS real) e cobertura do caminho PKCS#11/HSM contra
+> SoftHSM2 real (ver [§12](#12-evolução-prevista)) — nenhum dos dois é
+> uma lacuna de implementação, e sim de exercício/validação do que já
+> existe.
 
 ## 11. Casos de teste mínimos de conformidade
 
@@ -650,28 +847,80 @@ seguintes já têm cobertura nesta base (arquivo entre parênteses):
    desabilitado; teto LRU (`test_token_cache.py`).
 5. **Retry (cálculo)**: fórmula do backoff 1s/2s/4s/...; `attempt < 1`
    rejeitado (`test_retry.py`).
-6. **Validações de construção (parcial)**: normalização de TTL/retries
-   inválidos (`test_fault_tolerance.py`); rejeição de `max_entries` não
-   positivo (`test_token_cache.py`).
+6. **Validações de construção**: normalização de TTL/retries inválidos
+   (`test_fault_tolerance.py`); rejeição de `max_entries` não positivo
+   (`test_token_cache.py`); exclusividade `token_endpoint`/`fhir_base`,
+   `client_id` obrigatório, exclusividade `signing_strategy`/
+   `private_key_pem`, timeouts e algoritmo JWT inválidos
+   (`test_builder.py`).
 7. **Trace**: formato do `traceparent`; validação de trace-id/span-id;
    unicidade entre chamadas de `generate()` (`test_trace.py`).
 8. **Erros**: mensagem e encadeamento de causa (`test_exceptions.py`).
+9. **JWT (`client_assertion`)**: header/payload, `kid` opcional,
+   `hub_ctx` opcional, `jti` novo por tentativa (`test_client.py`).
+10. **Requisição/resposta HTTP**: form body correto, sucesso (200),
+    `expires_in` ausente usando o padrão, 429 sem retry, outros status
+    com corpo sanitizado (`test_client.py`, `test_response_guard.py`,
+    `test_error_classifier.py`).
+11. **Single-flight**: chamadas concorrentes pelo mesmo scope resultam
+    em uma única requisição em voo; *double-checked locking*
+    (`test_client.py`).
+12. **Retry (orquestração)**: falha transitória (timeout/conexão)
+    dispara retry até `max_retries`; resposta HTTP recebida não dispara
+    retry; erro final preserva a causa (`test_client.py`).
+13. **Descoberta**: resolução via `.well-known/smart-configuration`;
+    exclusividade com `token_endpoint`; resposta ≠ 200 ou sem
+    `token_endpoint` é erro (`test_discovery.py`).
 
-Os demais casos mínimos de um SDK completo — JWT, form body, resposta
-HTTP, HTTP 429/erros, single-flight, mTLS, descoberta, PEM, certificado,
-par chave–certificado — não têm como existir ainda, pois dependem de
-componentes listados como não implementados na seção 6.
+A Fatia A (PEM/certificado, par chave–certificado, PKCS#12) já tem
+casos de teste com material real (autoassinado, gerado em memória via
+`tests/conftest.py::fake_pem_pair`) para carga de PEM, validação de
+certificado e consistência chave–certificado (`test_pem_loader.py`,
+`test_key_certificate_consistency.py`, `test_ssl_context_factory.py`).
+O que ainda não existe é: (a) um handshake TLS/mTLS de verdade contra
+um servidor real com certificado de cliente rejeitado, para validar
+RF-08 além da simulação de `ssl.SSLError`; e (b) a suíte de
+PKCS#11/HSM exercitada com SoftHSM2 presente no ambiente — os 7 testes
+correspondentes (`test_pkcs11_strategy_factory.py`, caso equivalente em
+`test_builder.py`) hoje aparecem como `SKIPPED` por ausência do
+SoftHSM2 no ambiente em que a suíte foi rodada, não por ausência de
+código.
 
 ## 12. Evolução prevista
 
-A ordem sugerida para os próximos incrementos, pelas dependências entre
-componentes, é: implementação concreta de `SigningStrategy` para chave
-em memória e carregamento de PEM (RF-12, RF-13) → montagem e assinatura
-do `client_assertion` (RF-01, reaproveitando RF-16) → cliente HTTP com
-requisição ao token endpoint, consumindo `retry.py`, `token_cache.py` e
-`trace.py` (RF-02, RF-03, RF-05, RF-07) → configuração TLS/mTLS
-(RF-10, RF-11, RF-08) → descoberta de endpoint (RF-09) → validação de
-certificado e consistência chave–certificado (RF-14, RF-15) → API
-pública e validações de construção completas (RF-17, RF-18). Cada
-incremento deve atualizar a coluna de status do requisito
-correspondente neste documento.
+A Fatia B (RF-01 a RF-09, RF-17 a RF-19, RNF-01, RNF-02, RNF-05, RNF-06)
+e a Fatia A (RF-10 a RF-16, RNF-03) estão concluídas e testadas nesta
+base de código: `client.SmartTokenClient` e
+`builder.SmartTokenClientBuilder` compõem `retry.py`, `token_cache.py`,
+`trace.py`, `response_guard.py`, `error_classifier.py`, `discovery.py`
+(Fatia B), `ssl_context_factory.py`, `pem_loader.py`,
+`key_certificate_consistency.py` e `strategy_factory.py` (Fatia A) no
+fluxo completo de obtenção de token com TLS/mTLS configurável. Não há
+mais `# TODO(fatia-a)` no builder. O que resta, e é acompanhado no
+roadmap de engenharia do projeto (fora deste documento contratual),
+é:
+
+1. **Validação end-to-end do caminho PKCS#11/HSM** — código
+   implementado (`pkcs11_signing_strategy.py`,
+   `strategy_factory.from_pkcs11`) mas com cobertura de teste ainda não
+   confirmada contra SoftHSM2 real (7 testes hoje `SKIPPED` por
+   ambiente, não por ausência de implementação).
+2. **Decisão sobre o `# TODO(duvida)` de `error_classifier.py`** — se a
+   suposição de que `bad_record_mac` cobre o equivalente Python de
+   `AEADBadTagException` (Java) é válida ou se há caso de borda não
+   tratado (afeta o status ⚠️ de RF-08).
+3. **RNF-03 (higiene de segredos):** decidir se vale estender o
+   tratamento de zeragem por `bytearray`, hoje só aplicado à senha de
+   `.private_key_pem()`, também à senha de `.client_key_store()`/
+   `from_pkcs12` e ao PIN de `from_pkcs11`.
+4. **Confirmação formal do layout achatado** do pacote de
+   assinatura/TLS (`algorithms.py`, `pem_loader.py`, etc. soltos em
+   `hubsaude_client/`, em vez de um subpacote `signing/` dedicado) como
+   definitivo, já que `[tool.importlinter]` (`pyproject.toml`) lista
+   esses módulos um a um.
+
+Nenhum dos quatro itens acima é uma lacuna de requisito funcional não
+implementado; são validação, uma decisão técnica documentada como
+pendente no próprio código, e uma confirmação de decisão de layout já
+em produção. Cada incremento futuro DEVE atualizar a coluna de status
+do requisito correspondente na tabela do [§10](#10-rastreabilidade--requisito--implementação).
