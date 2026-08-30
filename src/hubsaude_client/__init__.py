@@ -27,10 +27,15 @@ from __future__ import annotations
 
 from hubsaude_client.exceptions import SmartTokenError
 from hubsaude_client.ports import SigningStrategy
+from hubsaude_client.settings import ResolvedSigning, SigningSettings
+from hubsaude_client.tls_settings import TlsSettings
 from hubsaude_client.trace import TraceContext
 
 __all__: list[str] = [
-    "SmartTokenError",
+    "ResolvedSigning",
+    "SigningSettings",
     "SigningStrategy",
+    "SmartTokenError",
+    "TlsSettings",
     "TraceContext",
 ]

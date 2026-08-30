@@ -132,5 +132,6 @@ source_modules = [
     "hubsaude_client.ssl_context_factory",
     "hubsaude_client.pkcs11_signing_strategy",
     "hubsaude_client.tls_settings",
+    "hubsaude_client.settings",
 ]
 forbidden_modules = ["httpx"]
