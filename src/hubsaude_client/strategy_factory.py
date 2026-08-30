@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric.types import PrivateKeyTypes
 from cryptography.hazmat.primitives.serialization import pkcs12
 
@@ -167,3 +168,37 @@ def from_pkcs11(
         session.close()
         raise SmartTokenError(f"Falha ao acessar chave PKCS#11: {exc}", exc) from exc
     return Pkcs11SigningStrategy(session, key, jwt_algorithm)
+
+
+def load_pkcs12_key_and_certificate(data: bytes | Path, password: bytes) -> tuple[PrivateKeyTypes, x509.Certificate]:
+    """Carrega chave privada E certificado de um bundle PKCS#12.
+
+    Uso: quando o mesmo bundle precisa fornecer tanto a chave para
+    assinatura quanto o certificado para apresentacao em mTLS (builder
+    ``client_key_store()``). Para uso apenas como SigningStrategy (sem
+    precisar do certificado), use ``from_pkcs12`` diretamente.
+
+    Args:
+        data: conteudo do arquivo PKCS#12, em bytes, ou o caminho do arquivo.
+        password: senha do bundle.
+
+    Returns:
+        A chave privada e o certificado, ambos ja validados (tamanho
+        minimo de chave, periodo de validade do certificado).
+
+    Raises:
+        SmartTokenError: se a senha for incorreta, o arquivo for invalido,
+            ou o bundle nao contiver chave privada ou certificado.
+    """
+    raw = data.read_bytes() if isinstance(data, Path) else data
+    try:
+        private_key, certificate, _additional = pkcs12.load_key_and_certificates(raw, password)
+    except ValueError as exc:
+        raise SmartTokenError(f"Falha ao carregar PKCS#12 (senha incorreta ou arquivo invalido?): {exc}", exc) from exc
+    if private_key is None:
+        raise SmartTokenError("Bundle PKCS#12 nao contem chave privada")
+    if certificate is None:
+        raise SmartTokenError("Bundle PKCS#12 nao contem certificado")
+    pem_loader.validate_minimum_key_size(private_key, "pkcs12")
+    pem_loader.check_certificate_validity(certificate, "pkcs12")
+    return private_key, certificate
