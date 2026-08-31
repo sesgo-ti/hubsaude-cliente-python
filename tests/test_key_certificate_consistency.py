@@ -206,6 +206,49 @@ def test_verify_key_pair_rejects_unsupported_key_type(fake_pem_pair) -> None:
         key_certificate_consistency.verify_key_pair(object(), cert)  # type: ignore[arg-type]
 
 
+def test_verify_key_pair_wraps_unexpected_strategy_construction_failure(fake_pem_pair, monkeypatch) -> None:
+    """Se a construcao da ``PrivateKeySigningStrategy`` interna falhar com
+    uma excecao que NAO seja ``SmartTokenError`` (ex.: um erro inesperado
+    fora do fail-fast conhecido de ``validate_minimum_key_size``), o erro
+    deve ser envolvido em ``SmartTokenError`` com a causa original
+    preservada, em vez de vazar a excecao crua para quem chamou
+    ``verify_key_pair`` (ramo de guarda do fail-fast)."""
+    key = pem_loader.load_private_key(fake_pem_pair["key"])
+    cert = pem_loader.load_certificate(fake_pem_pair["cert"])
+    original_error = ValueError("falha inesperada e nao relacionada a tamanho de chave")
+
+    def _boom(*args: object, **kwargs: object) -> None:
+        raise original_error
+
+    monkeypatch.setattr(key_certificate_consistency, "PrivateKeySigningStrategy", _boom)
+
+    with pytest.raises(SmartTokenError, match="Falha ao verificar consistencia") as exc_info:
+        key_certificate_consistency.verify_key_pair(key, cert)
+
+    assert exc_info.value.__cause__ is original_error
+
+
+def test_verify_key_pair_does_not_wrap_smart_token_error_from_strategy_construction(fake_pem_pair, monkeypatch) -> None:
+    """Quando a construcao da estrategia interna ja falha com
+    ``SmartTokenError`` (ex.: chave abaixo do tamanho minimo, validada por
+    ``validate_minimum_key_size``), ``verify_key_pair`` deve deixar essa
+    excecao propagar sem envolve-la de novo (o ramo ``except
+    SmartTokenError: raise`` deve preceder o ``except Exception`` generico)."""
+    key = pem_loader.load_private_key(fake_pem_pair["key"])
+    cert = pem_loader.load_certificate(fake_pem_pair["cert"])
+    original_error = SmartTokenError("chave rejeitada por tamanho minimo")
+
+    def _boom(*args: object, **kwargs: object) -> None:
+        raise original_error
+
+    monkeypatch.setattr(key_certificate_consistency, "PrivateKeySigningStrategy", _boom)
+
+    with pytest.raises(SmartTokenError) as exc_info:
+        key_certificate_consistency.verify_key_pair(key, cert)
+
+    assert exc_info.value is original_error
+
+
 def _self_signed_ec_cert(key) -> "x509.Certificate":
     """Gera um certificado autoassinado minimo para uma chave EC de teste,
     usado pelos testes de curva que nao dependem das fixtures PEM fixas
