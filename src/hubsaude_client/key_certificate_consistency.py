@@ -7,8 +7,7 @@ Dois pontos de entrada:
 
 - :func:`verify_key_pair`: recebe uma chave privada "solta" (RSA ou EC)
   diretamente -- equivalente publico de
-  ``SmartTokenClient.verifyKeyPairConsistency`` (roadmap Fatia B, item
-  P2). O algoritmo da assinatura de teste e' inferido do tipo/curva da
+  ``SmartTokenClient.verifyKeyPairConsistency``. O algoritmo da assinatura de teste e' inferido do tipo/curva da
   chave (RSA -> RS256; EC -> ES256/ES384/ES512 conforme a curva).
 - :func:`verify_strategy`: recebe uma ``SigningStrategy`` ja construida.
   Limitacao: so e possivel verificar quando a estrategia e uma
@@ -55,8 +54,8 @@ def verify_key_pair(private_key: PrivateKeyTypes, certificate: x509.Certificate)
     do certificado, assinando um desafio e conferindo a assinatura.
 
     Porte de ``KeyCertificateConsistency.verifyKeyPair`` (``.java``, via o
-    wrapper publico ``SmartTokenClient.verifyKeyPairConsistency``) --
-    roadmap Fatia B, item P2. Complementa :func:`verify_strategy`: aquela
+    wrapper publico ``SmartTokenClient.verifyKeyPairConsistency``).
+    Complementa :func:`verify_strategy`: aquela
     funcao exige uma :class:`~hubsaude_client.ports.SigningStrategy` ja
     construida (e so consegue validar quando ela e uma
     ``PrivateKeySigningStrategy``); esta aceita a chave privada

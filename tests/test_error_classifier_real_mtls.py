@@ -3,10 +3,9 @@ contra handshakes mTLS *reais* (sockets loopback + OpenSSL de verdade),
 complementando ``test_error_classifier.py`` -- que so' cobre a heuristica
 com instancias de ``ssl.SSLError`` construidas a mao.
 
-Contexto: item 2 do roadmap (``ROADMAP-hubsaude-cliente-python.md``)
-listava como pendencia "validar a heuristica contra um handshake mTLS
-real com certificado de cliente rejeitado (hoje so' testada com
-ssl.SSLError simulado)". Este arquivo faz exatamente isso, usando
+Este arquivo valida a heuristica contra um handshake mTLS
+real com certificado de cliente rejeitado (complementando os testes que
+usam ``ssl.SSLError`` simulado), usando
 ``hubsaude_client.ssl_context_factory.build_ssl_context`` (mesmo caminho
 de producao) para o lado do cliente, contra um servidor loopback que
 exige certificado de cliente de uma CA que ele deliberadamente nao
@@ -58,8 +57,8 @@ def test_real_unknown_ca_rejection_tls13_is_never_treated_as_retriable(real_mtls
     depender de qual OpenSSL roda a maquina) -- ver
     ``test_real_unknown_ca_rejection_tls13_is_classified_when_surface_is_recognized``,
     abaixo, para a classificacao fina das duas superficies conhecidas
-    (confirmadas nesta rodada com base na fonte de verdade ``.java``, ver
-    topo de ``error_classifier.py`` e item 2 do roadmap).
+    (confirmadas com base na fonte de verdade ``.java``, ver
+    topo de ``error_classifier.py``).
 
     O que este teste garante, e que *nao* varia por plataforma: a
     conexao nunca e' tratada como retriavel nesse cenario, porque

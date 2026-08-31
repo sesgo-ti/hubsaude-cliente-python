@@ -156,7 +156,7 @@ def test_sanitize_expires_in_absent_uses_default() -> None:
     ],
 )
 def test_sanitize_expires_in_wrong_type_raises(raw: object) -> None:
-    # Alinhado ao Java (roadmap Fatia B, item P1): presente mas invalido e'
+    # Alinhado ao Java: presente mas invalido e'
     # rejeitado, nao absorvido com o padrao.
     with pytest.raises(SmartTokenError, match="expires_in"):
         sanitize_expires_in(raw)
@@ -181,7 +181,7 @@ def test_sanitize_expires_in_valid_numeric_string_is_coerced() -> None:
 
 
 def test_sanitize_expires_in_above_ceiling_is_capped() -> None:
-    # Teto de sanidade de 24h (roadmap Fatia B, item P1 -- achado extra):
+    # Teto de sanidade de 24h:
     # valor valido mas acima do teto e' normalizado, nao rejeitado.
     assert sanitize_expires_in(200_000) == MAX_EXPIRES_IN_SECONDS
 

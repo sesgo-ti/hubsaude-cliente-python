@@ -5,8 +5,7 @@ Porte de ``SmartTokenClientBuilder.java`` (622 linhas): a API publica mais
 visivel da biblioteca, responsavel por validar a configuracao *fail-fast*
 na construcao e produzir um ``SmartTokenClient`` pronto para uso.
 
-Decisao de design (documentada aqui, conforme pedido pela Tarefa B9 do
-roadmap): optou-se por um **builder mutavel com metodos encadeaveis**
+Decisao de design: optou-se por um **builder mutavel com metodos encadeaveis**
 (``self`` retornado a cada chamada), como no ``.java`` original, em vez de
 ``@dataclass`` + ``build()`` sobre campos publicos. Motivo: a classe reune
 mais de uma dezena de parametros opcionais com validacao cruzada (ex.:
@@ -17,14 +16,14 @@ uso, o que uma dataclass com dezenas de campos posicionais/kwargs nao
 oferece com a mesma clareza. O builder em si **nao precisa ser
 thread-safe**: construcao e passo unico no bootstrap da aplicacao
 integradora (quem precisa ser thread-safe e o ``SmartTokenClient``
-retornado — responsabilidade de ``client.py``, Tarefa B8).
+retornado — responsabilidade de ``client.py``).
 
 Metodos de conveniencia que, no ``.java``, recebem ``Path``/``KeyStore``
-(carga de PEM, PKCS#12/JKS, trust anchor) pertencem a Fatia A -- todos ja
+(carga de PEM, PKCS#12/JKS, trust anchor) ja estao todos
 ligados nesta base de codigo. ``private_key_pem()`` delega a
 ``strategy_factory.from_pem_file``/``SigningSettings``;
 ``certificate_pem()`` e ``server_trust_anchor()`` delegam a
-``pem_loader``/``TlsSettings`` (``ssl_context_factory.py``, Fatia A);
+``pem_loader``/``TlsSettings`` (``ssl_context_factory.py``);
 ``client_key_store()`` delega a
 ``strategy_factory.load_pkcs12_key_and_certificate`` para prover, de um
 unico bundle PKCS#12, tanto a estrategia de assinatura quanto o
@@ -37,7 +36,7 @@ que satisfazem diretamente os Protocols de ``ports.py``
 e :meth:`tls_context_provider` -- util quando a fonte de credenciais nao
 se encaixa nos atalhos acima (ex.: cofre de segredos remoto).
 
-PKCS#11/HSM (``strategy_factory.from_pkcs11``, Fatia A) ja esta disponivel
+PKCS#11/HSM (``strategy_factory.from_pkcs11``) ja esta disponivel
 mas, assim como no ``.java`` original (ver o segundo exemplo da classe
 abaixo), **nao tem um metodo de conveniencia dedicado no builder** -- o
 proprio Java so o expoe via ``.signingStrategy(SigningStrategyFactory
@@ -67,9 +66,9 @@ Quando ``fhir_base`` e informado (em vez de ``token_endpoint``), a
 resolucao via ``SmartConfigurationDiscovery`` (RF-09) **nao** acontece
 aqui: RF-09 item 5 exige que ela ocorra uma unica vez, na construcao do
 cliente, usando a mesma configuracao TLS/mTLS e os mesmos timeouts do
-cliente principal — como e ``client.py`` (Tarefa B8) quem monta o
-``httpx.Client`` interno a partir de ``tls_context_provider`` (ver roadmap
-da Tarefa B8), e' ele quem deve, no seu ``__init__``, invocar
+cliente principal — como e ``client.py`` quem monta o
+``httpx.Client`` interno a partir de ``tls_context_provider``,
+e' ele quem deve, no seu ``__init__``, invocar
 ``SmartConfigurationDiscovery`` com esse mesmo ``httpx.Client`` quando
 ``fhir_base`` estiver presente. Este builder so valida eagerly o esquema
 (``https``) da URL base fornecida; o ``token_endpoint`` efetivamente
@@ -368,7 +367,7 @@ class SmartTokenClientBuilder:
         return self
 
     # ------------------------------------------------------------------
-    # Metodos de conveniencia (Fatia A)
+    # Metodos de conveniencia
     # ------------------------------------------------------------------
 
     def private_key_pem(self, path: Path | str, password: bytearray | None = None) -> SmartTokenClientBuilder:

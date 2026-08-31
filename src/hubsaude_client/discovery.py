@@ -129,7 +129,7 @@ class SmartConfigurationDiscovery:
                 f" '{_TOKEN_ENDPOINT_FIELD}' valido (traceId={trace.trace_id})"
             )
 
-        # RF-10/RF-18 (roadmap Fatia B, item P0): o token_endpoint devolvido
+        # RF-10/RF-18: o token_endpoint devolvido
         # pelo servidor de descoberta precisa ser validado quanto ao
         # esquema, assim como um token_endpoint informado manualmente ja e'
         # em builder.py -- um .well-known comprometido (ou um MITM capaz de
