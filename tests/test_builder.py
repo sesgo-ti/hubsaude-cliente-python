@@ -348,6 +348,48 @@ def test_raises_when_fhir_base_is_not_https() -> None:
         builder.build()
 
 
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://localhost:8080/token",
+        "http://127.0.0.1:8080/token",
+        "http://[::1]:8080/token",
+    ],
+)
+def test_allows_token_endpoint_on_local_host_without_https(url: str) -> None:
+    """Excecao de desenvolvimento local (roadmap Fatia B, item P1): um
+    authorization server local sem TLS nao deve quebrar o builder, mesma
+    allowlist do lado Java (localhost/127.0.0.1/::1)."""
+    builder = (
+        SmartTokenClientBuilder()
+        .client_id(CLIENT_ID)
+        .token_endpoint(url)
+        .signing_strategy(FakeSigningStrategy())
+        .tls_context_provider(FakeTlsContextProvider())
+    )
+
+    client = builder.build()
+
+    assert client.get_token_endpoint() == url
+
+
+def test_does_not_reject_fhir_base_on_local_host_for_scheme(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``fhir_base`` em localhost/127.0.0.1/::1 sem https nao deve ser
+    rejeitado por ``_validate_endpoint_config`` (RF-18). A resolucao do
+    ``token_endpoint`` via descoberta SMART e' testada separadamente em
+    ``test_discovery.py``; aqui isolamos apenas a validacao de esquema do
+    builder, sem depender de rede real."""
+    builder = (
+        SmartTokenClientBuilder()
+        .client_id(CLIENT_ID)
+        .fhir_base("http://localhost:8080/r4")
+        .signing_strategy(FakeSigningStrategy())
+        .tls_context_provider(FakeTlsContextProvider())
+    )
+
+    builder._validate_endpoint_config()  # nao deve lancar por causa do esquema
+
+
 # ---------------------------------------------------------------------------
 # jwt_algorithm
 # ---------------------------------------------------------------------------
