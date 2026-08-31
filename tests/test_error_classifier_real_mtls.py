@@ -15,6 +15,10 @@ confia -- ver ``tests/conftest.py::real_mtls_client_cert_rejection``.
 
 from __future__ import annotations
 
+import ssl
+
+import pytest
+
 from hubsaude_client.error_classifier import is_likely_client_certificate_rejection, is_transient_network_failure
 
 
@@ -51,11 +55,11 @@ def test_real_unknown_ca_rejection_tls13_is_never_treated_as_retriable(real_mtls
     o fix desta rodada, ``is_likely_client_certificate_rejection``
     devolve ``True``. Por isso este teste nao afirma um valor especifico
     de :func:`is_likely_client_certificate_rejection` (faria o teste
-    depender de qual OpenSSL roda a maquina) -- e' a mesma incerteza do
-    ``# TODO(duvida)`` sobre ``AEADBadTagException`` (ver topo de
-    ``error_classifier.py`` e item 2 do roadmap), agora com evidencia
-    real de que ela tambem varia por ambiente, nao so' por plataforma
-    Java-vs-Python.
+    depender de qual OpenSSL roda a maquina) -- ver
+    ``test_real_unknown_ca_rejection_tls13_is_classified_when_surface_is_recognized``,
+    abaixo, para a classificacao fina das duas superficies conhecidas
+    (confirmadas nesta rodada com base na fonte de verdade ``.java``, ver
+    topo de ``error_classifier.py`` e item 2 do roadmap).
 
     O que este teste garante, e que *nao* varia por plataforma: a
     conexao nunca e' tratada como retriavel nesse cenario, porque
@@ -69,3 +73,43 @@ def test_real_unknown_ca_rejection_tls13_is_never_treated_as_retriable(real_mtls
 
     assert captured is not None, "esperava ssl.SSLError do lado do cliente; handshake teve sucesso inesperadamente"
     assert is_transient_network_failure(captured) is False
+
+
+def test_real_unknown_ca_rejection_tls13_is_classified_when_surface_is_recognized(
+    real_mtls_client_cert_rejection,
+) -> None:
+    """Confirma a classificacao fina sob TLS 1.3 para as duas superficies
+    conhecidas do mesmo evento de servidor (rejeicao de certificado de
+    cliente por CA desconhecida apos o ``Finished``):
+
+    - alerta ``unknown ca`` limpo (mesmo fragmento ja coberto para TLS 1.2);
+    - ``ssl.SSLEOFError`` com a mensagem "EOF occurred in violation of
+      protocol" -- confirmada nesta rodada, com base na propria fonte de
+      verdade ``.java`` (``ErrorClassifier.java`` / seu teste
+      ``SmartTokenClientCertRejectionTest``), como a superficie OpenSSL do
+      mesmo evento que o JSSE reporta como ``AEADBadTagException`` (ver
+      nota no topo de ``error_classifier.py``).
+
+    Uma terceira superficie nao mapeada, se aparecer numa plataforma ainda
+    nao observada, resulta em ``skip`` explicativo -- nao em falso
+    positivo/negativo silencioso.
+    """
+    captured = real_mtls_client_cert_rejection("TLSv1.3")
+
+    assert captured is not None, "esperava ssl.SSLError do lado do cliente; handshake teve sucesso inesperadamente"
+
+    message = str(captured).lower()
+    is_known_alert_surface = "unknown ca" in message
+    is_known_eof_surface = isinstance(captured, ssl.SSLEOFError) and (
+        "eof occurred in violation of protocol" in message
+    )
+
+    if not (is_known_alert_surface or is_known_eof_surface):
+        pytest.skip(
+            "Superficie de erro TLS 1.3 nao mapeada neste ambiente "
+            f"(OpenSSL/plataforma): {type(captured).__name__}: {captured!r}. "
+            "Nao e' falha do teste -- e' evidencia de uma terceira variante "
+            "que ainda nao foi documentada no modulo error_classifier.py."
+        )
+
+    assert is_likely_client_certificate_rejection(captured) is True
