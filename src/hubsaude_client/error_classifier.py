@@ -22,8 +22,7 @@ Mapeamento de excecoes Java -> Python (``httpx``/``ssl``):
   resetada durante leitura/escrita).
 - ``HttpTimeoutException`` -> ``httpx.TimeoutException`` (classe-base de
   ``ConnectTimeout``/``ReadTimeout``/``WriteTimeout``/``PoolTimeout``).
-- ``AEADBadTagException`` -> **decisao confirmada** (ver item 2 do
-  roadmap, fechado nesta rodada): o modulo ``ssl`` da stdlib nao expoe
+- ``AEADBadTagException`` -> **decisao confirmada**: o modulo ``ssl`` da stdlib nao expoe
   falhas de tag AEAD como excecao propria de handshake (isso e' detalhe
   interno do OpenSSL, nao presente no binding Python), entao nenhum
   mapeamento 1:1 de tipo e' possivel nem necessario. A confirmacao veio
@@ -255,8 +254,7 @@ class ErrorClassifier:
             trace: contexto de trace W3C enviado na requisicao.
             body_text: corpo da resposta ja lido pelo chamador (ex.: via
                 ``TokenResponseGuard.read_body`` sobre uma resposta em
-                streaming, respeitando o limite de tamanho -- P0 do
-                roadmap Fatia B). Quando ``None`` (compatibilidade com
+                streaming, respeitando o limite de tamanho). Quando ``None`` (compatibilidade com
                 chamadores que ja tem a resposta integralmente lida em
                 memoria, ex.: ``discovery.py`` e os testes deste modulo),
                 cai de volta para ``response.text``.

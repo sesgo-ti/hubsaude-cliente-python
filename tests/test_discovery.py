@@ -140,7 +140,7 @@ def test_raises_when_body_is_not_valid_json() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Validacao de esquema do token_endpoint descoberto (roadmap Fatia B, P0)
+# Validacao de esquema do token_endpoint descoberto
 # ---------------------------------------------------------------------------
 
 

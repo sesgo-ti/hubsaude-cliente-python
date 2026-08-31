@@ -1,5 +1,4 @@
-"""Testes de ``client.SmartTokenClient`` (Tarefa 5/B8 do roadmap de port
-Java -> Python).
+"""Testes de ``client.SmartTokenClient``.
 
 Nenhuma rede real e usada: o ``httpx.Client`` construido internamente por
 ``SmartTokenClient.__init__`` e interceptado via ``install_mock_transport``

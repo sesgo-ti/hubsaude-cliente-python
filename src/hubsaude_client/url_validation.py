@@ -7,8 +7,8 @@ desenvolvimento e testes com servidor local, nunca em producao.
 
 Compartilhado por ``builder.py`` (URLs de ``token_endpoint``/``fhir_base``
 informadas explicitamente por quem constroi o cliente) e ``discovery.py``
-(URL de ``token_endpoint`` retornada pelo servidor de descoberta SMART,
-ver roadmap Fatia B item P0): extraido para um modulo proprio para que os
+(URL de ``token_endpoint`` retornada pelo servidor de descoberta SMART):
+extraido para um modulo proprio para que os
 dois lados reutilizem a mesma logica e a mesma lista de hosts locais, sem
 duplicacao nem dependencia de um modulo sobre o outro.
 

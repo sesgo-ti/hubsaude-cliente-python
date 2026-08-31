@@ -5,7 +5,7 @@ o campo ``expires_in``, aplicando o padrao documentado quando ausente ou
 invalido.
 
 Porte de ``TokenResponseGuard.java`` (colaborador interno de
-``SmartTokenClient``, Tarefa 2/B4 do roadmap de port Java -> Python). Nao
+``SmartTokenClient``). Nao
 faz parte da API publica da biblioteca (nao exportado em ``__init__.py``).
 
 - o valor exato de ``MAX_RESPONSE_BODY_BYTES`` usado em producao no Java
@@ -14,7 +14,7 @@ faz parte da API publica da biblioteca (nao exportado em ``__init__.py``).
 - ``expires_in`` como string numerica e' aceito (por tolerancia a
   respostas nao estritamente conformes); qualquer outro tipo diferente
   de inteiro/float/string numerica e' tratado como invalido de imediato
-  -- decisao alinhada ao Java (roadmap Fatia B, item P1): ``expires_in``
+  -- decisao alinhada ao Java: ``expires_in``
   *ausente* aplica o padrao silenciosamente, mas ``expires_in``
   *presente e invalido* (zero, negativo ou nao numerico) e' rejeitado
   com ``SmartTokenError`` em vez de absorvido com um warning -- um
@@ -211,7 +211,7 @@ class TokenResponseGuard:
 def sanitize_expires_in(raw_expires_in: object, trace: TraceContext | None = None) -> int:
     """Sanitiza o campo ``expires_in`` da resposta do token endpoint.
 
-    Regras explicitas (roadmap Fatia B, item P1 -- alinhadas ao Java
+    Regras explicitas (alinhadas ao Java
     ``TokenResponseGuard.sanitizeExpiresIn``):
 
     - **Ausente** (``None``): assume ``DEFAULT_EXPIRES_IN_SECONDS``
