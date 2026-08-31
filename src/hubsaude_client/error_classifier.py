@@ -39,7 +39,8 @@ Mapeamento de excecoes Java -> Python (``httpx``/``ssl``):
   o proprio ``.java`` associa ao caso "bad_record_mac" -- ja coberta por
   :func:`is_likely_client_certificate_rejection` -- e nunca a superficie
   ``AEADBadTagException``, que e' especifica do peer JSSE/Java e nao tem
-  como aparecer no binding Python.
+  como aparecer no binding Python. A suposicao do TODO original estava
+  correta; o "TODO(duvida)" foi removido.
 
   Validado com handshake mTLS real (``tests/test_error_classifier_real_mtls.py``,
   nao apenas ``ssl.SSLError`` simulado): sob TLS 1.2, um certificado de

@@ -241,7 +241,7 @@ class SmartTokenClient:
             # Sem "assert" aqui (removido em bytecode otimizado, ver B101,
             # mesmo criterio ja aplicado em builder.py) -- SmartTokenError
             # explicito tambem ajuda o narrowing de tipos do mypy.
-            raise SmartTokenError(
+            raise SmartTokenError(  # pragma: no cover -- guarda defensiva inalcancavel, ver comentario acima
                 "estado inesperado: nem token_endpoint nem fhir_base preenchidos"
                 " na construcao de SmartTokenClient (deveria ter sido validado"
                 " pelo builder)"
@@ -459,7 +459,9 @@ class SmartTokenClient:
 
         # Inalcancavel: o laco acima sempre retorna ou levanta antes de
         # terminar (max_retries >= 1, normalizado por FaultToleranceConfig).
-        raise SmartTokenError(f"estado inesperado: retry esgotado sem resultado para clientId={self._client_id}")
+        raise SmartTokenError(  # pragma: no cover -- guarda defensiva inalcancavel, ver comentario acima
+            f"estado inesperado: retry esgotado sem resultado para clientId={self._client_id}"
+        )
 
     def _build_client_assertion(self) -> str:
         """Monta e assina um novo ``client_assertion`` (JWT, RF-01).

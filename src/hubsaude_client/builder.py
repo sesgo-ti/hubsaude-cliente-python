@@ -576,7 +576,7 @@ class SmartTokenClientBuilder:
             # mas mypy nao faz narrowing entre campos distintos; SmartTokenError
             # explicito narrowa o tipo para o restante do bloco.
             if self._client_key_store_password is None:
-                raise SmartTokenError(
+                raise SmartTokenError(  # pragma: no cover -- guarda defensiva inalcancavel, ver comentario acima
                     "estado interno inconsistente: client_key_store_path definido" " sem client_key_store_password"
                 )
             resolved_algorithm = algorithms.resolve(self._jwt_algorithm).jwt_algorithm
@@ -704,7 +704,7 @@ class SmartTokenClientBuilder:
             # dos dois esta preenchido neste ponto. Sem "assert" (removido
             # em bytecode otimizado, ver B101) -- SmartTokenError explicito
             # tambem ajuda o narrowing de tipos do mypy no ramo anterior.
-            raise SmartTokenError(
+            raise SmartTokenError(  # pragma: no cover -- guarda defensiva inalcancavel, ver comentario acima
                 "estado inesperado: nem token_endpoint nem fhir_base preenchidos"
                 " apos validacao de exclusividade mutua"
             )
