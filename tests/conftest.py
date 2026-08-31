@@ -304,3 +304,138 @@ def fake_pkcs12_bundle_without_certificate(tmp_path):
     p12_path = tmp_path / "bundle_no_cert.p12"
     p12_path.write_bytes(p12_bytes)
     return {"path": p12_path, "password": password}
+
+
+@pytest.fixture
+def real_mtls_client_cert_rejection(tmp_path):
+    """Fabrica de handshakes mTLS *reais* (sockets loopback + OpenSSL de
+    verdade, sem ``ssl.SSLError`` simulado a mao) em que o servidor
+    rejeita o certificado de cliente por CA desconhecida.
+
+    Devolve uma funcao ``handshake(tls_protocol) -> BaseException | None``
+    que: gera uma CA de servidor e uma CA de cliente *distintas* (o
+    servidor so' confia na propria), sobe um servidor TLS efemero em
+    ``127.0.0.1`` exigindo certificado de cliente, conecta usando
+    ``hubsaude_client.ssl_context_factory.build_ssl_context`` -- o mesmo
+    caminho de producao usado pelo builder/client.py -- e devolve a
+    excecao capturada do lado do cliente (``None`` se o handshake, ao
+    contrario do esperado, tiver sucesso).
+
+    Usada para validar heuristicas de classificacao de erro
+    (``error_classifier.is_likely_client_certificate_rejection``) contra
+    o comportamento real do OpenSSL, e nao apenas contra mensagens de
+    ``ssl.SSLError`` construidas manualmente no restante da suite.
+    """
+    import datetime
+    import socket
+    import ssl
+    import threading
+
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.x509.oid import NameOID
+
+    from hubsaude_client import ssl_context_factory
+
+    def _make_ca(cn: str):
+        key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, cn)])
+        cert = (
+            x509.CertificateBuilder()
+            .subject_name(name)
+            .issuer_name(name)
+            .public_key(key.public_key())
+            .serial_number(x509.random_serial_number())
+            .not_valid_before(datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=1))
+            .not_valid_after(datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=1))
+            .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+            .sign(key, hashes.SHA256())
+        )
+        return key, cert
+
+    def _make_leaf(ca_key, ca_cert, cn: str, *, is_server: bool):
+        key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, cn)])
+        builder = (
+            x509.CertificateBuilder()
+            .subject_name(name)
+            .issuer_name(ca_cert.subject)
+            .public_key(key.public_key())
+            .serial_number(x509.random_serial_number())
+            .not_valid_before(datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=1))
+            .not_valid_after(datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=1))
+        )
+        if is_server:
+            builder = builder.add_extension(x509.SubjectAlternativeName([x509.DNSName("localhost")]), critical=False)
+        return key, builder.sign(ca_key, hashes.SHA256())
+
+    server_ca_key, server_ca_cert = _make_ca("hubsaude-test Server CA")
+    server_key, server_cert = _make_leaf(server_ca_key, server_ca_cert, "localhost", is_server=True)
+    # CA distinta e propositalmente NAO confiada pelo servidor -- e' isso
+    # que faz o servidor rejeitar o certificado de cliente.
+    client_ca_key, client_ca_cert = _make_ca("hubsaude-test Client CA (untrusted)")
+    client_key, client_cert = _make_leaf(client_ca_key, client_ca_cert, "hubsaude-test-client", is_server=False)
+
+    server_ca_path = tmp_path / "server_ca.pem"
+    server_ca_path.write_bytes(server_ca_cert.public_bytes(serialization.Encoding.PEM))
+    server_cert_path = tmp_path / "server_cert.pem"
+    server_cert_path.write_bytes(server_cert.public_bytes(serialization.Encoding.PEM))
+    server_key_path = tmp_path / "server_key.pem"
+    server_key_path.write_bytes(
+        server_key.private_bytes(
+            serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()
+        )
+    )
+
+    def handshake(tls_protocol: str) -> BaseException | None:
+        version = ssl_context_factory._resolve_tls_version(tls_protocol)  # mesma resolucao de producao
+
+        server_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        server_ctx.load_cert_chain(str(server_cert_path), str(server_key_path))
+        server_ctx.verify_mode = ssl.CERT_REQUIRED
+        server_ctx.load_verify_locations(cafile=str(server_ca_path))
+        server_ctx.minimum_version = version
+        server_ctx.maximum_version = version
+
+        listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(1)
+        port = listener.getsockname()[1]
+
+        def _accept_and_reject() -> None:
+            try:
+                raw_conn, _addr = listener.accept()
+                try:
+                    with server_ctx.wrap_socket(raw_conn, server_side=True) as tls_conn:
+                        tls_conn.recv(16)  # forca a troca pos-handshake sob TLS 1.3
+                except ssl.SSLError:
+                    pass  # esperado: e' exatamente a rejeicao sob teste
+            except OSError:
+                pass
+
+        server_thread = threading.Thread(target=_accept_and_reject, daemon=True)
+        server_thread.start()
+
+        client_context = ssl_context_factory.build_ssl_context(
+            trusted_cert=server_ca_cert,
+            tls_protocol=tls_protocol,
+            client_key=client_key,
+            client_cert=client_cert,
+        )
+        client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        client_socket.settimeout(5)
+        client_socket.connect(("127.0.0.1", port))
+        captured: BaseException | None = None
+        try:
+            with client_context.wrap_socket(client_socket, server_hostname="localhost") as tls_client:
+                tls_client.send(b"ping")
+                tls_client.recv(16)
+        except ssl.SSLError as exc:
+            captured = exc
+        finally:
+            server_thread.join(timeout=5)
+            listener.close()
+        return captured
+
+    return handshake

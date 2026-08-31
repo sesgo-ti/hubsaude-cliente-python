@@ -31,7 +31,7 @@ def softhsm2_available() -> bool:
 
 
 @pytest.fixture(scope="session")
-def _pkcs11_lib() -> Iterator[object]:
+def _pkcs11_lib(tmp_path_factory: pytest.TempPathFactory) -> Iterator[object]:
     """Objeto ``pkcs11.lib(...)`` unico, compartilhado por toda a sessao de
     testes.
 
@@ -50,13 +50,52 @@ def _pkcs11_lib() -> Iterator[object]:
     teste, o que forca a biblioteca a reler ``SOFTHSM2_CONF`` corrente --
     testado ponta a ponta nesta maquina, inclusive com uma sessao anterior
     deixada aberta (cenario real do ``Pkcs11SigningStrategy``).
+
+    Segundo achado de ambiente (esta rodada): a *primeira* ``C_Initialize``
+    -- a que acontece aqui, antes de qualquer teste rodar -- le qualquer
+    ``SOFTHSM2_CONF`` que ja estiver no ambiente do processo pytest ou,
+    na ausencia dele, a config padrao do sistema instalada pelo pacote
+    (``/etc/softhsm2.conf``), cujo ``directories.tokendir`` (geralmente
+    ``/var/lib/softhsm2/tokens/``) costuma so' ser gravavel pelo usuario
+    ``root``/grupo ``softhsm``. Num usuario comum sem esse grupo, isso
+    faz ``pkcs11.lib(module_path)`` falhar com
+    ``pkcs11.exceptions.GeneralError`` na fixture de sessao, antes mesmo
+    do primeiro teste comecar -- nao e' um problema de instalacao do
+    SoftHSM2 em si, e' a primeira inicializacao apontando pra um
+    diretorio que este usuario nao pode acessar. A correcao e' apontar
+    ``SOFTHSM2_CONF`` para um diretorio proprio, gravavel e efemero
+    (``tmp_path_factory``, escopo de sessao) *antes* dessa primeira
+    inicializacao, restaurando a variavel de ambiente logo em seguida --
+    o diretorio real usado por cada teste continua sendo o de
+    :func:`softhsm2_token`, que troca essa variavel de novo e recicla
+    esta mesma instancia via ``finalize()``/``reinitialize()``.
     """
     module_path = find_softhsm2_lib()
     assert module_path is not None
 
+    bootstrap_dir = tmp_path_factory.mktemp("softhsm2-bootstrap")
+    bootstrap_tokendir = bootstrap_dir / "tokens"
+    bootstrap_tokendir.mkdir()
+    bootstrap_conf = bootstrap_dir / "softhsm2.conf"
+    bootstrap_conf.write_text(f"directories.tokendir = {bootstrap_tokendir}\nobjectstore.backend = file\n")
+
+    previous_conf = os.environ.get("SOFTHSM2_CONF")
+    os.environ["SOFTHSM2_CONF"] = str(bootstrap_conf)
+
     import pkcs11
 
-    lib = pkcs11.lib(module_path)
+    try:
+        lib = pkcs11.lib(module_path)
+    finally:
+        # A config real de cada teste vem de softhsm2_token (via
+        # monkeypatch, desfeito automaticamente ao fim de cada teste) --
+        # esta variavel de bootstrap so' precisa existir durante a
+        # C_Initialize acima, nao depois.
+        if previous_conf is None:
+            os.environ.pop("SOFTHSM2_CONF", None)
+        else:
+            os.environ["SOFTHSM2_CONF"] = previous_conf
+
     yield lib
     try:
         lib.finalize()
