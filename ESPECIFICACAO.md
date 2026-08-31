@@ -639,21 +639,24 @@ colaboradores de Fatia B (`client.py`, `error_classifier.py`,
 mascaram o `access_token` (`[REDACTED]`) para evitar exposição
 acidental em `repr()`/logs.
 
-#### RNF-03 — Higiene de segredos em memória — ⚠️ Parcial
+#### RNF-03 — Higiene de segredos em memória — ✅ Implementado
 
 Senhas e PINs DEVEM ser recebidos em estruturas mutáveis da plataforma e
 limpos (zerados) após o uso, quando a plataforma permitir.
 
 *Como implementado:* `builder.private_key_pem(path, password:
-bytearray | None)` recebe a senha da chave PEM como `bytearray`
-(mutável) e `pem_loader._clear_password` zera o conteúdo após o uso —
-sucesso ou erro — em `_load_private_key_from_bytes`. As demais senhas
-(`client_key_store()`/`from_pkcs12`, PIN de `from_pkcs11`) ainda são
-recebidas como `bytes`/`str` — estruturas imutáveis do Python, que não
-podem ser zeradas em memória da mesma forma; permanece pendente avaliar
-se vale a pena expor essas duas também como `bytearray` (PIN de HSM é
-tipicamente de vida curta e já não fica retido pela lib após abrir a
-sessão, o que reduz a urgência desse caso específico).
+bytearray | None)` e `builder.client_key_store(path, password:
+bytearray, alias=None)` recebem a senha (chave PEM e bundle PKCS#12,
+respectivamente) como `bytearray` (mutável); `pem_loader.clear_password`
+zera o conteúdo após o uso — sucesso ou erro — em
+`_load_private_key_from_bytes` (PEM) e em `strategy_factory.from_pkcs12`/
+`load_pkcs12_key_and_certificate` (PKCS#12). Ambas são as únicas senhas
+retidas em campo do builder entre a chamada de conveniência e `build()`.
+
+O PIN de `from_pkcs11` permanece `str` — decisão deliberada e final, não
+lacuna: é consumido uma única vez, na própria chamada de `from_pkcs11`,
+para abrir a sessão PKCS#11, e nunca fica retido em campo de builder
+entre chamadas (perfil de retenção diferente do das duas senhas acima).
 
 #### RNF-04 — Dependências mínimas — ✅ Implementado (nesta fase)
 
@@ -813,7 +816,7 @@ de uma fonte TLS fora desses três continua podendo fornecer a própria
 | RF-19 | `exceptions.SmartTokenError`, `exceptions.SigningError` | ✅ |
 | RNF-01 | `client.SmartTokenClient` (`_ReadersWriterLock`) | ✅ |
 | RNF-02 | `error_classifier.sanitize_error_response()`, `CachedToken`/`TokenResult`/`TokenResponse.__repr__` | ✅ |
-| RNF-03 | `pem_loader._clear_password()`, `builder.private_key_pem()` | ⚠️ (só a senha do PEM é `bytearray` zerado; senha de `client_key_store()`/`from_pkcs12` e PIN de `from_pkcs11` continuam `bytes`/`str`) |
+| RNF-03 | `pem_loader.clear_password()`, `builder.private_key_pem()`, `builder.client_key_store()` | ✅ (senha do PEM e do PKCS#12 são `bytearray` zerado; PIN de `from_pkcs11` permanece `str` por decisão deliberada — não fica retido em campo de builder, ver §5) |
 | RNF-04 | `pyproject.toml` → `[tool.importlinter]` | ✅ |
 | RNF-05 | `client.SmartTokenClient` (cache-aside + lock striping O(1)) | ✅ (estrutural) |
 | RNF-06 | `tox.ini` (`pytest --cov-fail-under=85`) | ✅ |
@@ -909,18 +912,3 @@ roadmap de engenharia do projeto (fora deste documento contratual),
    suposição de que `bad_record_mac` cobre o equivalente Python de
    `AEADBadTagException` (Java) é válida ou se há caso de borda não
    tratado (afeta o status ⚠️ de RF-08).
-3. **RNF-03 (higiene de segredos):** decidir se vale estender o
-   tratamento de zeragem por `bytearray`, hoje só aplicado à senha de
-   `.private_key_pem()`, também à senha de `.client_key_store()`/
-   `from_pkcs12` e ao PIN de `from_pkcs11`.
-4. **Confirmação formal do layout achatado** do pacote de
-   assinatura/TLS (`algorithms.py`, `pem_loader.py`, etc. soltos em
-   `hubsaude_client/`, em vez de um subpacote `signing/` dedicado) como
-   definitivo, já que `[tool.importlinter]` (`pyproject.toml`) lista
-   esses módulos um a um.
-
-Nenhum dos quatro itens acima é uma lacuna de requisito funcional não
-implementado; são validação, uma decisão técnica documentada como
-pendente no próprio código, e uma confirmação de decisão de layout já
-em produção. Cada incremento futuro DEVE atualizar a coluna de status
-do requisito correspondente na tabela do [§10](#10-rastreabilidade--requisito--implementação).

@@ -212,8 +212,15 @@ Já implementado: `.private_key_pem(path, password=None)` no builder
 delega a `strategy_factory.from_pem_file`, que carrega a chave privada
 de um arquivo PEM (com ou sem senha). A senha é recebida como
 `bytearray` (mutável) e é **zerada em memória** logo após o uso —
-sucesso ou erro (`pem_loader._clear_password`) — para reduzir o tempo
-em que o segredo permanece legível em heap dumps.
+sucesso ou erro (`pem_loader.clear_password`) — para reduzir o tempo
+em que o segredo permanece legível em heap dumps. O mesmo vale para a
+senha do bundle PKCS#12 em `.client_key_store(path, password)`/
+`from_pkcs12`/`load_pkcs12_key_and_certificate`. O PIN de
+`from_pkcs11` continua `str`, deliberadamente: é usado uma única vez,
+na própria chamada, para abrir a sessão PKCS#11, e nunca fica retido
+num campo do builder entre chamadas (ao contrário da senha de
+`.client_key_store()`) — não é uma lacuna pendente, é uma decisão de
+escopo já fechada.
 
 ## Configuração avançada
 
