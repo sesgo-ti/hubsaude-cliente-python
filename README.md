@@ -22,9 +22,8 @@ por scope e propagação de contexto de trace W3C.
 **Status:** `0.1.0`, em desenvolvimento iterativo. As duas fatias de
 implementação (assinatura/certificados/TLS e cliente HTTP/orquestração
 de token) estão concluídas e testadas — ver [Referências](#referências)
-para o contrato completo (`ESPECIFICACAO.md`). O que resta é conteúdo de
-documentação complementar (guia de integração enterprise, tabela de
-erros) e o processo de publicação/release, ainda não definidos.
+para o contrato completo (`ESPECIFICACAO.md`). O que resta é o processo
+de publicação/release, ainda não definido.
 
 ## Dependência
 
@@ -282,9 +281,57 @@ os três métodos de conveniência acima.
 Se preferir usar o material diretamente em PKCS#12, sem converter para
 PEM, `.client_key_store(path, password)` já cobre tanto o lado de
 assinatura quanto o de mTLS a partir do mesmo bundle (ver
-[PKCS#12 direto](#pkcs12-direto) e [TLS/mTLS](#tlsmtls-e-servertrustanchor)).
-Um guia de conversão PFX/P12 → PEM (para quem prefere a estratégia via
-`.private_key_pem()`/`.certificate_pem()`) ainda não foi escrito.
+[PKCS#12 direto](#pkcs12-direto) e [TLS/mTLS](#tlsmtls-e-servertrustanchor)) —
+para esse caso, **não é necessário** converter nada, pule esta seção.
+
+Quem prefere a estratégia via `.private_key_pem()`/`.certificate_pem()`
+(dois arquivos PEM separados, em vez de um bundle único) precisa
+extrair a chave privada e o certificado do arquivo `.pfx`/`.p12` uma
+única vez, com OpenSSL:
+
+```bash
+# 1. Extrai a chave privada, sem senha na saída (-nocrypt) — o PEM
+#    resultante deve ser protegido por permissões de arquivo restritas
+#    (ex.: chmod 600), já que não tem senha própria.
+openssl pkcs12 -in certificado.pfx -nocrypt -nocerts -out chave-privada.pem
+
+# 2. Extrai o certificado de cliente (sem a cadeia de CAs).
+openssl pkcs12 -in certificado.pfx -nokeys -clcerts -out certificado.pem
+```
+
+Ambos os comandos pedem a senha do `.pfx`/`.p12` interativamente
+(`Enter Import Password:`). Se preferir manter a chave protegida por
+senha no PEM em vez de gerar `-nocrypt`, omita essa flag — nesse caso,
+informe a senha ao usar `.private_key_pem(path, password=...)` (ver
+[PEM com senha](#pem-com-senha)).
+
+```python
+from hubsaude_client.builder import SmartTokenClientBuilder
+
+client = (
+    SmartTokenClientBuilder()
+    .client_id("meu-client-id")
+    .token_endpoint("https://auth.hubsaude.exemplo/token")
+    .private_key_pem("/caminho/para/chave-privada.pem")
+    .certificate_pem("/caminho/para/certificado.pem")
+    .build()
+)
+```
+
+Confira que o par extraído é consistente antes de usar em produção —
+o builder já faz essa checagem automaticamente (RF-15,
+`key_certificate_consistency.verify_strategy`) e falha rápido
+(`SmartTokenError: Chave privada nao corresponde ao certificado`) se
+os arquivos não corresponderem. Para conferir manualmente antes,
+compare o *modulus* (RSA):
+
+```bash
+openssl x509 -noout -modulus -in certificado.pem | openssl md5
+openssl rsa -noout -modulus -in chave-privada.pem | openssl md5
+```
+
+Os dois hashes devem ser idênticos. Para chaves EC, compare a chave
+pública derivada (`openssl ec -pubout`) em vez do *modulus*.
 
 ## Resiliência em produção
 
@@ -349,16 +396,32 @@ gerá-lo manualmente.
 
 ## Troubleshooting
 
-Para diagnóstico de confiança de certificado SSL/TLS ao conectar-se ao
-HubSaúde (erros como *PKIX path building failed* / *SSL handshake
-failed*, com detecção via OpenSSL, Java, C#, Node.js e Python),
-consulte o [guia de troubleshooting TLS](docs/troubleshooting.md).
+Erros específicos desta biblioteca chegam como `SmartTokenError` ou
+`SigningError` (ver [Ciclo de vida, cache e
+erros](#ciclo-de-vida-cache-e-erros)), sempre com a mensagem indicando
+a causa e, quando aplicável, a causa original preservada em
+`__cause__`. A tabela abaixo cobre os cenários mais comuns:
 
-Uma tabela de erros específicos desta biblioteca (assinatura, carga de
-chave, cliente HTTP) ainda não foi adicionada aqui, embora
-`SmartTokenError`/`SigningError` (ver [Ciclo de vida, cache e
-erros](#ciclo-de-vida-cache-e-erros)) já cubram os cenários de erro do
-cliente HTTP e de todas as estratégias de assinatura/TLS implementadas.
+| Mensagem (trecho) | Causa provável | Solução |
+|---|---|---|
+| `Chave criptografada requer senha` | PEM da chave privada tem senha, mas `.private_key_pem(path)` foi chamado sem o parâmetro `password` | Informe a senha: `.private_key_pem(path, password=bytearray(b"..."))` |
+| `Falha ao decriptar chave, verifique a senha fornecida` | Senha incorreta para uma chave PEM criptografada | Confirme a senha com quem gerou a chave; teste com `openssl rsa -check -in key.pem` |
+| `formato de chave PEM invalido` | Arquivo não é uma chave privada PEM válida (ex.: é um certificado, ou está corrompido) | Confirme o conteúdo: `openssl pkey -in key.pem -noout -text`. PKCS#1 (`BEGIN RSA PRIVATE KEY`) e PKCS#8 (`BEGIN PRIVATE KEY`) são aceitos automaticamente — não é necessário converter entre eles como em outras linguagens |
+| `Chave RSA de N bits rejeitada` / `Chave EC com campo de N bits rejeitada` | Chave abaixo do tamanho mínimo aceito (RSA < 2048 bits, EC < P-256) | Gere uma chave maior: `openssl genrsa -out key.pem 2048` ou `openssl ecparam -name prime256v1 -genkey -noout -out key.pem` |
+| `Certificado ainda nao e valido` / `Certificado expirado` | Certificado (cliente ou `server_trust_anchor`) fora do período de validade (`notBefore`/`notAfter`) | Verifique as datas: `openssl x509 -noout -dates -in cert.pem`; emita/renove o certificado |
+| `Chave privada nao corresponde ao certificado: assinatura invalida` | `.private_key_pem()` + `.certificate_pem()` apontam para um par chave/certificado que não combina | Compare o *modulus* (RSA): `openssl x509 -noout -modulus -in cert.pem \| openssl md5` vs `openssl rsa -noout -modulus -in key.pem \| openssl md5`; para EC, compare a chave pública derivada |
+| `Falha ao carregar PKCS#12 (senha incorreta ou arquivo invalido?)` | Senha errada para o bundle `.client_key_store()`/`from_pkcs12`, ou arquivo não é um PKCS#12 válido | Teste a senha isoladamente: `openssl pkcs12 -info -in bundle.p12 -noout -passin pass:SENHA` |
+| `Falha ao abrir sessao PKCS#11 (PIN incorreto?)` | PIN incorreto para `strategy_factory.from_pkcs11`, ou o slot/token não está acessível | Confirme o PIN e o `token_label` com `pkcs11-tool --list-slots` (pacote `opensc`) |
+| `Chave nao encontrada no token PKCS#11` | `key_label` não corresponde a nenhum objeto de chave no token | Liste os objetos: `pkcs11-tool --list-objects --login --pin SEU_PIN` e confira o `key_label` exato |
+| `Protocolo TLS nao suportado` | `.tls_protocol(...)` recebeu um valor diferente de `TLSv1.2`/`TLSv1.3` | Use um dos dois valores suportados (`defaults.DEFAULT_TLS_PROTOCOL` é `TLSv1.3`) |
+| `ssl.SSLCertVerificationError` (fora de `SmartTokenError`, direto do `ssl`) — ex. `unable to get local issuer certificate` | CA do servidor não confiável pelo trust store em uso | Use `.server_trust_anchor(caminho)` (homologação/simulador) ou consulte o [guia de troubleshooting TLS](docs/troubleshooting.md) para importar a CA no ambiente |
+| `httpx.ConnectTimeout` / `httpx.ConnectError` (após esgotar `max_retries`) | Firewall, endpoint incorreto, ou serviço indisponível | Verifique conectividade e a URL de `.token_endpoint()`/`.fhir_base()`; esses casos já são retriáveis automaticamente até `max_retries` |
+
+Para diagnóstico aprofundado de **confiança de certificado SSL/TLS**
+(erros como *PKIX path building failed* / *SSL handshake failed*, com
+detecção via OpenSSL, Python, Java, C# e Node.js), consulte o
+[guia de troubleshooting TLS](docs/troubleshooting.md) já referenciado
+acima.
 
 ## Build e testes
 
@@ -424,10 +487,10 @@ processo de publicação for definido.
 
 O contrato comportamental completo, requisito a requisito, está em
 [`ESPECIFICACAO.md`](ESPECIFICACAO.md). O
-[guia de integração enterprise](docs/integracao-enterprise.md) ainda
-está vazio — é onde a recomendação de circuit breaker externo e a
-regra de "uma única renovação após 401" (fora do escopo do SDK)
-deveriam ser detalhadas.
+[guia de integração enterprise](docs/integracao-enterprise.md) detalha
+a recomendação de circuit breaker externo, a regra de "uma única
+renovação após 401" e a convenção de métricas/trace — tudo fora do
+escopo do próprio SDK por design.
 
 ## Licença e contribuição
 
