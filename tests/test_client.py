@@ -249,6 +249,39 @@ def test_assertion_header_includes_kid_when_configured(install_mock_transport) -
     client.close()
 
 
+def test_get_key_id_returns_configured_value(install_mock_transport) -> None:
+    install_mock_transport(_token_success_handler(captured=[]))
+    client = SmartTokenClient(**_base_kwargs(key_id="minha-chave-01"))
+
+    assert client.get_key_id() == "minha-chave-01"
+    client.close()
+
+
+def test_get_key_id_returns_none_when_not_configured(install_mock_transport) -> None:
+    install_mock_transport(_token_success_handler(captured=[]))
+    client = SmartTokenClient(**_base_kwargs(key_id=None))
+
+    assert client.get_key_id() is None
+    client.close()
+
+
+def test_verify_key_pair_consistency_static_wrapper_accepts_matching_pair(fake_pem_pair) -> None:
+    from hubsaude_client import pem_loader
+
+    key = pem_loader.load_private_key(fake_pem_pair["key"])
+    cert = pem_loader.load_certificate(fake_pem_pair["cert"])
+    SmartTokenClient.verify_key_pair_consistency(key, cert)  # nao deve lancar
+
+
+def test_verify_key_pair_consistency_static_wrapper_rejects_mismatched_pair(fake_mismatched_pem_pair) -> None:
+    from hubsaude_client import pem_loader
+
+    key = pem_loader.load_private_key(fake_mismatched_pem_pair["matching_key"])
+    mismatched_cert = pem_loader.load_certificate(fake_mismatched_pem_pair["mismatched_cert"])
+    with pytest.raises(SmartTokenError, match="nao corresponde"):
+        SmartTokenClient.verify_key_pair_consistency(key, mismatched_cert)
+
+
 def test_assertion_header_omits_kid_when_not_configured(install_mock_transport) -> None:
     captured: list[httpx.Request] = []
     install_mock_transport(_token_success_handler(captured=captured))

@@ -54,7 +54,10 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Final, Iterator
 
 import httpx
+from cryptography import x509
+from cryptography.hazmat.primitives.asymmetric.types import PrivateKeyTypes
 
+from hubsaude_client import key_certificate_consistency
 from hubsaude_client._log import get_logger
 from hubsaude_client.discovery import SmartConfigurationDiscovery
 from hubsaude_client.error_classifier import ErrorClassifier
@@ -348,6 +351,43 @@ class SmartTokenClient:
         """Retorna o algoritmo JWT (``alg``) configurado para a assinatura."""
         return self._jwt_algorithm
 
+    def get_key_id(self) -> str | None:
+        """Retorna o ``kid`` configurado para o header do client_assertion,
+        ou ``None`` quando nao configurado (equivalente a
+        ``SmartTokenClient.getKeyId()`` do ``.java`` -- roadmap Fatia B,
+        item P2).
+        """
+        return self._key_id
+
+    @staticmethod
+    def verify_key_pair_consistency(private_key: PrivateKeyTypes, certificate: x509.Certificate) -> None:
+        """Verifica, de forma fail-fast, que uma chave privada corresponde
+        a chave publica de um certificado X.509.
+
+        Equivalente publico de ``SmartTokenClient.verifyKeyPairConsistency``
+        (``.java`` -- roadmap Fatia B, item P2): util para quem monta a
+        propria ``SigningStrategy`` fora do builder (cenario HSM/cofre de
+        segredos customizado) e quer confirmar, antes de usar, que a chave
+        e o certificado formam o mesmo par -- em vez de descobrir isso
+        apenas quando o authorization server rejeitar o
+        ``client_assertion``.
+
+        Nao exige uma instancia de ``SmartTokenClient``: e' um metodo
+        estatico, chamavel diretamente como
+        ``SmartTokenClient.verify_key_pair_consistency(...)``.
+
+        Args:
+            private_key: chave privada RSA ou EC a validar.
+            certificate: certificado X.509 com a chave publica
+                correspondente.
+
+        Raises:
+            SmartTokenError: se o tipo/curva da chave nao for suportado
+                para esta verificacao, ou se a chave e o certificado nao
+                formarem um par valido.
+        """
+        key_certificate_consistency.verify_key_pair(private_key, certificate)
+
     def close(self) -> None:
         """Libera os recursos do cliente (idempotente).
 
@@ -429,7 +469,25 @@ class SmartTokenClient:
             headers = {TraceContext.TRACEPARENT_HEADER: trace.traceparent()}
 
             try:
-                response = self._http_client.post(self._token_endpoint, data=data, headers=headers)
+                # ``stream=True`` (via Client.stream(), nao Client.post()) e'
+                # essencial para que o limite de tamanho do corpo em
+                # response_guard.read_body() interrompa a leitura durante o
+                # transporte -- sem streaming, httpx ja baixa o corpo
+                # inteiro para memoria antes de response_guard poder agir,
+                # tornando a protecao apenas cosmetica (P0 do roadmap
+                # Fatia B: equivalente ao boundedStringBodyHandler do .java,
+                # que cancela a subscription assim que o limite e excedido).
+                with self._http_client.stream("POST", self._token_endpoint, data=data, headers=headers) as response:
+                    if response.status_code == 200:
+                        return self._response_guard.parse_success_response(response, trace)
+                    # Caminho de erro: tambem le em streaming, respeitando o
+                    # mesmo limite de tamanho (response.text exigiria o
+                    # corpo inteiro ja lido, o que httpx nao faz sozinho em
+                    # modo stream -- e' preciso ler explicitamente aqui,
+                    # ainda dentro do "with", antes da conexao ser fechada).
+                    body_bytes = self._response_guard.read_body(response, trace)
+                    body_text = body_bytes.decode("utf-8", errors="replace")
+                    raise self._error_classifier.http_failure(response, trace, body_text)
             except httpx.RequestError as exc:
                 # Relanca diretamente se nao-retriavel (ou levanta
                 # SmartTokenError na heuristica de rejeicao do
@@ -452,10 +510,6 @@ class SmartTokenClient:
                     f" tentativa(s) (traceId={trace.trace_id}): {last_exc}",
                     last_exc,
                 ) from last_exc
-            else:
-                if response.status_code == 200:
-                    return self._response_guard.parse_success_response(response, trace)
-                raise self._error_classifier.http_failure(response, trace)
 
         # Inalcancavel: o laco acima sempre retorna ou levanta antes de
         # terminar (max_retries >= 1, normalizado por FaultToleranceConfig).
