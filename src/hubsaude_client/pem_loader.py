@@ -113,16 +113,19 @@ def _load_private_key_from_bytes(pem_bytes: bytes, password: bytearray | None, s
             raise SmartTokenError(f"Falha ao decriptar chave, verifique a senha fornecida: {source}", exc) from exc
         raise SmartTokenError(f"formato de chave PEM invalido: {source}", exc) from exc
     finally:
-        _clear_password(password)
+        clear_password(password)
     validate_minimum_key_size(key, source)
     return key
 
 
-def _clear_password(password: bytearray | None) -> None:
+def clear_password(password: bytearray | None) -> None:
     """Zera o conteudo do array de senha em memoria, apos o uso.
 
-    RNF de seguranca: minimiza a janela em que a senha em texto puro fica
-    exposta num dump de memoria/heap.
+    RNF-03 (higiene de segredos em memoria): minimiza a janela em que a
+    senha em texto puro fica exposta num dump de memoria/heap. Publica
+    (nao prefixada) porque tambem e reaproveitada por outras fontes de
+    senha/PIN mutaveis fora deste modulo (ex: ``strategy_factory.py``,
+    bundle PKCS#12).
     """
     if password is not None:
         password[:] = bytes(len(password))

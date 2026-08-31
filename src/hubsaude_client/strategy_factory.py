@@ -90,12 +90,14 @@ def from_pem_string(
     return PrivateKeySigningStrategy(key, jwt_algorithm)
 
 
-def from_pkcs12(data: bytes | Path, password: bytes, jwt_algorithm: str = DEFAULT_JWT_ALGORITHM) -> SigningStrategy:
+def from_pkcs12(data: bytes | Path, password: bytearray, jwt_algorithm: str = DEFAULT_JWT_ALGORITHM) -> SigningStrategy:
     """Cria estrategia a partir de bundle PKCS#12 (chave + certificado).
 
     Args:
         data: conteudo do arquivo PKCS#12, em bytes, ou o caminho do arquivo.
-        password: senha do bundle.
+        password: senha do bundle. E consumida: o array e zerado ao final da
+            chamada, em sucesso ou erro (RNF-03). O chamador nao deve
+            reutiliza-la.
         jwt_algorithm: algoritmo JWT (JWA) a usar na assinatura.
 
     Returns:
@@ -107,9 +109,14 @@ def from_pkcs12(data: bytes | Path, password: bytes, jwt_algorithm: str = DEFAUL
     """
     raw = data.read_bytes() if isinstance(data, Path) else data
     try:
-        private_key, _certificate, _additional = pkcs12.load_key_and_certificates(raw, password)
+        # A lib cryptography exige `bytes` (imutavel) neste parametro; a copia
+        # temporaria criada aqui fica sem outra referencia viva assim que a
+        # chamada retorna. O bytearray original do chamador e zerado no finally.
+        private_key, _certificate, _additional = pkcs12.load_key_and_certificates(raw, bytes(password))
     except ValueError as exc:
         raise SmartTokenError(f"Falha ao carregar PKCS#12 (senha incorreta ou arquivo invalido?): {exc}", exc) from exc
+    finally:
+        pem_loader.clear_password(password)
     if private_key is None:
         raise SmartTokenError("Bundle PKCS#12 nao contem chave privada")
     pem_loader.validate_minimum_key_size(private_key, "pkcs12")
@@ -133,7 +140,13 @@ def from_pkcs11(
             (ex: ``/usr/lib/softhsm/libsofthsm2.so``).
         token_label: rotulo do token/slot.
         key_label: rotulo da chave privada no token.
-        user_pin: PIN de acesso ao token.
+        user_pin: PIN de acesso ao token. Permanece ``str`` (nao
+            ``bytearray`` + zeragem como em ``from_pem_file``/
+            ``from_pkcs12`` -- RNF-03): e usado uma unica vez, aqui mesmo,
+            para abrir a sessao PKCS#11, e descartado ao final desta
+            funcao (nunca fica retido em campo de builder entre chamadas,
+            ao contrario da senha de ``client_key_store()``). Decisao
+            deliberada e final, nao pendencia.
         jwt_algorithm: algoritmo JWT (JWA) a usar na assinatura.
 
     Returns:
@@ -170,7 +183,9 @@ def from_pkcs11(
     return Pkcs11SigningStrategy(session, key, jwt_algorithm)
 
 
-def load_pkcs12_key_and_certificate(data: bytes | Path, password: bytes) -> tuple[PrivateKeyTypes, x509.Certificate]:
+def load_pkcs12_key_and_certificate(
+    data: bytes | Path, password: bytearray
+) -> tuple[PrivateKeyTypes, x509.Certificate]:
     """Carrega chave privada E certificado de um bundle PKCS#12.
 
     Uso: quando o mesmo bundle precisa fornecer tanto a chave para
@@ -180,7 +195,9 @@ def load_pkcs12_key_and_certificate(data: bytes | Path, password: bytes) -> tupl
 
     Args:
         data: conteudo do arquivo PKCS#12, em bytes, ou o caminho do arquivo.
-        password: senha do bundle.
+        password: senha do bundle. E consumida: o array e zerado ao final
+            da chamada, em sucesso ou erro (RNF-03). O chamador nao deve
+            reutiliza-la.
 
     Returns:
         A chave privada e o certificado, ambos ja validados (tamanho
@@ -192,9 +209,11 @@ def load_pkcs12_key_and_certificate(data: bytes | Path, password: bytes) -> tupl
     """
     raw = data.read_bytes() if isinstance(data, Path) else data
     try:
-        private_key, certificate, _additional = pkcs12.load_key_and_certificates(raw, password)
+        private_key, certificate, _additional = pkcs12.load_key_and_certificates(raw, bytes(password))
     except ValueError as exc:
         raise SmartTokenError(f"Falha ao carregar PKCS#12 (senha incorreta ou arquivo invalido?): {exc}", exc) from exc
+    finally:
+        pem_loader.clear_password(password)
     if private_key is None:
         raise SmartTokenError("Bundle PKCS#12 nao contem chave privada")
     if certificate is None:

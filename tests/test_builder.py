@@ -563,6 +563,20 @@ def test_client_key_store_builds_client_with_signing_and_tls(
     assert isinstance(context, ssl.SSLContext)
 
 
+def test_client_key_store_password_is_zeroed_after_build(
+    fake_pkcs12_bundle, fake_smart_token_client_module: type[_FakeSmartTokenClient]
+) -> None:
+    password = fake_pkcs12_bundle["password"]
+    (
+        SmartTokenClientBuilder()
+        .client_id(CLIENT_ID)
+        .token_endpoint(TOKEN_ENDPOINT)
+        .client_key_store(fake_pkcs12_bundle["path"], password)
+        .build()
+    )
+    assert password == bytearray(len(password))
+
+
 def test_client_key_store_and_private_key_pem_are_mutually_exclusive(fake_pkcs12_bundle, fake_pem_pair) -> None:
     builder = (
         SmartTokenClientBuilder()

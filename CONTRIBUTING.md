@@ -110,6 +110,16 @@ e destrói o próprio token SoftHSM2 isolado em um diretório temporário
   `.importlinter`) — regras arquiteturais são bloqueantes. As regras
   são mantidas localmente para preservar a independência total do
   cliente (sem dependência do monorepo HubSaúde).
+- **Layout achatado do pacote de assinatura/TLS**: `algorithms.py`,
+  `pem_loader.py`, `strategy_factory.py`, `ssl_context_factory.py` etc.
+  ficam soltos direto em `hubsaude_client/`, sem subpacote `signing/`
+  dedicado — decisão definitiva, não provisória. Consequência prática:
+  o contrato "Modulos de assinatura nao dependem de HTTP" em
+  `[tool.importlinter]` (`pyproject.toml`) lista os módulos um a um em
+  `source_modules`, em vez de apontar para um pacote só. **Todo PR que
+  adicionar um novo módulo de assinatura/TLS DEVE incluí-lo nessa
+  lista** — do contrário a regra deixa de valer para o módulo novo
+  silenciosamente (sem falha visível de lint/CI).
 
 ## Política de versionamento
 

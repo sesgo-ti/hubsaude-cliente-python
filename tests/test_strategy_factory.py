@@ -54,7 +54,13 @@ def test_from_pkcs12_with_bytes_loads_and_signs(fake_pkcs12_bundle) -> None:
 
 def test_from_pkcs12_wrong_password_raises(fake_pkcs12_bundle) -> None:
     with pytest.raises(SmartTokenError, match="senha incorreta"):
-        strategy_factory.from_pkcs12(fake_pkcs12_bundle["path"], b"senha-errada")
+        strategy_factory.from_pkcs12(fake_pkcs12_bundle["path"], bytearray(b"senha-errada"))
+
+
+def test_from_pkcs12_password_is_zeroed_after_use(fake_pkcs12_bundle) -> None:
+    password = fake_pkcs12_bundle["password"]
+    strategy_factory.from_pkcs12(fake_pkcs12_bundle["path"], password)
+    assert password == bytearray(len(password))
 
 
 def test_from_pkcs12_without_private_key_raises(fake_pkcs12_bundle_without_key) -> None:
@@ -72,7 +78,13 @@ def test_load_pkcs12_key_and_certificate_returns_both(fake_pkcs12_bundle) -> Non
 
 def test_load_pkcs12_key_and_certificate_wrong_password_raises(fake_pkcs12_bundle) -> None:
     with pytest.raises(SmartTokenError, match="senha incorreta"):
-        strategy_factory.load_pkcs12_key_and_certificate(fake_pkcs12_bundle["path"], b"senha-errada")
+        strategy_factory.load_pkcs12_key_and_certificate(fake_pkcs12_bundle["path"], bytearray(b"senha-errada"))
+
+
+def test_load_pkcs12_key_and_certificate_password_is_zeroed_after_use(fake_pkcs12_bundle) -> None:
+    password = fake_pkcs12_bundle["password"]
+    strategy_factory.load_pkcs12_key_and_certificate(fake_pkcs12_bundle["path"], password)
+    assert password == bytearray(len(password))
 
 
 def test_load_pkcs12_key_and_certificate_without_private_key_raises(fake_pkcs12_bundle_without_key) -> None:

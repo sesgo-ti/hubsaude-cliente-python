@@ -254,7 +254,7 @@ def fake_pkcs12_bundle(tmp_path):
     )
     p12_path = tmp_path / "bundle.p12"
     p12_path.write_bytes(p12_bytes)
-    return {"path": p12_path, "bytes": p12_bytes, "password": password}
+    return {"path": p12_path, "bytes": p12_bytes, "password": bytearray(password)}
 
 
 @pytest.fixture
@@ -286,7 +286,7 @@ def fake_pkcs12_bundle_without_key(tmp_path):
     )
     p12_path = tmp_path / "bundle_no_key.p12"
     p12_path.write_bytes(p12_bytes)
-    return {"path": p12_path, "password": password}
+    return {"path": p12_path, "password": bytearray(password)}
 
 
 @pytest.fixture
@@ -303,7 +303,7 @@ def fake_pkcs12_bundle_without_certificate(tmp_path):
     )
     p12_path = tmp_path / "bundle_no_cert.p12"
     p12_path.write_bytes(p12_bytes)
-    return {"path": p12_path, "password": password}
+    return {"path": p12_path, "password": bytearray(password)}
 
 
 @pytest.fixture
