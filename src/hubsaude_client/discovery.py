@@ -33,6 +33,7 @@ from hubsaude_client._log import get_logger
 from hubsaude_client.error_classifier import sanitize_error_response
 from hubsaude_client.exceptions import SmartTokenError
 from hubsaude_client.trace import TraceContext
+from hubsaude_client.url_validation import require_https_scheme
 
 #: Caminho fixo do documento de descoberta (SMART App Launch — Backend
 #: Services). Sempre relativo a raiz da URL base FHIR informada.
@@ -86,8 +87,11 @@ class SmartConfigurationDiscovery:
         Raises:
             SmartTokenError: se a requisicao falhar por erro de rede,
                 se a resposta nao tiver status ``200``, se o corpo nao
-                for JSON valido, ou se o campo ``token_endpoint``
-                estiver ausente, vazio ou nao for uma string.
+                for JSON valido, se o campo ``token_endpoint`` estiver
+                ausente, vazio ou nao for uma string, ou se o
+                ``token_endpoint`` descoberto nao usar https (exceto
+                para localhost/127.0.0.1/::1 -- ver
+                ``url_validation.require_https_scheme``).
         """
         well_known_url = _build_well_known_url(fhir_base)
         trace = TraceContext.generate()
@@ -124,6 +128,14 @@ class SmartConfigurationDiscovery:
                 f"Documento de descoberta SMART em {well_known_url} nao contem"
                 f" '{_TOKEN_ENDPOINT_FIELD}' valido (traceId={trace.trace_id})"
             )
+
+        # RF-10/RF-18 (roadmap Fatia B, item P0): o token_endpoint devolvido
+        # pelo servidor de descoberta precisa ser validado quanto ao
+        # esquema, assim como um token_endpoint informado manualmente ja e'
+        # em builder.py -- um .well-known comprometido (ou um MITM capaz de
+        # responder por ele) nao pode fazer este cliente enviar o
+        # client_assertion (e credenciais de mTLS) para um endpoint sem TLS.
+        require_https_scheme(token_endpoint, "token_endpoint descoberto")
 
         _LOG.debug(
             "Descoberta SMART concluida: token_endpoint=%s traceId=%s",
