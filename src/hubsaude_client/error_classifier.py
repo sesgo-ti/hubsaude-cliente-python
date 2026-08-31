@@ -22,38 +22,52 @@ Mapeamento de excecoes Java -> Python (``httpx``/``ssl``):
   resetada durante leitura/escrita).
 - ``HttpTimeoutException`` -> ``httpx.TimeoutException`` (classe-base de
   ``ConnectTimeout``/``ReadTimeout``/``WriteTimeout``/``PoolTimeout``).
-- ``AEADBadTagException`` -> ``# TODO(duvida):`` sem equivalente direto de
-  rede no stack Python/OpenSSL -- o modulo ``ssl`` da stdlib nao expoe
+- ``AEADBadTagException`` -> **decisao confirmada** (ver item 2 do
+  roadmap, fechado nesta rodada): o modulo ``ssl`` da stdlib nao expoe
   falhas de tag AEAD como excecao propria de handshake (isso e' detalhe
-  interno do OpenSSL, nao presente no binding Python). O sintoma
-  equivalente do lado do cliente -- alerta ``bad_record_mac`` apos o
-  ``Finished`` -- ja e' coberto por
-  :func:`is_likely_client_certificate_rejection` via ``ssl.SSLError``,
-  entao nenhum mapeamento artificial adicional foi forcado aqui.
+  interno do OpenSSL, nao presente no binding Python), entao nenhum
+  mapeamento 1:1 de tipo e' possivel nem necessario. A confirmacao veio
+  da propria fonte de verdade (``.java``): o docblock de
+  ``SmartTokenClientCertRejectionTest`` (Java) documenta que o cenario
+  de servidor rejeitando o certificado de cliente apos o handshake foi
+  "observado em producao como ``bad_record_mac`` no peer OpenSSL e
+  ``AEADBadTagException`` no peer JSSE" -- ou seja, o proprio time que
+  escreveu o ``.java`` original ja registrou que sao duas superficies
+  (uma por peer TLS/biblioteca) do mesmo evento de servidor, nao dois
+  cenarios distintos. Python, cujo binding TLS e' OpenSSL (o mesmo peer
+  citado no lado "bad_record_mac"), portanto ve a mesma superficie que
+  o proprio ``.java`` associa ao caso "bad_record_mac" -- ja coberta por
+  :func:`is_likely_client_certificate_rejection` -- e nunca a superficie
+  ``AEADBadTagException``, que e' especifica do peer JSSE/Java e nao tem
+  como aparecer no binding Python. A suposicao do TODO original estava
+  correta; o "TODO(duvida)" foi removido.
 
   Validado com handshake mTLS real (``tests/test_error_classifier_real_mtls.py``,
-  nao apenas ``ssl.SSLError`` simulado como antes): sob TLS 1.2, um
-  certificado de cliente com CA desconhecida do servidor produz de fato
-  ``ssl.SSLError`` com o alerta ``unknown ca`` do lado do cliente -- caso
-  real que NAO estava coberto pelos fragmentos abaixo e foi adicionado
-  nesta rodada. Sob TLS 1.3 (protocolo padrao desta lib, ver
+  nao apenas ``ssl.SSLError`` simulado): sob TLS 1.2, um certificado de
+  cliente com CA desconhecida do servidor produz de fato ``ssl.SSLError``
+  com o alerta ``unknown ca`` do lado do cliente -- caso real que nao
+  estava coberto pelos fragmentos abaixo e foi adicionado numa rodada
+  anterior. Sob TLS 1.3 (protocolo padrao desta lib, ver
   ``defaults.DEFAULT_TLS_PROTOCOL``), a superficie exata do erro que
   chega ao cliente para o mesmo cenario de rejeicao **varia por
   plataforma/versao do OpenSSL**: em ``OpenSSL 3.0.13`` observou-se
   ``ssl.SSLEOFError`` ("EOF occurred in violation of protocol"), sem
   alerta textual reconhecivel; em outra maquina (mesma lib, OpenSSL
   diferente), o mesmo cenario produziu um alerta ``unknown ca`` limpo,
-  ja coberto pelo fix acima. Quando o EOF sem alerta ocorre, ele *nao*
-  e' classificado como provavel rejeicao de certificado (a mensagem nao
-  contem nenhum dos fragmentos rastreados) -- fica como a mesma duvida
-  em aberto do ``AEADBadTagException`` acima (ver item 2 do roadmap), e
-  nao como bug: em qualquer uma das duas variantes a conexao e'
-  relancada corretamente e nunca e' tratada como retriavel
+  ja coberto pelo fix acima. Essa variante ``ssl.SSLEOFError`` e'
+  exatamente a superficie OpenSSL do evento que o ``.java`` chama de
+  ``bad_record_mac``/``AEADBadTagException`` -- confirmado o mapeamento
+  acima, ela tambem passou a ser reconhecida por
+  :func:`is_likely_client_certificate_rejection` (fragmento
+  ``_TLS13_EOF_AFTER_HANDSHAKE_MESSAGE_FRAGMENT``, restrito ao tipo
+  exato ``ssl.SSLEOFError`` e a essa mensagem, para nao capturar EOFs
+  genuinamente transitorios). Em qualquer uma das duas variantes a
+  conexao e' relancada corretamente e nunca e' tratada como retriavel
   (``is_transient_network_failure`` ja exclui todo ``ssl.SSLError``,
-  incluindo ``ssl.SSLEOFError``, entao a garantia de seguranca real --
-  nunca reenviar credencial apos rejeicao -- se sustenta nos dois
-  casos); a variante EOF so' perde a mensagem de diagnostico mais
-  especifica.
+  incluindo ``ssl.SSLEOFError``), entao a garantia de seguranca real --
+  nunca reenviar credencial apos rejeicao -- ja se sustentava mesmo
+  antes desta confirmacao; o que a confirmacao acrescenta e' a mensagem
+  de diagnostico mais especifica nesse cenario tambem.
 
 A cadeia de causas e' percorrida (``__cause__``, com fallback para
 ``__context__`` quando a excecao nao foi relancada explicitamente com
@@ -148,6 +162,18 @@ _CLIENT_CERT_REJECTION_ALERT_FRAGMENTS: Final[tuple[str, ...]] = (
     "access_denied",
     "access denied",
 )
+
+#: Mensagem exata (minusculas) com que alguns builds de OpenSSL encerram a
+#: conexao sob TLS 1.3, sem alerta textual reconhecivel, quando o servidor
+#: rejeita o certificado de cliente apos o ``Finished`` -- a mesma
+#: superficie de servidor que o ``.java`` original (fonte de verdade,
+#: ``ErrorClassifier.java``) documenta como observada em producao como
+#: ``bad_record_mac``/``AEADBadTagException`` (ver nota no topo do
+#: modulo). So' e' considerada quando o tipo da excecao e' exatamente
+#: ``ssl.SSLEOFError`` (nunca ``ssl.SSLError`` generico) para nao capturar
+#: EOFs genuinamente transitorios (ex.: queda de conexao TCP antes do
+#: handshake completar) que por acaso mencionem "EOF" na mensagem.
+_TLS13_EOF_AFTER_HANDSHAKE_MESSAGE_FRAGMENT: Final[str] = "eof occurred in violation of protocol"
 
 
 class ErrorClassifier:
@@ -298,11 +324,15 @@ def is_likely_client_certificate_rejection(exc: BaseException | None) -> bool:
     alerta TLS tipico desse cenario (``handshake_failure``,
     ``certificate_revoked``, ``certificate_expired``, ``certificate_unknown``,
     ``unknown_ca``, ``bad_record_mac``, ``decrypt_error``, ``access_denied``
-    — o penultimo caso e' o sintoma equivalente, do lado do binding
-    Python/OpenSSL, ao ``AEADBadTagException`` do JSSE; ver nota no topo do
-    modulo). Validado com handshake real sob TLS 1.2; sob TLS 1.3 (padrao
-    da lib) o mesmo cenario pode nao produzir nenhum desses fragmentos —
-    ver nota no topo do modulo sobre ``ssl.SSLEOFError``.
+    — o penultimo caso e' a superficie, do lado do binding Python/OpenSSL,
+    confirmada equivalente ao ``AEADBadTagException`` do JSSE pela propria
+    fonte de verdade ``.java``; ver nota no topo do modulo); e qualquer
+    ``ssl.SSLEOFError`` (tipo exato, nao ``ssl.SSLError`` generico) cuja
+    mensagem seja a variante sem alerta textual que builds de OpenSSL sob
+    TLS 1.3 produzem para o mesmo cenario. Validado com handshake mTLS
+    real sob TLS 1.2 (alerta ``unknown ca``) e sob TLS 1.3 (ambas as
+    superficies observadas: alerta limpo e ``ssl.SSLEOFError``) — ver
+    ``tests/test_error_classifier_real_mtls.py``.
 
     Falhas cuja cadeia de causas contenha ``ssl.SSLCertVerificationError``
     sao excluidas: indicam que foi ESTE cliente que rejeitou o certificado
@@ -325,6 +355,11 @@ def is_likely_client_certificate_rejection(exc: BaseException | None) -> bool:
         # trust anchor) — nao e' rejeicao mTLS pelo servidor.
         return False
     for cause in chain:
+        if isinstance(cause, ssl.SSLEOFError):
+            message = str(cause).lower()
+            if _TLS13_EOF_AFTER_HANDSHAKE_MESSAGE_FRAGMENT in message:
+                return True
+            continue
         if isinstance(cause, ssl.SSLError):
             message = str(cause).lower()
             if any(fragment in message for fragment in _CLIENT_CERT_REJECTION_ALERT_FRAGMENTS):

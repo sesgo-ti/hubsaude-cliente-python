@@ -130,6 +130,41 @@ def test_server_cert_verification_failure_excludes_even_with_alert_text_elsewher
     assert is_likely_client_certificate_rejection(outer) is False
 
 
+def test_recognizes_tls13_eof_after_handshake_variant() -> None:
+    """Sob TLS 1.3, alguns builds de OpenSSL encerram a conexao sem alerta
+    textual reconhecivel quando o servidor rejeita o certificado de
+    cliente apos o ``Finished`` -- confirmado equivalente a
+    ``bad_record_mac``/``AEADBadTagException`` pela fonte de verdade
+    ``.java`` (ver nota no topo de ``error_classifier.py``)."""
+    exc = ssl.SSLEOFError("EOF occurred in violation of protocol (_ssl.c:1006)")
+    assert is_likely_client_certificate_rejection(exc) is True
+
+
+def test_recognizes_tls13_eof_variant_wrapped_in_httpx_connect_error() -> None:
+    eof_failure = ssl.SSLEOFError("EOF occurred in violation of protocol (_ssl.c:1006)")
+    wrapped = httpx.ConnectError("connection failed")
+    wrapped.__cause__ = eof_failure
+    assert is_likely_client_certificate_rejection(wrapped) is True
+
+
+def test_ssl_eof_error_with_generic_message_is_not_a_client_certificate_rejection() -> None:
+    """So' o texto exato da variante conhecida deve ser reconhecido -- um
+    ``ssl.SSLEOFError`` generico (ex.: queda de conexao TCP antes do
+    handshake completar) nao deve virar falso positivo."""
+    exc = ssl.SSLEOFError("some other EOF condition")
+    assert is_likely_client_certificate_rejection(exc) is False
+
+
+def test_ssl_error_with_eof_message_but_wrong_type_is_not_recognized() -> None:
+    """A checagem exige o tipo exato ``ssl.SSLEOFError``: um ``ssl.SSLError``
+    generico com o mesmo texto (cenario que nao deveria ocorrer na pratica,
+    mas nao pode ser tratado como a variante especifica) nao e' reconhecido
+    por esse fragmento -- e nenhum dos fragmentos de alerta bate com esse
+    texto, entao o resultado e' ``False``."""
+    exc = ssl.SSLError("EOF occurred in violation of protocol (_ssl.c:1006)")
+    assert is_likely_client_certificate_rejection(exc) is False
+
+
 def test_unrelated_ssl_error_is_not_a_client_certificate_rejection() -> None:
     assert is_likely_client_certificate_rejection(ssl.SSLError("unrecognized_name")) is False
 

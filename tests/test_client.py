@@ -28,7 +28,7 @@ import httpx
 import pytest
 
 from hubsaude_client.builder import HubContext
-from hubsaude_client.client import SmartTokenClient, TokenResult
+from hubsaude_client.client import SmartTokenClient, TokenResult, _ReadersWriterLock
 from hubsaude_client.exceptions import SmartTokenError
 from hubsaude_client.fault_tolerance import FaultToleranceConfig
 from hubsaude_client.token_cache import TokenCacheStrategy
@@ -777,3 +777,87 @@ def test_token_result_repr_masks_access_token() -> None:
 
     assert "segredo-super-secreto" not in text
     assert "[REDACTED]" in text
+
+
+# ---------------------------------------------------------------------------
+# _ReadersWriterLock -- contencao real entre leitores/escritor (RNF-01)
+# ---------------------------------------------------------------------------
+#
+# Os testes de single-flight acima ja exercitam varios leitores concorrentes
+# sem contencao com um escritor. Os dois testes abaixo forcam deliberadamente
+# a espera em `_acquire_read`/`_acquire_write` (via `threading.Condition.wait`)
+# -- cenario que so' ocorre quando um escritor esta ativo e um leitor chega
+# (ou vice-versa) -- para exercitar o unico ramo de `_ReadersWriterLock` que
+# os testes de fluxo normal do client nao alcancam.
+
+
+def test_reader_waits_while_writer_is_active() -> None:
+    lock = _ReadersWriterLock()
+    writer_holding = threading.Event()
+    release_writer = threading.Event()
+    reader_acquired = threading.Event()
+
+    def writer() -> None:
+        with lock.write_lock():
+            writer_holding.set()
+            release_writer.wait(timeout=5)
+
+    def reader() -> None:
+        writer_holding.wait(timeout=5)
+        # Aqui o escritor certamente esta ativo -- _acquire_read cai no
+        # `while self._writer_active: self._condition.wait()`.
+        with lock.read_lock():
+            reader_acquired.set()
+
+    writer_thread = threading.Thread(target=writer)
+    reader_thread = threading.Thread(target=reader)
+    writer_thread.start()
+    writer_thread_started = writer_holding.wait(timeout=5)
+    assert writer_thread_started, "escritor nao sinalizou posse do lock a tempo"
+
+    reader_thread.start()
+    # Da tempo do leitor de fato bloquear em `condition.wait()` antes de liberar
+    # o escritor -- sem isso o teste nao garante que o ramo de espera rodou.
+    time.sleep(0.05)
+    assert not reader_acquired.is_set(), "leitor nao deveria progredir com o escritor ainda ativo"
+
+    release_writer.set()
+    writer_thread.join(timeout=5)
+    reader_thread.join(timeout=5)
+
+    assert reader_acquired.is_set(), "leitor deveria progredir apos o escritor liberar o lock"
+
+
+def test_writer_waits_while_reader_is_active() -> None:
+    lock = _ReadersWriterLock()
+    reader_holding = threading.Event()
+    release_reader = threading.Event()
+    writer_acquired = threading.Event()
+
+    def reader() -> None:
+        with lock.read_lock():
+            reader_holding.set()
+            release_reader.wait(timeout=5)
+
+    def writer() -> None:
+        reader_holding.wait(timeout=5)
+        # Aqui o leitor certamente esta ativo -- _acquire_write cai no
+        # `while self._writer_active or self._active_readers > 0: self._condition.wait()`.
+        with lock.write_lock():
+            writer_acquired.set()
+
+    reader_thread = threading.Thread(target=reader)
+    writer_thread = threading.Thread(target=writer)
+    reader_thread.start()
+    reader_thread_started = reader_holding.wait(timeout=5)
+    assert reader_thread_started, "leitor nao sinalizou posse do lock a tempo"
+
+    writer_thread.start()
+    time.sleep(0.05)
+    assert not writer_acquired.is_set(), "escritor nao deveria progredir com o leitor ainda ativo"
+
+    release_reader.set()
+    reader_thread.join(timeout=5)
+    writer_thread.join(timeout=5)
+
+    assert writer_acquired.is_set(), "escritor deveria progredir apos o leitor liberar o lock"

@@ -406,6 +406,24 @@ def test_raises_when_hub_context_ig_has_invalid_format() -> None:
         builder.build()
 
 
+def test_raises_when_hub_context_ig_is_blank_but_versao_is_present() -> None:
+    """``hub_context(ig, versao)`` sempre atribui os dois juntos, mas um
+    dos dois pode normalizar para ``None`` (string vazia/so espacos) sem o
+    outro -- e' o unico jeito de alcancar a validacao de "os dois juntos"
+    em `_build_hub_context`, que fica logo antes da validacao de formato."""
+    builder = _valid_builder().hub_context("   ", "1.0.0")
+
+    with pytest.raises(SmartTokenError, match="hub_context exige ig e versao juntos"):
+        builder.build()
+
+
+def test_raises_when_hub_context_versao_is_blank_but_ig_is_present() -> None:
+    builder = _valid_builder().hub_context("meu-ig", "   ")
+
+    with pytest.raises(SmartTokenError, match="hub_context exige ig e versao juntos"):
+        builder.build()
+
+
 @pytest.mark.parametrize("versao", ["1.0", "1.0.0-beta", "v1.0.0", "1.0.0.0"])
 def test_raises_when_hub_context_versao_has_invalid_format(versao: str) -> None:
     builder = _valid_builder().hub_context("meu-ig", versao)
