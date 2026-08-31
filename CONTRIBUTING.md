@@ -64,6 +64,36 @@ licença do projeto, conforme o texto integral do DCO. Commits sem
 7. **Descrição do PR**: explique *o quê*, *por quê* e *como testar*.
    Referencie issues com `Closes #123`.
 
+## Testes do caminho PKCS#11/HSM (SoftHSM2)
+
+Os testes de `strategy_factory.from_pkcs11` (`tests/test_pkcs11_strategy_factory.py`)
+usam um token SoftHSM2 efêmero via `tests/pkcs11_softhsm_helper.py` e são
+pulados automaticamente (`SKIPPED`) quando o ambiente não tem SoftHSM2
+instalado — o que **não** significa que o código do caminho PKCS#11 não
+tenha teste, apenas que ele não roda sem essa dependência de sistema.
+
+Para rodá-los localmente (validado em Ubuntu 24.04):
+
+```bash
+# Ubuntu/Debian
+sudo apt-get update && sudo apt-get install -y softhsm2 opensc
+
+# macOS (Homebrew)
+brew install softhsm
+
+# instala o binding Python opcional (extra "hsm" do pyproject.toml)
+pip install -e ".[dev,hsm]"
+
+pytest --cov=hubsaude_client --cov-report=term-missing
+```
+
+Com o SoftHSM2 presente, os 7 testes deixam de aparecer como `SKIPPED` e
+`pkcs11_signing_strategy.py`/`strategy_factory.py` (função `from_pkcs11`)
+passam a ter cobertura real medida, não apenas o resto da suíte. Não é
+necessário nenhum passo manual de inicialização de token — cada teste cria
+e destrói o próprio token SoftHSM2 isolado em um diretório temporário
+(`tests/pkcs11_softhsm_helper.py::softhsm2_token`).
+
 ## Padrões técnicos
 
 - **Python 3.12**. Build com **pip + venv** (`python -m venv .venv && pip install -e ".[dev]"`_)
