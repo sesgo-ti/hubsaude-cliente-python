@@ -10,10 +10,18 @@ faz parte da API publica da biblioteca (nao exportado em ``__init__.py``).
 
 - o valor exato de ``MAX_RESPONSE_BODY_BYTES`` usado em producao no Java
   (aqui adotado 1 MiB, sem referencia direta -- ver comentario na
-  constante abaixo);
-- se o Java aceita ``expires_in`` como string numerica (aqui aceito, por
-  tolerancia a respostas nao estritamente conformes) ou trata qualquer
-  tipo diferente de inteiro como invalido de imediato.
+  constante abaixo, que coincide com o valor documentado no ``.java``);
+- ``expires_in`` como string numerica e' aceito (por tolerancia a
+  respostas nao estritamente conformes); qualquer outro tipo diferente
+  de inteiro/float/string numerica e' tratado como invalido de imediato
+  -- decisao alinhada ao Java (roadmap Fatia B, item P1): ``expires_in``
+  *ausente* aplica o padrao silenciosamente, mas ``expires_in``
+  *presente e invalido* (zero, negativo ou nao numerico) e' rejeitado
+  com ``SmartTokenError`` em vez de absorvido com um warning -- um
+  ``expires_in`` adulterado nao pode reter tokens no cache (a mesma
+  protecao da issue #730 do Java). Um ``expires_in`` valido mas acima do
+  teto de sanidade (``MAX_EXPIRES_IN_SECONDS``, 24h) e' normalizado para
+  o teto com apenas um warning, tambem espelhando o Java.
 
 Validacao de sucesso (RF-03, ``ESPECIFICACAO.md``):
 
@@ -22,8 +30,10 @@ Validacao de sucesso (RF-03, ``ESPECIFICACAO.md``):
   status) e responsabilidade do chamador (``client.py``); este modulo
   nao inspeciona ``response.status_code``.
 - ``access_token`` ausente ou vazio e erro (``SmartTokenError``).
-- ``expires_in`` ausente ou invalido recebe o padrao documentado
-  (``DEFAULT_EXPIRES_IN_SECONDS``, 3600s -- RF-03.2); campos
+- ``expires_in`` ausente recebe o padrao documentado
+  (``DEFAULT_EXPIRES_IN_SECONDS``, 3600s -- RF-03.2); presente mas
+  invalido e' erro (``SmartTokenError``); presente, valido e acima de
+  ``MAX_EXPIRES_IN_SECONDS`` e' normalizado para o teto. Campos
   desconhecidos sao ignorados pela validacao mas o corpo JSON cru fica
   disponivel ao chamador via ``TokenResponse.raw``.
 """
@@ -51,6 +61,14 @@ from hubsaude_client.trace import TraceContext
 #: DEFAULT_EXPIRES_IN_SECONDS, que foi para defaults.py por ja nascer
 #: como constante DEFAULT_* neutra).
 MAX_RESPONSE_BODY_BYTES: Final[int] = 1_048_576  # 1 MiB
+
+#: Teto de sanidade para ``expires_in``, em segundos (24h). Valores
+#: validos acima deste teto sao normalizados para ele antes de
+#: alimentar o cache de tokens (nao e' um erro -- apenas um limite
+#: superior de sanidade). Mantido local pela mesma razao de
+#: ``MAX_RESPONSE_BODY_BYTES`` acima: nenhum outro colaborador da lib
+#: precisa deste valor hoje.
+MAX_EXPIRES_IN_SECONDS: Final[int] = 86_400  # 24h
 
 #: Granularidade de leitura em streaming ao aplicar o limite acima --
 #: menor que MAX_RESPONSE_BODY_BYTES para permitir interromper a leitura
@@ -193,9 +211,23 @@ class TokenResponseGuard:
 def sanitize_expires_in(raw_expires_in: object, trace: TraceContext | None = None) -> int:
     """Sanitiza o campo ``expires_in`` da resposta do token endpoint.
 
-    Ausente (``None``) ou invalido (tipo inesperado, nao numerico, ou
-    ``<= 0``) recebe o padrao ``DEFAULT_EXPIRES_IN_SECONDS`` (RF-03.2);
-    valores numericos validos (incluindo strings numericas, por
+    Regras explicitas (roadmap Fatia B, item P1 -- alinhadas ao Java
+    ``TokenResponseGuard.sanitizeExpiresIn``):
+
+    - **Ausente** (``None``): assume ``DEFAULT_EXPIRES_IN_SECONDS``
+      (1h) silenciosamente -- caso esperado quando o servidor
+      simplesmente omite o campo (RFC 6749 Sec5.1, RF-03.2).
+    - **Zero, negativo ou nao numerico** (tipo inesperado, ou string nao
+      numerica): rejeitado com ``SmartTokenError``. Um ``expires_in``
+      adulterado (por bug ou por um servidor de autorizacao
+      comprometido) nunca deve alimentar o cache de tokens -- e' a
+      mesma protecao da issue #730 do Java; ver nota de porte no topo
+      do modulo.
+    - **Acima de ``MAX_EXPIRES_IN_SECONDS``** (24h): normalizado para o
+      teto, com log de aviso -- o token continua utilizavel, mas o
+      cache nao retem entradas alem do limite de sanidade.
+
+    Valores numericos validos (incluindo strings numericas, por
     tolerancia a respostas nao estritamente conformes) sao truncados
     para ``int`` -- segundos fracionarios nao fazem sentido para o
     calculo de expiracao do cache de tokens.
@@ -203,39 +235,49 @@ def sanitize_expires_in(raw_expires_in: object, trace: TraceContext | None = Non
     Args:
         raw_expires_in: valor cru do campo ``expires_in`` no JSON
             decodificado (``None`` quando ausente).
-        trace: contexto de trace W3C, usado apenas para enriquecer o
-            log de aviso quando o padrao e aplicado por invalidez;
-            opcional para permitir testar esta funcao isoladamente, sem
-            montar um ``TraceContext``.
+        trace: contexto de trace W3C, usado apenas para enriquecer as
+            mensagens de erro/aviso; opcional para permitir testar esta
+            funcao isoladamente, sem montar um ``TraceContext``.
 
     Returns:
-        Validade em segundos, sempre positiva.
+        Validade em segundos, sempre positiva e no maximo
+        ``MAX_EXPIRES_IN_SECONDS``.
+
+    Raises:
+        SmartTokenError: quando ``expires_in`` esta presente mas e'
+            zero, negativo ou nao numerico.
     """
     if raw_expires_in is None:
         # Ausencia e o caso esperado quando o servidor simplesmente nao
-        # envia o campo (RF-03.2) -- nao e' um valor "invalido" digno de
-        # aviso, apenas a aplicacao silenciosa do padrao.
+        # envia o campo (RF-03.2) -- nao e' um valor "invalido", apenas
+        # a aplicacao silenciosa do padrao.
         return DEFAULT_EXPIRES_IN_SECONDS
     if isinstance(raw_expires_in, bool) or not isinstance(raw_expires_in, (int, float, str)):
-        _warn_invalid_expires_in(raw_expires_in, trace)
-        return DEFAULT_EXPIRES_IN_SECONDS
+        raise _invalid_expires_in_error(raw_expires_in, trace)
     try:
         value = float(raw_expires_in)
     except ValueError:
-        _warn_invalid_expires_in(raw_expires_in, trace)
-        return DEFAULT_EXPIRES_IN_SECONDS
+        raise _invalid_expires_in_error(raw_expires_in, trace) from None
     if value <= 0:
-        _warn_invalid_expires_in(raw_expires_in, trace)
-        return DEFAULT_EXPIRES_IN_SECONDS
+        raise _invalid_expires_in_error(raw_expires_in, trace)
+    if value > MAX_EXPIRES_IN_SECONDS:
+        trace_part = f" traceId={trace.trace_id}" if trace is not None else ""
+        _LOG.warning(
+            "expires_in=%ss acima do teto de sanidade de %ds na resposta do token endpoint -- normalizando para %ds.%s",
+            raw_expires_in,
+            MAX_EXPIRES_IN_SECONDS,
+            MAX_EXPIRES_IN_SECONDS,
+            trace_part,
+        )
+        return MAX_EXPIRES_IN_SECONDS
     return int(value)
 
 
-def _warn_invalid_expires_in(raw_expires_in: object, trace: TraceContext | None) -> None:
-    """Registra o aviso de substituicao de um ``expires_in`` invalido pelo padrao."""
-    trace_part = f" traceId={trace.trace_id}" if trace is not None else ""
-    _LOG.warning(
-        "expires_in invalido na resposta do token endpoint: %r -- usando padrao de %d segundos.%s",
-        raw_expires_in,
-        DEFAULT_EXPIRES_IN_SECONDS,
-        trace_part,
+def _invalid_expires_in_error(raw_expires_in: object, trace: TraceContext | None) -> SmartTokenError:
+    """Constroi o erro para um ``expires_in`` presente mas invalido (zero,
+    negativo ou nao numerico)."""
+    trace_part = f" (traceId={trace.trace_id})" if trace is not None else ""
+    return SmartTokenError(
+        f"'expires_in' invalido na resposta do token endpoint: {raw_expires_in!r}"
+        f" (esperado numero em 0 < x <= {MAX_EXPIRES_IN_SECONDS}){trace_part}"
     )
