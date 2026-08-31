@@ -231,7 +231,7 @@ class SmartTokenClientBuilder:
         self._hub_context_versao: str | None = None
         self._certificate_pem_path: Path | None = None
         self._client_key_store_path: Path | None = None
-        self._client_key_store_password: bytes | None = None
+        self._client_key_store_password: bytearray | None = None
         self._server_trust_anchor_path: Path | None = None
         self._server_trust_anchor_cert: x509.Certificate | None = None
 
@@ -425,7 +425,9 @@ class SmartTokenClientBuilder:
         self._certificate_pem_path = Path(path)
         return self
 
-    def client_key_store(self, path: Path | str, password: bytes, alias: str | None = None) -> SmartTokenClientBuilder:
+    def client_key_store(
+        self, path: Path | str, password: bytearray, alias: str | None = None
+    ) -> SmartTokenClientBuilder:
         """Carrega chave e certificado de cliente a partir de um bundle PKCS#12.
 
         Atalho para ``strategy_factory.load_pkcs12_key_and_certificate``: o
@@ -437,7 +439,9 @@ class SmartTokenClientBuilder:
 
         Args:
             path: caminho para o arquivo PKCS#12 (``.p12``/``.pfx``).
-            password: senha do bundle.
+            password: senha do bundle. E consumida: repassada a
+                ``strategy_factory``, que zera o array ao final de
+                :meth:`build` (RNF-03). O chamador nao deve reutiliza-la.
             alias: aceito por paridade com a API ``.java``; sem efeito aqui --
                 ``cryptography.hazmat...pkcs12.load_key_and_certificates`` nao
                 indexa por alias (API de base da biblioteca, nao escolha deste
