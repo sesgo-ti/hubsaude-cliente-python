@@ -41,6 +41,11 @@ Thumbs.db
 *.war
 *.ear
 
+# Caminho de conveniencia local para o JAR do hubsaude-simulador usado
+# pelos testes de integracao (tests/hubsaude_simulator_helper.py) --
+# alternativa a HUBSAUDE_SIMULADOR_JAR, especifica de maquina.
+.simulator/
+
 # Ignore local environment files
 .env
 .env.local
