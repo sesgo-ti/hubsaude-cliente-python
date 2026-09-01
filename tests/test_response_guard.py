@@ -9,6 +9,7 @@ import pytest
 from hubsaude_client.defaults import DEFAULT_EXPIRES_IN_SECONDS
 from hubsaude_client.exceptions import SmartTokenError
 from hubsaude_client.response_guard import (
+    MAX_EXPIRES_IN_SECONDS,
     MAX_RESPONSE_BODY_BYTES,
     TokenResponse,
     TokenResponseGuard,
@@ -154,13 +155,17 @@ def test_sanitize_expires_in_absent_uses_default() -> None:
         False,
     ],
 )
-def test_sanitize_expires_in_wrong_type_uses_default(raw: object) -> None:
-    assert sanitize_expires_in(raw) == DEFAULT_EXPIRES_IN_SECONDS
+def test_sanitize_expires_in_wrong_type_raises(raw: object) -> None:
+    # Alinhado ao Java (roadmap Fatia B, item P1): presente mas invalido e'
+    # rejeitado, nao absorvido com o padrao.
+    with pytest.raises(SmartTokenError, match="expires_in"):
+        sanitize_expires_in(raw)
 
 
 @pytest.mark.parametrize("raw", [0, -1, -3600, 0.0, "-10"])
-def test_sanitize_expires_in_non_positive_uses_default(raw: object) -> None:
-    assert sanitize_expires_in(raw) == DEFAULT_EXPIRES_IN_SECONDS
+def test_sanitize_expires_in_non_positive_raises(raw: object) -> None:
+    with pytest.raises(SmartTokenError, match="expires_in"):
+        sanitize_expires_in(raw)
 
 
 def test_sanitize_expires_in_valid_int_is_preserved() -> None:
@@ -175,12 +180,22 @@ def test_sanitize_expires_in_valid_numeric_string_is_coerced() -> None:
     assert sanitize_expires_in("300") == 300
 
 
-def test_sanitize_expires_in_logs_warning_when_invalid(caplog: pytest.LogCaptureFixture) -> None:
+def test_sanitize_expires_in_above_ceiling_is_capped() -> None:
+    # Teto de sanidade de 24h (roadmap Fatia B, item P1 -- achado extra):
+    # valor valido mas acima do teto e' normalizado, nao rejeitado.
+    assert sanitize_expires_in(200_000) == MAX_EXPIRES_IN_SECONDS
+
+
+def test_sanitize_expires_in_at_ceiling_is_preserved() -> None:
+    assert sanitize_expires_in(MAX_EXPIRES_IN_SECONDS) == MAX_EXPIRES_IN_SECONDS
+
+
+def test_sanitize_expires_in_logs_warning_when_above_ceiling(caplog: pytest.LogCaptureFixture) -> None:
     with caplog.at_level(logging.WARNING, logger="hubsaude_client.SmartTokenClient"):
-        sanitize_expires_in("nao-e-numero")
+        sanitize_expires_in(200_000)
 
     assert any(record.levelno == logging.WARNING for record in caplog.records)
-    assert any("expires_in invalido" in record.getMessage() for record in caplog.records)
+    assert any("teto de sanidade" in record.getMessage() for record in caplog.records)
 
 
 def test_sanitize_expires_in_does_not_log_when_absent(caplog: pytest.LogCaptureFixture) -> None:
@@ -190,11 +205,16 @@ def test_sanitize_expires_in_does_not_log_when_absent(caplog: pytest.LogCaptureF
     assert not any(record.levelno == logging.WARNING for record in caplog.records)
 
 
-def test_sanitize_expires_in_includes_trace_id_when_provided(
+def test_sanitize_expires_in_includes_trace_id_when_invalid(trace: TraceContext) -> None:
+    with pytest.raises(SmartTokenError, match=trace.trace_id):
+        sanitize_expires_in("invalido", trace)
+
+
+def test_sanitize_expires_in_includes_trace_id_in_ceiling_warning(
     trace: TraceContext, caplog: pytest.LogCaptureFixture
 ) -> None:
     with caplog.at_level(logging.WARNING, logger="hubsaude_client.SmartTokenClient"):
-        sanitize_expires_in("invalido", trace)
+        sanitize_expires_in(200_000, trace)
 
     assert any(trace.trace_id in record.getMessage() for record in caplog.records)
 
@@ -236,14 +256,19 @@ def test_parse_success_response_applies_default_when_expires_in_absent(
     assert result.expires_in == DEFAULT_EXPIRES_IN_SECONDS
 
 
-def test_parse_success_response_applies_default_when_expires_in_invalid(
-    guard: TokenResponseGuard, trace: TraceContext
-) -> None:
+def test_parse_success_response_raises_when_expires_in_invalid(guard: TokenResponseGuard, trace: TraceContext) -> None:
     response = _fake_response(_success_body(expires_in="nao-e-numero"))
+
+    with pytest.raises(SmartTokenError, match="expires_in"):
+        guard.parse_success_response(response, trace)
+
+
+def test_parse_success_response_caps_expires_in_above_ceiling(guard: TokenResponseGuard, trace: TraceContext) -> None:
+    response = _fake_response(_success_body(expires_in=200_000))
 
     result = guard.parse_success_response(response, trace)
 
-    assert result.expires_in == DEFAULT_EXPIRES_IN_SECONDS
+    assert result.expires_in == MAX_EXPIRES_IN_SECONDS
 
 
 def test_parse_success_response_raises_when_access_token_missing(

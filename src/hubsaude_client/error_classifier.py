@@ -240,7 +240,12 @@ class ErrorClassifier:
             return exc
         raise exc
 
-    def http_failure(self, response: httpx.Response, trace: TraceContext) -> SmartTokenError:
+    def http_failure(
+        self,
+        response: httpx.Response,
+        trace: TraceContext,
+        body_text: str | None = None,
+    ) -> SmartTokenError:
         """Materializa uma resposta HTTP de erro (status != 200) em
         ``SmartTokenError``, registrando o log adequado: WARNING para rate
         limit (HTTP 429, sem retry automatico) e ERROR para os demais.
@@ -248,6 +253,13 @@ class ErrorClassifier:
         Args:
             response: resposta recebida do servidor de autorizacao.
             trace: contexto de trace W3C enviado na requisicao.
+            body_text: corpo da resposta ja lido pelo chamador (ex.: via
+                ``TokenResponseGuard.read_body`` sobre uma resposta em
+                streaming, respeitando o limite de tamanho -- P0 do
+                roadmap Fatia B). Quando ``None`` (compatibilidade com
+                chamadores que ja tem a resposta integralmente lida em
+                memoria, ex.: ``discovery.py`` e os testes deste modulo),
+                cai de volta para ``response.text``.
 
         Returns:
             Excecao pronta para ser lancada pelo chamador.
@@ -266,7 +278,7 @@ class ErrorClassifier:
                 self._client_id,
                 trace.trace_id,
             )
-        return SmartTokenError(_build_http_error_message(status_code, response, trace))
+        return SmartTokenError(_build_http_error_message(status_code, response, trace, body_text))
 
 
 def is_transient_network_failure(exc: BaseException) -> bool:
@@ -389,7 +401,12 @@ def sanitize_error_response(response_body: str | None) -> str:
     return redacted
 
 
-def _build_http_error_message(status_code: int, response: httpx.Response, trace: TraceContext) -> str:
+def _build_http_error_message(
+    status_code: int,
+    response: httpx.Response,
+    trace: TraceContext,
+    body_text: str | None = None,
+) -> str:
     """Monta a mensagem de erro para resposta HTTP != 200: status,
     trace-id enviado na requisicao (correlaciona com o ``correlation-id``
     da plataforma), valor de ``Retry-After`` quando presente (apenas
@@ -400,6 +417,8 @@ def _build_http_error_message(status_code: int, response: httpx.Response, trace:
         status_code: status HTTP da resposta.
         response: resposta recebida do servidor de autorizacao.
         trace: contexto de trace W3C enviado na requisicao.
+        body_text: corpo ja lido pelo chamador (ver ``http_failure``);
+            quando ``None``, usa ``response.text``.
 
     Returns:
         Mensagem de erro pronta para ``SmartTokenError``.
@@ -411,10 +430,11 @@ def _build_http_error_message(status_code: int, response: httpx.Response, trace:
         if status_code == HTTP_TOO_MANY_REQUESTS
         else ""
     )
+    text = response.text if body_text is None else body_text
     return (
         f"Falha ao obter token: HTTP {status_code}{retry_after_part}"
         f" (traceId={trace.trace_id})"
-        f" — {sanitize_error_response(response.text)}{hint}"
+        f" — {sanitize_error_response(text)}{hint}"
     )
 
 

@@ -84,7 +84,6 @@ from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
-from urllib.parse import urlsplit
 
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric.types import PrivateKeyTypes
@@ -106,6 +105,7 @@ from hubsaude_client.ports import SigningStrategy, TlsContextProvider
 from hubsaude_client.settings import SigningSettings
 from hubsaude_client.tls_settings import TlsSettings
 from hubsaude_client.token_cache import TokenCacheStrategy
+from hubsaude_client.url_validation import require_https_scheme
 
 if TYPE_CHECKING:
     # So resolvido por mypy/type checkers -- nao importar em runtime aqui.
@@ -122,10 +122,6 @@ if TYPE_CHECKING:
 #: exp > iat + 300s. Valores acima disso nao sao rejeitados por este
 #: builder (a regra e' SHOULD, nao MUST) -- apenas logados como aviso.
 _RECOMMENDED_MAX_ASSERTION_TTL_SECONDS = 300
-
-#: Esquema exigido para token_endpoint/fhir_base (RF-10/RF-18: nenhum
-#: material de credencial deve trafegar fora de TLS).
-_REQUIRED_URL_SCHEME = "https"
 
 #: Formato exigido para o alias de Guia de Implementacao em hub_context
 #: (client-assertion-contexto-ig.md Sec3.4, RF-01 item 3).
@@ -581,7 +577,7 @@ class SmartTokenClientBuilder:
             # explicito narrowa o tipo para o restante do bloco.
             if self._client_key_store_password is None:
                 raise SmartTokenError(  # pragma: no cover -- guarda defensiva inalcancavel, ver comentario acima
-                    "estado interno inconsistente: client_key_store_path definido" " sem client_key_store_password"
+                    "estado interno inconsistente: client_key_store_path definido sem client_key_store_password"
                 )
             resolved_algorithm = algorithms.resolve(self._jwt_algorithm).jwt_algorithm
             client_key, client_cert = strategy_factory.load_pkcs12_key_and_certificate(
@@ -642,8 +638,7 @@ class SmartTokenClientBuilder:
                 )
             if client_key is None:
                 raise SmartTokenError(
-                    "certificate_pem exige private_key_pem tambem (mTLS precisa"
-                    " da chave e do certificado do mesmo par)"
+                    "certificate_pem exige private_key_pem tambem (mTLS precisa da chave e do certificado do mesmo par)"
                 )
             client_certificate = pem_loader.load_certificate(self._certificate_pem_path)
             # RF-15: confirma que a chave carregada por private_key_pem() de
@@ -697,20 +692,19 @@ class SmartTokenClientBuilder:
             raise SmartTokenError("informe token_endpoint() ou fhir_base() -- exatamente um dos dois e obrigatorio")
         if token_endpoint is not None and fhir_base is not None:
             raise SmartTokenError(
-                "token_endpoint e fhir_base sao mutuamente exclusivos (RF-09 item 2);" " informe apenas um dos dois"
+                "token_endpoint e fhir_base sao mutuamente exclusivos (RF-09 item 2); informe apenas um dos dois"
             )
         if token_endpoint is not None:
-            _require_https_scheme(token_endpoint, "token_endpoint")
+            require_https_scheme(token_endpoint, "token_endpoint")
         elif fhir_base is not None:
-            _require_https_scheme(fhir_base, "fhir_base")
+            require_https_scheme(fhir_base, "fhir_base")
         else:
             # Inalcancavel: os dois ifs acima ja garantem que exatamente um
             # dos dois esta preenchido neste ponto. Sem "assert" (removido
             # em bytecode otimizado, ver B101) -- SmartTokenError explicito
             # tambem ajuda o narrowing de tipos do mypy no ramo anterior.
             raise SmartTokenError(  # pragma: no cover -- guarda defensiva inalcancavel, ver comentario acima
-                "estado inesperado: nem token_endpoint nem fhir_base preenchidos"
-                " apos validacao de exclusividade mutua"
+                "estado inesperado: nem token_endpoint nem fhir_base preenchidos apos validacao de exclusividade mutua"
             )
         # Reatribui as versoes normalizadas (strip aplicado), preservando o
         # contrato de que build() so consome valores ja normalizados.
@@ -755,8 +749,7 @@ class SmartTokenClientBuilder:
             return None
         if ig is None or versao is None:
             raise SmartTokenError(
-                "hub_context exige ig e versao juntos; informe os dois em uma"
-                " unica chamada a hub_context(ig, versao)"
+                "hub_context exige ig e versao juntos; informe os dois em uma unica chamada a hub_context(ig, versao)"
             )
         if not _HUB_CONTEXT_IG_PATTERN.match(ig):
             raise SmartTokenError(f"hub_context: ig invalido ({ig!r}); deve seguir o padrao [a-z][a-z0-9-]{{1,30}}")
@@ -815,21 +808,3 @@ def _normalize_optional_str(value: str | None) -> str | None:
         return None
     stripped = value.strip()
     return stripped or None
-
-
-def _require_https_scheme(url: str, field_name: str) -> None:
-    """Exige que ``url`` use o esquema ``https`` (RF-10, RF-18).
-
-    Args:
-        url: URL a validar (ja normalizada/sem espacos laterais).
-        field_name: nome do campo, para a mensagem de erro.
-
-    Raises:
-        SmartTokenError: se o esquema nao for ``https`` (case-insensitive).
-    """
-    scheme = urlsplit(url).scheme.lower()
-    if scheme != _REQUIRED_URL_SCHEME:
-        raise SmartTokenError(
-            f"{field_name} deve usar o esquema https, recebido: {url!r}"
-            " (credenciais e client_assertion nao podem trafegar fora de TLS)"
-        )
