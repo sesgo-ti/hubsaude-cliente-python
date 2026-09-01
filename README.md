@@ -442,6 +442,41 @@ teste quando presente). Para exercitá-los, instale o SoftHSM2 do seu
 sistema (ex.: pacote `softhsm2` no Debian/Ubuntu) antes de rodar a
 suíte.
 
+### Testes de integração (simulador real)
+
+Além da suíte padrão acima (unitária, roda sempre), há uma suíte de
+integração real em `tests/test_smart_token_client_integration.py`:
+sobe o `hubsaude-simulador` (servidor de autorização SMART Backend
+Services simulado) como processo filho, fala mTLS real com ele e
+exercita o `SmartTokenClient` ponta a ponta — equivalente Python de
+`mvn verify -Dit.test=SmartTokenClientJarIT` no lado `.java`. Fica de
+fora da execução padrão (`pytest`/`tox` sem seletor de marker roda com
+`-m "not integration"`), assim como a suíte de integração do lado Java
+fica fora do `mvn test` normal (Surefire só executa `@Tag("integration")`
+no `mvn verify`/Failsafe).
+
+Pré-requisitos (ausentes, os testes ficam `SKIPPED`, não falham):
+
+- Java 21+ no `PATH`;
+- o JAR executável (Spring Boot) do `hubsaude-simulador`, localizado de
+  uma das duas formas (a variável de ambiente tem precedência sobre o
+  caminho de conveniência):
+
+```bash
+# opção 1 — variável de ambiente (específica de máquina, não versionar)
+export HUBSAUDE_SIMULADOR_JAR=/caminho/para/hubsaude-simulador.jar
+pytest -m integration -v
+
+# opção 2 — caminho de conveniência: copie o JAR para .simulator/ na
+# raiz do repositório (diretório já ignorado pelo .gitignore) e não
+# precisa reexportar a variável em cada sessão de shell
+mkdir -p .simulator && cp /caminho/para/hubsaude-simulador.jar .simulator/
+pytest -m integration -v
+
+# ou, com tox (usa a mesma resolução de caminho acima):
+tox -e integration
+```
+
 ### Verificações de qualidade (ambientes `tox`)
 
 | Ambiente `tox` | Ferramentas |

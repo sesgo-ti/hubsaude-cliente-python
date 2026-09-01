@@ -103,6 +103,12 @@ skips = ["*_test.py", "test_*.py"]
 # ------------------------------------------------------------------
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# "integration" nao entra na execucao padrao (pytest sem -m), espelhando
+# o excludedGroups do Surefire no lado Java (@Tag("integration") so'
+# roda no mvn verify/Failsafe) -- ver [testenv:integration] no tox.ini.
+markers = [
+    "integration: sobe o simulador real (hubsaude-simulador via subprocess) e fala mTLS real; mais lento, requer JDK + HUBSAUDE_SIMULADOR_JAR",
+]
 
 
 # ------------------------------------------------------------------

@@ -94,6 +94,43 @@ necessário nenhum passo manual de inicialização de token — cada teste cria
 e destrói o próprio token SoftHSM2 isolado em um diretório temporário
 (`tests/pkcs11_softhsm_helper.py::softhsm2_token`).
 
+## Testes de integração (simulador real)
+
+Os 14 casos de `tests/test_smart_token_client_integration.py` (marcados
+`@pytest.mark.integration`) sobem o `hubsaude-simulador` — servidor de
+autorização SMART Backend Services simulado, empacotado como JAR
+executável Spring Boot — como processo filho real e falam mTLS real com
+ele. São a tradução direta de `SmartTokenClientIntegrationTestBase.java`
+/ `SmartTokenClientJarIT.java` do lado `.java` (ver
+`roadmap-testes-integracao-java-para-python.md` para o mapeamento
+completo). Assim como os testes de SoftHSM2 acima, são pulados
+automaticamente (`SKIPPED`) quando o pré-requisito não está disponível
+no ambiente — o que **não** significa ausência de cobertura, apenas que
+o teste não roda sem essa dependência de sistema; ficam fora da suíte
+padrão (`pytest`/`tox` sem seletor de marker roda com
+`-m "not integration"`).
+
+Pré-requisitos: Java 21+ no `PATH`, mais o JAR do `hubsaude-simulador`
+localizado via `HUBSAUDE_SIMULADOR_JAR` (variável de ambiente) ou, como
+alternativa de conveniência, copiado para `.simulator/hubsaude-simulador.jar`
+na raiz do repositório (diretório já coberto pelo `.gitignore`). O JAR
+em si não é distribuído neste repositório — obtenha-o com quem mantém o
+`hubsaude-simulador` (o `pom.xml` do cliente `.java` não declara essa
+dependência de forma explícita neste export; a forma de obtenção fora
+do build Maven ainda está em aberto, ver seção 3 do roadmap).
+
+```bash
+export HUBSAUDE_SIMULADOR_JAR=/caminho/para/hubsaude-simulador.jar
+# ou: cp /caminho/para/hubsaude-simulador.jar .simulator/
+pytest -m integration -v
+# ou
+tox -e integration
+```
+
+A resolução do caminho do JAR (variável de ambiente vs. fallback) tem
+teste unitário dedicado, sem depender de JDK, em
+`tests/test_hubsaude_simulator_helper.py`.
+
 ## Padrões técnicos
 
 - **Python 3.12**. Build com **pip + venv** (`python -m venv .venv && pip install -e ".[dev]"`_)
