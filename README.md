@@ -216,7 +216,14 @@ senha do bundle PKCS#12 em `.client_key_store(path, password)`/
 na própria chamada, para abrir a sessão PKCS#11, e nunca fica retido
 num campo do builder entre chamadas (ao contrário da senha de
 `.client_key_store()`) — não é uma lacuna pendente, é uma decisão de
-escopo já fechada.
+escopo já fechada. Quando a chave vem de arquivo (`.private_key_pem(path)`),
+o próprio conteúdo PEM lido do disco (que, se a chave não for
+criptografada, é a chave privada em texto claro) também é mantido num
+buffer mutável e zerado após o uso (`pem_loader.load_private_key`) — o
+mesmo tratamento não se aplica a `from_pem_string`/`load_private_key_from_string`,
+que recebem o conteúdo PEM já como `str` (imutável) do chamador; essa
+limitação é herdada da própria API pública do `.java` (que documenta a
+mesma ressalva para sua sobrecarga baseada em `String`).
 
 ## Configuração avançada
 
@@ -266,8 +273,11 @@ mutuamente exclusivos entre si:
    anterior, mas a partir de um bundle PKCS#12 único (também resolve a
    estratégia de assinatura, ver [PKCS#12 direto](#pkcs12-direto)).
 
-Protocolo TLS configurável (`tlsProtocol`, padrão `TLSv1.3`,
-`defaults.DEFAULT_TLS_PROTOCOL`); `TLSv1.2` também é aceito.
+Protocolo TLS configurável via `.tls_protocol(...)` (padrão `TLSv1.3`,
+`defaults.DEFAULT_TLS_PROTOCOL`); `TLSv1.2` também é aceito. Efetivo com
+qualquer um dos três caminhos acima, ou sozinho (mantendo o trust store
+padrão do sistema) — mutuamente exclusivo com `.tls_context_provider(...)`,
+assim como os demais.
 `.tls_context_provider(...)` continua disponível para quem precisa de
 uma implementação própria do Protocol (ex.: buscar o `SSLContext`
 dinamicamente de um cofre a cada chamada) — é mutuamente exclusivo com

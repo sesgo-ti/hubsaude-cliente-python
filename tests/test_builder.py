@@ -695,6 +695,68 @@ def test_server_trust_anchor_and_tls_context_provider_are_mutually_exclusive(fak
 
 
 # ---------------------------------------------------------------------------
+# tls_protocol() -- sobrescreve a versao do protocolo TLS (padrao: TLSv1.3)
+# ---------------------------------------------------------------------------
+
+
+def test_tls_protocol_overrides_default_version(
+    fake_pem_pair, fake_smart_token_client_module: type[_FakeSmartTokenClient]
+) -> None:
+    client = (
+        SmartTokenClientBuilder()
+        .client_id(CLIENT_ID)
+        .token_endpoint(TOKEN_ENDPOINT)
+        .signing_strategy(FakeSigningStrategy())
+        .server_trust_anchor(fake_pem_pair["cert"])
+        .tls_protocol("TLSv1.2")
+        .build()
+    )
+    context = client.tls_context_provider.ssl_context()
+    assert context.minimum_version == ssl.TLSVersion.TLSv1_2
+    assert context.maximum_version == ssl.TLSVersion.TLSv1_2
+
+
+def test_tls_protocol_alone_builds_client_with_default_trust_store(
+    fake_smart_token_client_module: type[_FakeSmartTokenClient],
+) -> None:
+    client = (
+        SmartTokenClientBuilder()
+        .client_id(CLIENT_ID)
+        .token_endpoint(TOKEN_ENDPOINT)
+        .signing_strategy(FakeSigningStrategy())
+        .tls_protocol("TLSv1.2")
+        .build()
+    )
+    context = client.tls_context_provider.ssl_context()
+    assert context.minimum_version == ssl.TLSVersion.TLSv1_2
+
+
+def test_tls_protocol_and_tls_context_provider_are_mutually_exclusive() -> None:
+    builder = _valid_builder().tls_protocol("TLSv1.2")
+    with pytest.raises(SmartTokenError, match="mutuamente exclusivos"):
+        builder.build()
+
+
+def test_tls_protocol_invalid_value_raises_on_context_resolution(
+    fake_pem_pair, fake_smart_token_client_module: type[_FakeSmartTokenClient]
+) -> None:
+    # Assim como as demais opcoes de TlsSettings, a validacao do valor de
+    # tls_protocol e adiada para a resolucao efetiva do ssl.SSLContext
+    # (ver docstring do modulo) -- build() em si so guarda a configuracao.
+    client = (
+        SmartTokenClientBuilder()
+        .client_id(CLIENT_ID)
+        .token_endpoint(TOKEN_ENDPOINT)
+        .signing_strategy(FakeSigningStrategy())
+        .server_trust_anchor(fake_pem_pair["cert"])
+        .tls_protocol("TLSv1.0")
+        .build()
+    )
+    with pytest.raises(SmartTokenError, match="Protocolo TLS nao suportado"):
+        client.tls_context_provider.ssl_context()
+
+
+# ---------------------------------------------------------------------------
 # signing_strategy() com PKCS#11 -- prova de conexao ponta a ponta.
 #
 # strategy_factory.from_pkcs11 (Task 7) nao tem metodo de conveniencia

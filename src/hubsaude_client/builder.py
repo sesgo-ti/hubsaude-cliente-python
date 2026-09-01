@@ -95,6 +95,7 @@ from hubsaude_client.defaults import (
     DEFAULT_JWT_ALGORITHM,
     DEFAULT_MAX_RETRIES,
     DEFAULT_REQUEST_TIMEOUT_SECONDS,
+    DEFAULT_TLS_PROTOCOL,
     DEFAULT_TOKEN_CACHE_MARGIN_SECONDS,
     DEFAULT_TOKEN_CACHE_MAX_ENTRIES,
 )
@@ -202,6 +203,7 @@ class SmartTokenClientBuilder:
         "_client_key_store_password",
         "_server_trust_anchor_path",
         "_server_trust_anchor_cert",
+        "_tls_protocol",
     )
 
     def __init__(self) -> None:
@@ -229,6 +231,7 @@ class SmartTokenClientBuilder:
         self._client_key_store_password: bytearray | None = None
         self._server_trust_anchor_path: Path | None = None
         self._server_trust_anchor_cert: x509.Certificate | None = None
+        self._tls_protocol: str | None = None
 
     # ------------------------------------------------------------------
     # Metodos encadeaveis (fluent setters)
@@ -469,6 +472,24 @@ class SmartTokenClientBuilder:
             self._server_trust_anchor_path = Path(trust_anchor)
         return self
 
+    def tls_protocol(self, tls_protocol: str) -> SmartTokenClientBuilder:
+        """Sobrescreve a versao do protocolo TLS (padrao: ``TlsSettings``/"TLSv1.3").
+
+        Efetivo apenas quando o contexto TLS e resolvido internamente pelos
+        metodos de conveniencia (``certificate_pem``/``client_key_store``/
+        ``server_trust_anchor``, ou nenhum deles, usando o trust store
+        padrao) -- sem efeito, e mutuamente exclusivo, com
+        ``tls_context_provider()`` customizado (o contexto SSL, nesse caso,
+        e responsabilidade inteira do provider informado).
+
+        Args:
+            tls_protocol: nome do protocolo aceito por
+                ``ssl_context_factory.build_ssl_context`` (ex: "TLSv1.3",
+                "TLSv1.2"); validado apenas em :meth:`build`.
+        """
+        self._tls_protocol = tls_protocol
+        return self
+
     # ------------------------------------------------------------------
     # build()
     # ------------------------------------------------------------------
@@ -618,6 +639,7 @@ class SmartTokenClientBuilder:
             or client_cert_from_key_store is not None
             or self._server_trust_anchor_path is not None
             or self._server_trust_anchor_cert is not None
+            or self._tls_protocol is not None
         )
         if not convenience_used:
             return self._require_tls_context_provider()
@@ -651,6 +673,7 @@ class SmartTokenClientBuilder:
             client_private_key=client_key if client_certificate is not None else None,
             server_trust_anchor_path=self._server_trust_anchor_path,
             server_trust_anchor_cert=self._server_trust_anchor_cert,
+            tls_protocol=self._tls_protocol if self._tls_protocol is not None else DEFAULT_TLS_PROTOCOL,
         )
         return _TlsSettingsProvider(settings)
 
