@@ -49,9 +49,17 @@ def require_https_scheme(url: str, field_name: str) -> None:
 
     Raises:
         SmartTokenError: se o esquema nao for ``https`` (case-insensitive)
-            e o host nao for um dos hosts locais permitidos em ``http``.
+            e o host nao for um dos hosts locais permitidos em ``http``, ou
+            se ``url`` for malformada a ponto de nao poder ser decomposta
+            (ex.: literal IPv6 sem colchete de fechamento) -- ``urlsplit``
+            lanca ``ValueError`` crua nesses casos, convertida aqui para
+            manter um unico tipo de excecao de dominio na fronteira publica
+            desta funcao.
     """
-    parts = urlsplit(url)
+    try:
+        parts = urlsplit(url)
+    except ValueError as exc:
+        raise SmartTokenError(f"{field_name} e uma URL malformada: {url!r}", exc) from exc
     scheme = parts.scheme.lower()
     if scheme == _REQUIRED_URL_SCHEME:
         return
