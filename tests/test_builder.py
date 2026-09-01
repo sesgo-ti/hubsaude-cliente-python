@@ -357,7 +357,7 @@ def test_raises_when_fhir_base_is_not_https() -> None:
     ],
 )
 def test_allows_token_endpoint_on_local_host_without_https(url: str) -> None:
-    """Excecao de desenvolvimento local (roadmap Fatia B, item P1): um
+    """Excecao de desenvolvimento local: um
     authorization server local sem TLS nao deve quebrar o builder, mesma
     allowlist do lado Java (localhost/127.0.0.1/::1)."""
     builder = (
@@ -695,7 +695,7 @@ def test_server_trust_anchor_and_tls_context_provider_are_mutually_exclusive(fak
 
 
 # ---------------------------------------------------------------------------
-# signing_strategy() com PKCS#11 -- prova de conexao Fatia A <-> Fatia B.
+# signing_strategy() com PKCS#11 -- prova de conexao ponta a ponta.
 #
 # strategy_factory.from_pkcs11 (Task 7) nao tem metodo de conveniencia
 # dedicado no builder (nem o .java original tem -- ver docstring do modulo);

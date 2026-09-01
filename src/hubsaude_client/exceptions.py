@@ -1,15 +1,9 @@
 """Excecoes de dominio do hubsaude_client.
 
-Nota de decisao (QA intermediario do roadmap de port Java -> Python):
-o nome oficial da excecao-base e ``SmartTokenError``, NAO
-``SmartTokenException``. A F3 original do roadmap previa
-``SmartTokenException``, mas a implementacao real -- ja consumida por
-``algorithms.py`` e pelos testes da Fatia A -- usa ``SmartTokenError``,
-seguindo a convencao Python de sufixo ``Error`` (analoga a
-``ValueError``/``KeyError``). Renomear geraria retrabalho cruzado
-desnecessario entre as Fatias A e B; a decisao foi formalizada sem
-mudanca de codigo. Nao "corrigir" o nome de volta para
-``SmartTokenException``.
+O nome oficial da excecao-base e ``SmartTokenError``, NAO
+``SmartTokenException``, seguindo a convencao Python de sufixo ``Error``
+(analoga a ``ValueError``/``KeyError``). E usada por ``algorithms.py``
+e pelos demais modulos da biblioteca.
 """
 
 from __future__ import annotations

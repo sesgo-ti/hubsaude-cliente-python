@@ -19,11 +19,8 @@ HSM/PKCS#11 já implementados), configuração TLS/mTLS (`TlsContextProvider`
 customizado), tolerância a falhas com retry exponencial, cache de token
 por scope e propagação de contexto de trace W3C.
 
-**Status:** `0.1.0`, em desenvolvimento iterativo. As duas fatias de
-implementação (assinatura/certificados/TLS e cliente HTTP/orquestração
-de token) estão concluídas e testadas — ver [Referências](#referências)
-para o contrato completo (`ESPECIFICACAO.md`). O que resta é o processo
-de publicação/release, ainda não definido.
+**Status:** `0.1.0`, em desenvolvimento iterativo, seguindo para  
+a fase de testes.
 
 ## Dependência
 

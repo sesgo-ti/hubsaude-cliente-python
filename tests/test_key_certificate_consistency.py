@@ -127,8 +127,8 @@ def test_verify_strategy_wraps_unexpected_error(fake_pem_pair, monkeypatch) -> N
 
 
 # ---------------------------------------------------------------------------
-# verify_key_pair -- roadmap Fatia B, item P2 (equivalente publico de
-# KeyCertificateConsistency.verifyKeyPair / SmartTokenClient.verifyKeyPairConsistency)
+# verify_key_pair -- equivalente publico de
+# KeyCertificateConsistency.verifyKeyPair / SmartTokenClient.verifyKeyPairConsistency
 # ---------------------------------------------------------------------------
 
 

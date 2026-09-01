@@ -8,7 +8,7 @@ exclusivas: uma SigningStrategy propria (HSM, cofre de segredos) ou uma
 chave privada em arquivo PEM, da qual a estrategia e derivada conforme o
 algoritmo JWT configurado.
 
-Ponto de entrada consumido pela Fatia B (cliente HTTP/orquestracao), junto
+Ponto de entrada consumido pelo cliente HTTP/orquestracao, junto
 com TlsSettings.
 """
 

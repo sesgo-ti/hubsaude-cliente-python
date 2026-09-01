@@ -584,8 +584,8 @@ rejeição) de TTL/`max_retries` não positivos continua em
 *Como implementado:* `exceptions.SmartTokenError(RuntimeError)` e
 `exceptions.SigningError(RuntimeError)`, ambas aceitando uma mensagem
 obrigatória e uma causa original opcional (`cause`), disponibilizada em
-`__cause__` quando fornecida. `SmartTokenError` agora é usada em toda a
-Fatia B — algoritmo JWT não reconhecido (`algorithms.resolve`),
+`__cause__` quando fornecida. `SmartTokenError` agora é usada em todo o
+cliente — algoritmo JWT não reconhecido (`algorithms.resolve`),
 respostas inesperadas do token endpoint (`response_guard.py`), falhas
 de rede/HTTP e suspeita de rejeição de certificado de cliente
 (`error_classifier.py`), falha de descoberta (`discovery.py`) e
@@ -631,7 +631,7 @@ redige `access_token`/`token` (JSON e form-encoded) *antes* de truncar
 o corpo em `_MAX_ERROR_RESPONSE_LENGTH` (500 caracteres), usada tanto
 em `ErrorClassifier.http_failure()` quanto em
 `discovery.SmartConfigurationDiscovery` (itens 1–2). Todos os
-colaboradores de Fatia B (`client.py`, `error_classifier.py`,
+colaboradores internos (`client.py`, `error_classifier.py`,
 `response_guard.py`, `discovery.py`) usam o logger compartilhado
 `_log.get_logger()` (nunca `logging.getLogger(__name__)`), em níveis
 `debug`/`warning`/`error` apropriados ao evento (item 3).
@@ -666,9 +666,9 @@ depender de frameworks de aplicação.
 
 *Status atual:* as dependências de execução declaradas são um cliente
 HTTP e uma biblioteca de criptografia. `httpx` já é importado por
-`client.py`, `discovery.py`, `response_guard.py` e `error_classifier.py`
-(Fatia B); da biblioteca de criptografia, além da parte de assinatura
-ECDSA (conversão DER/`R||S`, `algorithms.py`), a Fatia A também já usa
+`client.py`, `discovery.py`, `response_guard.py` e `error_classifier.py`;
+da biblioteca de criptografia, além da parte de assinatura
+ECDSA (conversão DER/`R||S`, `algorithms.py`), o restante do código também já usa
 `cryptography` para carga de PEM/PKCS#12 e verificação de par
 chave-certificado. Uma dependência opcional para HSM/PKCS#11 está
 declarada para uso futuro. Nenhuma dependência de framework de
@@ -695,7 +695,7 @@ ainda — a garantia é estrutural, verificada pelos testes unitários de
    externos.
 2. Cobertura mínima de linha: **85%**, aplicada como *gate*.
 
-*Status atual:* a suíte de testes cobre os componentes de Fatia B já
+*Status atual:* a suíte de testes cobre os componentes já
 implementados (JWT/`client_assertion`, requisição/resposta HTTP,
 single-flight, retry, classificação de erro, descoberta, invalidação de
 cache, validações do builder — `test_client.py`, `test_builder.py`,
@@ -706,7 +706,7 @@ retry, configuração de tolerância a falhas, contexto de trace, exceções,
 constantes padrão), sem dependência de serviços externos (`httpx.MockTransport`
 em vez de rede real), com o *gate* de 85% de cobertura de linha
 configurado em `tox.ini` (`pytest --cov-fail-under=85`). Os casos de
-teste que dependem de uma implementação concreta de mTLS (Fatia A) —
+teste que dependem de uma implementação concreta de mTLS —
 handshake real com certificado de cliente contra um servidor de
 verdade — ainda não têm como existir, já que só o *port*
 `ports.TlsContextProvider` e um fake de teste (`FakeTlsContextProvider`)
@@ -722,7 +722,7 @@ português cobrindo módulo, classes e métodos públicos. `docs/troubleshooting
 já tem conteúdo completo (guia de diagnóstico de confiança de
 certificado SSL/TLS, com detecção via OpenSSL/Python/Java/C#/Node.js).
 `README.md` já reflete o estado real do cliente HTTP/builder e das
-fontes de chave/TLS (Fatia A e B). `docs/integracao-enterprise.md`
+fontes de chave/TLS. `docs/integracao-enterprise.md`
 continua vazio (0 bytes) — é onde a regra "uma única renovação após
 401", citada como possível conteúdo futuro em `client.py`, e a
 recomendação de circuit breaker externo deveriam ser documentadas.
@@ -740,7 +740,7 @@ Apache License 2.0. Não há automação de release nem geração de SBOM
 configuradas ainda — isso, junto com metadados de publicação
 (`authors`/`classifiers`/`urls` em `[project]`, `__version__` exposto,
 `CHANGELOG.md`, `py.typed`, `NOTICE`), é tratado como pendência de
-**publicação**, fora do escopo do roadmap de código.
+**publicação**, não de implementação.
 
 ## 8. Parâmetros de configuração
 
@@ -821,15 +821,14 @@ de uma fonte TLS fora desses três continua podendo fornecer a própria
 | RNF-05 | `client.SmartTokenClient` (cache-aside + lock striping O(1)) | ✅ (estrutural) |
 | RNF-06 | `tox.ini` (`pytest --cov-fail-under=85`) | ✅ |
 | RNF-07 | `docs/troubleshooting.md`, docstrings, `README.md` | ⚠️ (`docs/integracao-enterprise.md` vazio; tabela de erros do README ainda não escrita) |
-| RNF-08 | `pyproject.toml` (`version = "0.1.0"`), `LICENSE` | ⚠️ (versionado e licenciado; falta automação de release e SBOM — fora do escopo do roadmap de código, ver `zPENDENCIAS-PUBLICACAO.md`) |
+| RNF-08 | `pyproject.toml` (`version = "0.1.0"`), `LICENSE` | ⚠️ (versionado e licenciado; falta automação de release e SBOM, ver `zPENDENCIAS-PUBLICACAO.md`) |
 
-> **Nota sobre RF-10 a RF-15 (Fatia A):** a tabela acima reflete o
+> **Nota sobre RF-10 a RF-15:** a tabela acima reflete o
 > código verificado nesta rodada — `pem_loader.py`,
 > `ssl_context_factory.py`, `strategy_factory.py` e
 > `key_certificate_consistency.py` existem, estão implementados e têm
-> cobertura de teste (100% nos três primeiros). A Fatia A está
-> concluída junto com a Fatia B; não há mais requisito funcional
-> "não revisado" nesta base. O que resta é validação end-to-end (RF-08,
+> cobertura de teste (100% nos três primeiros). Não há mais requisito
+> funcional "não revisado" nesta base. O que resta é validação end-to-end (RF-08,
 > handshake mTLS real) e cobertura do caminho PKCS#11/HSM contra
 > SoftHSM2 real (ver [§12](#12-evolução-prevista)) — nenhum dos dois é
 > uma lacuna de implementação, e sim de exercício/validação do que já
@@ -875,7 +874,7 @@ seguintes já têm cobertura nesta base (arquivo entre parênteses):
     exclusividade com `token_endpoint`; resposta ≠ 200 ou sem
     `token_endpoint` é erro (`test_discovery.py`).
 
-A Fatia A (PEM/certificado, par chave–certificado, PKCS#12) já tem
+PEM/certificado, par chave–certificado e PKCS#12 já têm
 casos de teste com material real (autoassinado, gerado em memória via
 `tests/conftest.py::fake_pem_pair`) para carga de PEM, validação de
 certificado e consistência chave–certificado (`test_pem_loader.py`,
@@ -891,17 +890,15 @@ código.
 
 ## 12. Evolução prevista
 
-A Fatia B (RF-01 a RF-09, RF-17 a RF-19, RNF-01, RNF-02, RNF-05, RNF-06)
-e a Fatia A (RF-10 a RF-16, RNF-03) estão concluídas e testadas nesta
-base de código: `client.SmartTokenClient` e
+Todos os requisitos funcionais e não funcionais cobertos por este
+documento (RF-01 a RF-19, RNF-01 a RNF-06) estão concluídos e testados
+nesta base de código: `client.SmartTokenClient` e
 `builder.SmartTokenClientBuilder` compõem `retry.py`, `token_cache.py`,
-`trace.py`, `response_guard.py`, `error_classifier.py`, `discovery.py`
-(Fatia B), `ssl_context_factory.py`, `pem_loader.py`,
-`key_certificate_consistency.py` e `strategy_factory.py` (Fatia A) no
-fluxo completo de obtenção de token com TLS/mTLS configurável. Não há
-mais `# TODO(fatia-a)` no builder. O que resta, e é acompanhado no
-roadmap de engenharia do projeto (fora deste documento contratual),
-é:
+`trace.py`, `response_guard.py`, `error_classifier.py`, `discovery.py`,
+`ssl_context_factory.py`, `pem_loader.py`,
+`key_certificate_consistency.py` e `strategy_factory.py` no
+fluxo completo de obtenção de token com TLS/mTLS configurável. O que
+resta é:
 
 1. **Validação end-to-end do caminho PKCS#11/HSM** — código
    implementado (`pkcs11_signing_strategy.py`,
