@@ -72,8 +72,15 @@ def load_private_key(path: Path, password: bytearray | None = None) -> PrivateKe
         SmartTokenError: se a chave requer senha nao fornecida, a senha for
             incorreta, ou o formato for invalido.
     """
-    pem_bytes = path.read_bytes()
-    return _load_private_key_from_bytes(pem_bytes, password, str(path))
+    # O conteudo lido do arquivo (que pode ser a propria chave privada em
+    # texto claro, quando nao criptografada) e mantido num bytearray
+    # mutavel e zerado no finally -- minimiza a janela em que o material de
+    # chave fica exposto em heap dump apos o uso.
+    pem_buffer = bytearray(path.read_bytes())
+    try:
+        return _load_private_key_from_bytes(bytes(pem_buffer), password, str(path))
+    finally:
+        clear_password(pem_buffer)
 
 
 def load_private_key_from_string(pem: str, password: bytearray | None, source: str) -> PrivateKeyTypes:

@@ -49,6 +49,24 @@ def test_load_private_key_invalid_format_raises(tmp_path: Path) -> None:
         pem_loader.load_private_key(garbage_path)
 
 
+def test_load_private_key_zeroes_pem_bytes_after_use(fake_pem_pair, monkeypatch) -> None:
+    captured: dict[str, bytes] = {}
+    original_clear = pem_loader.clear_password
+
+    def spy_clear(buf: bytearray | None) -> None:
+        if buf is not None:
+            captured["before"] = bytes(buf)
+        original_clear(buf)
+        if buf is not None:
+            captured["after"] = bytes(buf)
+
+    monkeypatch.setattr(pem_loader, "clear_password", spy_clear)
+    pem_loader.load_private_key(fake_pem_pair["key"])
+
+    assert captured["before"] == fake_pem_pair["key"].read_bytes()
+    assert captured["after"] == bytes(len(captured["before"]))
+
+
 def test_load_private_key_from_string(fake_pem_pair) -> None:
     pem_content = fake_pem_pair["key"].read_text()
     key = pem_loader.load_private_key_from_string(pem_content, None, "<string>")
