@@ -88,6 +88,7 @@ def _base_kwargs(**overrides: object) -> dict[str, object]:
             connect_timeout=timedelta(seconds=5),
             request_timeout=timedelta(seconds=5),
             assertion_ttl_seconds=60,
+            token_cache_margin_seconds=30,
             max_retries=3,
         ),
         token_cache=TokenCacheStrategy(enabled=True),
@@ -225,6 +226,7 @@ def test_assertion_ttl_reflects_fault_tolerance_config(install_mock_transport) -
         connect_timeout=timedelta(seconds=5),
         request_timeout=timedelta(seconds=5),
         assertion_ttl_seconds=120,
+        token_cache_margin_seconds=30,
         max_retries=3,
     )
     client = SmartTokenClient(**_base_kwargs(fault_tolerance=fault_tolerance))
@@ -669,6 +671,7 @@ def test_exhausts_retries_and_raises_smart_token_error(install_mock_transport, m
         connect_timeout=timedelta(seconds=5),
         request_timeout=timedelta(seconds=5),
         assertion_ttl_seconds=60,
+        token_cache_margin_seconds=30,
         max_retries=2,
     )
     client = SmartTokenClient(**_base_kwargs(fault_tolerance=fault_tolerance))

@@ -340,7 +340,11 @@ class SmartTokenClientBuilder:
         return self
 
     def token_cache_margin_seconds(self, seconds: int) -> SmartTokenClientBuilder:
-        """Define a margem de renovacao antecipada do cache. Padrao: 30s."""
+        """Define a margem de renovacao antecipada do cache. Padrao: 30s.
+        
+        Valores ``<= 0`` sao normalizados para o padrao por
+        ``FaultToleranceConfig``.
+        """
         self._token_cache_margin_seconds = seconds
         return self
 
@@ -527,6 +531,7 @@ class SmartTokenClientBuilder:
             connect_timeout=self._connect_timeout,
             request_timeout=self._request_timeout,
             assertion_ttl_seconds=self._assertion_ttl_seconds,
+            token_cache_margin_seconds=self._token_cache_margin_seconds,
             max_retries=self._max_retries,
         )
         token_cache = TokenCacheStrategy(
