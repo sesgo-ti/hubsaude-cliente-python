@@ -1,8 +1,7 @@
 """Validacao compartilhada de esquema https para URLs (RF-10, RF-18).
 
-Porte de ``SmartConfigurationDiscovery.requireHttps`` (``.java``): exige
-que uma URL use o esquema ``https``, com excecao explicita para hosts
-locais (``localhost``, ``127.0.0.1``, ``::1``) em ``http`` -- util em
+Exige que uma URL use o esquema ``https``, com excecao explicita para
+hosts locais (``localhost``, ``127.0.0.1``, ``::1``) em ``http`` -- util em
 desenvolvimento e testes com servidor local, nunca em producao.
 
 Compartilhado por ``builder.py`` (URLs de ``token_endpoint``/``fhir_base``
@@ -27,11 +26,9 @@ _REQUIRED_URL_SCHEME: Final[str] = "https"
 
 #: Hosts tratados como locais para fins da excecao de esquema http
 #: (RF-18) -- uteis em desenvolvimento e testes com servidor local, nunca
-#: em producao. Espelha a allowlist de ``SmartConfigurationDiscovery
-#: .requireHttps`` (.java): localhost, 127.0.0.1 e ::1 (com ou sem
-#: colchetes -- ``urlsplit(...).hostname`` ja normaliza IPv6 sem
-#: colchetes e em minusculas, entao uma unica entrada "::1" cobre as
-#: duas grafias aceitas no lado Java).
+#: em producao. ``urlsplit(...).hostname`` ja normaliza IPv6 sem
+#: colchetes e em minusculas, entao uma unica entrada "::1" cobre tanto
+#: ``http://[::1]`` quanto ``http://::1``.
 _LOCAL_HOSTS: Final[frozenset[str]] = frozenset({"localhost", "127.0.0.1", "::1"})
 
 
@@ -41,7 +38,7 @@ def require_https_scheme(url: str, field_name: str) -> None:
     Excecao explicita: ``http://localhost``, ``http://127.0.0.1`` e
     ``http://[::1]``/``http://::1`` sao aceitos, para nao quebrar o
     desenvolvimento local contra um authorization server de teste sem
-    TLS -- mesma excecao do lado Java (``requireHttps``).
+    TLS.
 
     Args:
         url: URL a validar (ja normalizada/sem espacos laterais).

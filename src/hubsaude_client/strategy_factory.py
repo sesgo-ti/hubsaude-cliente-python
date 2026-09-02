@@ -161,9 +161,7 @@ def from_pkcs11(
     # maioria dos consumidores nao instala. strategy_factory.py e um unico
     # arquivo com todas as factories -- um import no topo faria qualquer
     # uso de from_pem_file/from_pkcs12 (sem PKCS#11) falhar com
-    # ModuleNotFoundError para quem nao instalou o extra. Diferente do
-    # .java, que resolve PKCS#11 via SunPKCS11 (provider embutido na JVM,
-    # sem dependencia de terceiros).
+    # ModuleNotFoundError para quem nao instalou o extra.
     import pkcs11 as pkcs11_lib
 
     lib = pkcs11_lib.lib(str(pkcs11_module_path))

@@ -105,9 +105,8 @@ e destrói o próprio token SoftHSM2 isolado em um diretório temporário
 Os 14 casos de `tests/test_smart_token_client_integration.py` (marcados
 `@pytest.mark.integration`) sobem o `hubsaude-simulador` — servidor de
 autorização SMART Backend Services simulado, empacotado como JAR
-executável Spring Boot — como processo filho real e falam mTLS real com
-ele. São a tradução direta de `SmartTokenClientIntegrationTestBase.java`
-/ `SmartTokenClientJarIT.java` do lado `.java`. Assim como os testes de
+executável — como processo filho real e falam mTLS real com
+ele, exercitando o `SmartTokenClient` ponta a ponta. Assim como os testes de
 SoftHSM2 acima, são pulados automaticamente (`SKIPPED`) quando o
 pré-requisito não está disponível no ambiente — o que **não** significa
 ausência de cobertura, apenas que o teste não roda sem essa dependência

@@ -1,7 +1,7 @@
 """Orquestracao principal do SDK: ``SmartTokenClient`` (SMART Backend
 Services, RF-01/RF-02/RF-03/RF-05/RF-07/RF-09/RF-17).
 
-Porte de ``SmartTokenClient.java`` (810 linhas). E a peca central que os demais colaboradores ja
+E a peca central que os demais colaboradores ja
 implementados (``ports.SigningStrategy``/``TlsContextProvider``,
 ``token_cache.TokenCacheStrategy``, ``error_classifier.ErrorClassifier``,
 ``response_guard.TokenResponseGuard``, ``discovery.SmartConfigurationDiscovery``,
@@ -10,8 +10,8 @@ projetados para compor. Este modulo **nao** implementa assinatura
 criptografica (delegada a ``signing_strategy.sign(...)``, port de
 ``ports.py``) nem monta o ``ssl.SSLContext`` (delegado a
 ``tls_context_provider.ssl_context()``, mesmo port) -- ambos sao
-consumidos prontos, preservando o desacoplamento
-descrito em ``lib-orquestracao-14-08-26.md``.
+consumidos prontos, preservando o desacoplamento entre assinatura, TLS e
+orquestracao HTTP.
 
 Instancias sao pensadas como **singleton por processo**: thread-safe e
 reutilizavel pelo ciclo de vida da aplicacao integradora (RNF-01), nunca
@@ -352,8 +352,7 @@ class SmartTokenClient:
 
     def get_key_id(self) -> str | None:
         """Retorna o ``kid`` configurado para o header do client_assertion,
-        ou ``None`` quando nao configurado (equivalente a
-        ``SmartTokenClient.getKeyId()`` do ``.java``).
+        ou ``None`` quando nao configurado.
         """
         return self._key_id
 
@@ -362,8 +361,7 @@ class SmartTokenClient:
         """Verifica, de forma fail-fast, que uma chave privada corresponde
         a chave publica de um certificado X.509.
 
-        Equivalente publico de ``SmartTokenClient.verifyKeyPairConsistency``
-        (``.java``): util para quem monta a
+        Util para quem monta a
         propria ``SigningStrategy`` fora do builder (cenario HSM/cofre de
         segredos customizado) e quer confirmar, antes de usar, que a chave
         e o certificado formam o mesmo par -- em vez de descobrir isso
@@ -472,9 +470,7 @@ class SmartTokenClient:
                 # response_guard.read_body() interrompa a leitura durante o
                 # transporte -- sem streaming, httpx ja baixa o corpo
                 # inteiro para memoria antes de response_guard poder agir,
-                # tornando a protecao apenas cosmetica --
-                # equivalente ao boundedStringBodyHandler do .java,
-                # que cancela a subscription assim que o limite e excedido).
+                # tornando a protecao apenas cosmetica.
                 with self._http_client.stream("POST", self._token_endpoint, data=data, headers=headers) as response:
                     if response.status_code == 200:
                         return self._response_guard.parse_success_response(response, trace)

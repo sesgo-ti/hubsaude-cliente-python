@@ -1,12 +1,12 @@
 """Builder publico da lib: ``SmartTokenClientBuilder`` (SMART Backend
 Services, RF-17/RF-18).
 
-Porte de ``SmartTokenClientBuilder.java`` (622 linhas): a API publica mais
-visivel da biblioteca, responsavel por validar a configuracao *fail-fast*
-na construcao e produzir um ``SmartTokenClient`` pronto para uso.
+A API publica mais visivel da biblioteca, responsavel por validar a
+configuracao *fail-fast* na construcao e produzir um ``SmartTokenClient``
+pronto para uso.
 
 Decisao de design: optou-se por um **builder mutavel com metodos encadeaveis**
-(``self`` retornado a cada chamada), como no ``.java`` original, em vez de
+(``self`` retornado a cada chamada) em vez de
 ``@dataclass`` + ``build()`` sobre campos publicos. Motivo: a classe reune
 mais de uma dezena de parametros opcionais com validacao cruzada (ex.:
 ``token_endpoint``/``fhir_base`` mutuamente exclusivos, ``hub_context``
@@ -18,8 +18,8 @@ thread-safe**: construcao e passo unico no bootstrap da aplicacao
 integradora (quem precisa ser thread-safe e o ``SmartTokenClient``
 retornado — responsabilidade de ``client.py``).
 
-Metodos de conveniencia que, no ``.java``, recebem ``Path``/``KeyStore``
-(carga de PEM, PKCS#12/JKS, trust anchor) ja estao todos
+Metodos de conveniencia para as fontes de credencial mais comuns
+(carga de PEM, PKCS#12, trust anchor) ja estao todos
 ligados nesta base de codigo. ``private_key_pem()`` delega a
 ``strategy_factory.from_pem_file``/``SigningSettings``;
 ``certificate_pem()`` e ``server_trust_anchor()`` delegam a
@@ -37,11 +37,10 @@ e :meth:`tls_context_provider` -- util quando a fonte de credenciais nao
 se encaixa nos atalhos acima (ex.: cofre de segredos remoto).
 
 PKCS#11/HSM (``strategy_factory.from_pkcs11``) ja esta disponivel
-mas, assim como no ``.java`` original (ver o segundo exemplo da classe
-abaixo), **nao tem um metodo de conveniencia dedicado no builder** -- o
-proprio Java so o expoe via ``.signingStrategy(SigningStrategyFactory
-.fromPkcs11(...))``, nunca um ``.pkcs11(...)`` fluente. A forma de uso e
-identica em Python, ja funcional hoje:
+mas **nao tem um metodo de conveniencia dedicado no builder** -- a
+configuracao (modulo, token, PIN) nao tem um equivalente natural de
+"caminho de arquivo" como os demais atalhos, entao o uso e via
+``.signing_strategy(...)`` com a factory, ja funcional hoje:
 
     SmartTokenClientBuilder()
         .signing_strategy(strategy_factory.from_pkcs11(
@@ -440,7 +439,8 @@ class SmartTokenClientBuilder:
             password: senha do bundle. E consumida: repassada a
                 ``strategy_factory``, que zera o array ao final de
                 :meth:`build` (RNF-03). O chamador nao deve reutiliza-la.
-            alias: aceito por paridade com a API ``.java``; sem efeito aqui --
+            alias: aceito para manter a mesma assinatura de metodo entre as
+                implementacoes do SDK; sem efeito aqui --
                 ``cryptography.hazmat...pkcs12.load_key_and_certificates`` nao
                 indexa por alias (API de base da biblioteca, nao escolha deste
                 projeto -- ver docstring de ``strategy_factory``).
@@ -457,10 +457,10 @@ class SmartTokenClientBuilder:
         """Define um trust anchor customizado (substitui o trust store padrao).
 
         Aceita um caminho de arquivo PEM ou um certificado ``x509.Certificate``
-        ja em memoria (ex: obtido dinamicamente em testes de integracao) -- as
-        duas sobrecargas do ``.java`` colapsadas num unico metodo, via
-        dispatch por tipo. Uso pretendido: homologacao/simuladores locais, nao
-        producao (que deve confiar no trust store padrao do sistema).
+        ja em memoria (ex: obtido dinamicamente em testes de integracao),
+        resolvido num unico metodo via dispatch por tipo. Uso pretendido:
+        homologacao/simuladores locais, nao producao (que deve confiar no
+        trust store padrao do sistema).
 
         Args:
             trust_anchor: caminho do certificado PEM, ou o certificado ja

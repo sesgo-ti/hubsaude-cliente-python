@@ -221,9 +221,10 @@ o próprio conteúdo PEM lido do disco (que, se a chave não for
 criptografada, é a chave privada em texto claro) também é mantido num
 buffer mutável e zerado após o uso (`pem_loader.load_private_key`) — o
 mesmo tratamento não se aplica a `from_pem_string`/`load_private_key_from_string`,
-que recebem o conteúdo PEM já como `str` (imutável) do chamador; essa
-limitação é herdada da própria API pública do `.java` (que documenta a
-mesma ressalva para sua sobrecarga baseada em `String`).
+que recebem o conteúdo PEM já como `str` (imutável) do chamador: uma
+`str` do Python não pode ser zerada em memória, então essa limitação é
+inerente a expor o conteúdo PEM como texto (em vez de bytes mutáveis)
+nesse ponto de entrada.
 
 ## Configuração avançada
 
@@ -413,7 +414,7 @@ a causa e, quando aplicável, a causa original preservada em
 |---|---|---|
 | `Chave criptografada requer senha` | PEM da chave privada tem senha, mas `.private_key_pem(path)` foi chamado sem o parâmetro `password` | Informe a senha: `.private_key_pem(path, password=bytearray(b"..."))` |
 | `Falha ao decriptar chave, verifique a senha fornecida` | Senha incorreta para uma chave PEM criptografada | Confirme a senha com quem gerou a chave; teste com `openssl rsa -check -in key.pem` |
-| `formato de chave PEM invalido` | Arquivo não é uma chave privada PEM válida (ex.: é um certificado, ou está corrompido) | Confirme o conteúdo: `openssl pkey -in key.pem -noout -text`. PKCS#1 (`BEGIN RSA PRIVATE KEY`) e PKCS#8 (`BEGIN PRIVATE KEY`) são aceitos automaticamente — não é necessário converter entre eles como em outras linguagens |
+| `formato de chave PEM invalido` | Arquivo não é uma chave privada PEM válida (ex.: é um certificado, ou está corrompido) | Confirme o conteúdo: `openssl pkey -in key.pem -noout -text`. PKCS#1 (`BEGIN RSA PRIVATE KEY`) e PKCS#8 (`BEGIN PRIVATE KEY`) são aceitos automaticamente, sem necessidade de conversão manual |
 | `Chave RSA de N bits rejeitada` / `Chave EC com campo de N bits rejeitada` | Chave abaixo do tamanho mínimo aceito (RSA < 2048 bits, EC < P-256) | Gere uma chave maior: `openssl genrsa -out key.pem 2048` ou `openssl ecparam -name prime256v1 -genkey -noout -out key.pem` |
 | `Certificado ainda nao e valido` / `Certificado expirado` | Certificado (cliente ou `server_trust_anchor`) fora do período de validade (`notBefore`/`notAfter`) | Verifique as datas: `openssl x509 -noout -dates -in cert.pem`; emita/renove o certificado |
 | `Chave privada nao corresponde ao certificado: assinatura invalida` | `.private_key_pem()` + `.certificate_pem()` apontam para um par chave/certificado que não combina | Compare o *modulus* (RSA): `openssl x509 -noout -modulus -in cert.pem \| openssl md5` vs `openssl rsa -noout -modulus -in key.pem \| openssl md5`; para EC, compare a chave pública derivada |
@@ -458,12 +459,10 @@ Além da suíte padrão acima (unitária, roda sempre), há uma suíte de
 integração real em `tests/test_smart_token_client_integration.py`:
 sobe o `hubsaude-simulador` (servidor de autorização SMART Backend
 Services simulado) como processo filho, fala mTLS real com ele e
-exercita o `SmartTokenClient` ponta a ponta — equivalente Python de
-`mvn verify -Dit.test=SmartTokenClientJarIT` no lado `.java`. Fica de
+exercita o `SmartTokenClient` ponta a ponta. Fica de
 fora da execução padrão (`pytest`/`tox` sem seletor de marker roda com
-`-m "not integration"`), assim como a suíte de integração do lado Java
-fica fora do `mvn test` normal (Surefire só executa `@Tag("integration")`
-no `mvn verify`/Failsafe).
+`-m "not integration"`) — só é executada explicitamente com o marker
+`integration` (ver comandos abaixo).
 
 Pré-requisitos (ausentes, os testes ficam `SKIPPED`, não falham):
 
