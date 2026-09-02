@@ -114,8 +114,9 @@ markers = [
 # ------------------------------------------------------------------
 # [tool.importlinter]
 # Regra arquitetural: os modulos de assinatura/criptografia nao podem
-# depender do cliente HTTP. Sem pacote proprio (estrutura de modulos
-# achatada, ver ADR sobre layout do pacote) -- por isso os modulos sao
+# depender do cliente HTTP. Sem pacote proprio (layout achatado,
+# decisao definitiva -- ver "Layout achatado do pacote de
+# assinatura/TLS" em CONTRIBUTING.md) -- por isso os modulos sao
 # listados individualmente e a lista cresce conforme novos modulos de
 # assinatura sao adicionados.
 # ------------------------------------------------------------------
