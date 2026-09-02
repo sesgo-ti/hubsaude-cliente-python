@@ -116,17 +116,15 @@ sequenceDiagram
     end
 ```
 
-Este é o fluxo-alvo do SDK completo. **Nesta base de código, o
-orquestrador (`App->>SDK->>AS`) já existe** como
-`client.SmartTokenClient` (construído por
-`builder.SmartTokenClientBuilder`), compondo os colaboradores descritos
-nas seções seguintes. A configuração TLS/mTLS efetiva
-(`tls_context_provider`) já tem implementações concretas de
-`ports.TlsContextProvider` (`ssl_context_factory.py`, acessíveis via
-`builder.certificate_pem()`/`client_key_store()`/`server_trust_anchor()`);
-quem integra pode fornecer a própria implementação do Protocol apenas
-para casos fora desses três (ex.: rotação dinâmica de certificado a
-partir de um cofre).
+O orquestrador desse fluxo (`App->>SDK->>AS`) é `client.SmartTokenClient`
+(construído por `builder.SmartTokenClientBuilder`), que compõe os
+colaboradores descritos nas seções seguintes. A configuração TLS/mTLS
+efetiva (`tls_context_provider`) tem implementações concretas de
+`ports.TlsContextProvider` em `ssl_context_factory.py`, acessíveis via
+`builder.certificate_pem()`/`client_key_store()`/`server_trust_anchor()`;
+quem integra pode fornecer a própria implementação do Protocol para
+casos fora desses três (ex.: rotação dinâmica de certificado a partir
+de um cofre).
 
 ## 6. Requisitos funcionais
 
@@ -205,10 +203,10 @@ tentativa, inclusive retries (item 3).
    formato W3C na construção, rejeitando trace-id/span-id fora do
    formato (tamanho, maiúsculas, todo-zeros) com erro explícito.
 
-*Como implementado:* `trace.TraceContext`, com `generate()` para criar
-um novo par e `traceparent()` para montar o header. O envio efetivo
-desse header numa requisição HTTP (RF-02.3) já acontece em
-`client.SmartTokenClient` e em `discovery.SmartConfigurationDiscovery`.
+*Como implementado:* `trace.TraceContext` gera o par via `generate()` e
+monta o header via `traceparent()`. O envio desse header nas
+requisições HTTP (RF-02.3) acontece em `client.SmartTokenClient` e em
+`discovery.SmartConfigurationDiscovery`.
 
 #### RF-03 — Tratamento da resposta — ✅ Implementado
 
@@ -228,10 +226,10 @@ que loga em nível `WARNING` para 429 (sem retry, pois retry só ocorre
 em falha de transporte — ver RF-07) e `ERROR` para os demais, com o
 corpo sanitizado por `error_classifier.sanitize_error_response()`.
 `TokenResponseGuard.parse_success_response()` extrai `access_token`
-(erro se ausente/vazio), sanitiza `expires_in` com o padrão
-`DEFAULT_EXPIRES_IN_SECONDS` (3600) quando ausente/inválido, ignora
-campos desconhecidos na validação mas preserva o corpo cru em
-`TokenResponse.raw` (item 2).
+(erro se ausente/vazio), aplica o padrão
+`DEFAULT_EXPIRES_IN_SECONDS` (3600) quando `expires_in` está
+ausente/inválido, ignora campos desconhecidos na validação mas
+preserva o corpo cru em `TokenResponse.raw` (item 2).
 
 ### 6.2 Cache e concorrência
 
@@ -255,10 +253,10 @@ campos desconhecidos na validação mas preserva o corpo cru em
 *Como implementado:* `token_cache.TokenCacheStrategy`
 (`cached_if_valid`, `store`, `invalidate`, `invalidate_all`, `size`),
 com `CachedToken`/`CachedTokenResponse`. A normalização do scope
-(item 1) é responsabilidade do chamador (`client.SmartTokenClient._normalize_scope`,
-`strip()`; `None` -> string vazia) — não desta classe. Uma entrada
-inválida encontrada em `cached_if_valid` é removida na mesma chamada
-(*eviction* antecipada).
+(item 1) é responsabilidade do chamador
+(`client.SmartTokenClient._normalize_scope`, `strip()`; `None` vira
+string vazia) — não desta classe. Uma entrada inválida encontrada em
+`cached_if_valid` é removida na mesma chamada (*eviction* antecipada).
 
 #### RF-05 — *Single-flight* por scope — ✅ Implementado
 
@@ -277,7 +275,7 @@ inválida encontrada em `cached_if_valid` é removida na mesma chamada
 `obtain_token_response()`, um *miss* de cache adquire o lock do stripe
 e reconsulta o cache antes de ir à rede (*double-checked locking*, item
 2), garantindo no máximo uma requisição em voo por scope na prática
-(item 1). Isso é responsabilidade de `client.py`, não de
+(item 1). Essa coordenação é responsabilidade de `client.py`, e não de
 `token_cache.py` — ver nota de escopo no código de `token_cache.py`.
 
 #### RF-06 — Invalidação de cache — ✅ Implementado
@@ -317,7 +315,7 @@ HTTP efetivamente recebida (inclusive 429/5xx) é tratada por
 o esgotamento com erro final (itens 3, 5) estão em
 `client.SmartTokenClient._fetch_token()`, que preserva a causa original
 (`raise ... from last_exc`). A normalização de `max_retries` não
-positivo continua em outro componente — ver RF-18.
+positivo está em `fault_tolerance.FaultToleranceConfig` — ver RF-18.
 
 #### RF-08 — Diagnóstico de rejeição de certificado de cliente (mTLS) — ✅ Implementado
 
@@ -326,27 +324,24 @@ positivo continua em outro componente — ver RF-18.
    falhar imediatamente (sem retry) com mensagem diagnóstica.
 2. Essa heurística DEVE apenas enriquecer a mensagem de erro.
 
-*Como implementado:* a heurística em si já existe e está testada —
+*Como implementado:*
 `error_classifier.is_likely_client_certificate_rejection()` reconhece
 fragmentos de alerta TLS típicos desse cenário (`bad_record_mac`,
 `certificate_revoked`, `certificate_expired`, etc., excluindo
 `ssl.SSLCertVerificationError`, que é rejeição do certificado do
-*servidor*, não do cliente) e `ErrorClassifier.retriable_or_reraise()`
+*servidor*, não do cliente); `ErrorClassifier.retriable_or_reraise()`
 falha imediatamente, sem retry, com mensagem diagnóstica (itens 1–2).
-O ponto que antes ficava em aberto no código (equivalente Python de
-`AEADBadTagException`, do lado Java) já foi decidido e documentado no
-próprio `error_classifier.py`: a stdlib `ssl`/OpenSSL não expõe uma
-exceção própria para falha de tag AEAD, e a fonte de verdade do lado
-`.java` já registra que o mesmo evento de servidor aparece como
-`bad_record_mac` no peer OpenSSL e como `AEADBadTagException` no peer
-JSSE — logo, a heurística já cobre a superfície equivalente em Python.
-Essa decisão foi validada contra um handshake mTLS **real** (sockets
-loopback + OpenSSL de verdade, não apenas `ssl.SSLError` simulado) em
+A stdlib `ssl`/OpenSSL não expõe uma exceção própria para falha de tag
+AEAD — o mesmo evento de servidor se manifesta como `bad_record_mac`
+no peer OpenSSL, então a heurística reconhece esse fragmento
+diretamente. A cobertura foi confirmada contra um handshake mTLS
+**real** (sockets loopback + OpenSSL de verdade, não apenas
+`ssl.SSLError` simulado) em
 `tests/test_error_classifier_real_mtls.py`: sob TLS 1.2, a rejeição do
 certificado de cliente produz `ssl.SSLError` com o alerta `unknown ca`;
 sob TLS 1.3 (protocolo padrão desta lib), a superfície observada varia
 por plataforma/versão do OpenSSL (`ssl.SSLEOFError` numa máquina,
-alerta `unknown ca` limpo em outra) — ambas as variantes já são
+alerta `unknown ca` limpo em outra) — ambas as variantes são
 reconhecidas pela heurística e, em qualquer caso, nunca são tratadas
 como retriáveis.
 
@@ -410,15 +405,15 @@ que desative a verificação do servidor é exposto na API pública (item
    unidirecional, sem erro.
 
 *Como implementado:* `ssl_context_factory.build_ssl_context()` só
-carrega o certificado de cliente
-(`context.load_cert_chain`, via arquivo temporário de vida curta —
-`ssl.SSLContext.load_cert_chain` exige caminho real, e o material chega
-em memória) quando `client_key`/`client_cert` são ambos fornecidos
-(itens 1, 4); a apresentação em si, condicionada à solicitação do
-servidor no handshake, é comportamento nativo do `ssl.SSLContext`
-(item 2, não reimplementado pela lib). O material chega em memória —
-carregado de PEM (`builder.certificate_pem()` + `.private_key_pem()`)
-ou de PKCS#12 (`builder.client_key_store()`, via
+carrega o certificado de cliente (`context.load_cert_chain`, via
+arquivo temporário de vida curta — `ssl.SSLContext.load_cert_chain`
+exige caminho real, e o material chega em memória) quando
+`client_key`/`client_cert` são ambos fornecidos (itens 1, 4); a
+apresentação em si, condicionada à solicitação do servidor no
+handshake, é comportamento nativo do `ssl.SSLContext` (item 2, não
+reimplementado pela lib). O material chega em memória — carregado de
+PEM (`builder.certificate_pem()` + `.private_key_pem()`) ou de PKCS#12
+(`builder.client_key_store()`, via
 `strategy_factory.load_pkcs12_key_and_certificate`) — cobrindo o item 3.
 
 ### 6.6 Material criptográfico
@@ -440,8 +435,8 @@ PEM em string, PKCS#12 — via `strategy_factory.from_private_key`/
 `from_pem_file`/`from_pem_string`/`from_pkcs12`) e por
 `Pkcs11SigningStrategy` (HSM/smart token — `strategy_factory.from_pkcs11`,
 que nunca extrai a chave do hardware, guardando só um handle de sessão
-PKCS#11), cobrindo o item 2 (JKS explicitamente não é suportado — não é
-um formato nativo do ecossistema Python; PKCS#12 cobre o caso
+PKCS#11), cobrindo o item 2 (JKS não é suportado, por não ser um
+formato nativo do ecossistema Python; PKCS#12 cobre o caso
 equivalente). Chave/certificado ausente, PIN ou senha incorretos
 resultam em `SmartTokenError` explícito em todas as factories (item 3).
 As implementações não mantêm estado mutável compartilhado além da chave
@@ -460,7 +455,7 @@ já carregada (imutável após construção) ou do handle PKCS#11 (item 4).
 *Como implementado:* `pem_loader.load_private_key`/
 `load_private_key_from_string` delegam a
 `cryptography...serialization.load_pem_private_key`, que detecta os 4
-formatos automaticamente sem parsing manual por tipo de header PEM
+formatos automaticamente, sem parsing manual por tipo de header PEM
 (item 1); o módulo concentra o trabalho em mensagens de erro corretas
 por causa (`SmartTokenError` distinguindo senha ausente, incorreta, ou
 formato não suportado, incluindo a fonte — arquivo ou `<string>` — na
@@ -523,9 +518,9 @@ para ECDSA, curva e `signature_length`) para os 9 algoritmos, com erro
 desconhecido. `algorithms.encode_p1363`/`decode_p1363` fazem a
 conversão DER ↔ `R||S` exigida pelo item 4, usando `cryptography`
 (`utils.decode_dss_signature`/`encode_dss_signature`). O padrão
-`RS384` está declarado em `defaults.DEFAULT_JWT_ALGORITHM` e já é
-consumido: `builder.SmartTokenClientBuilder.jwt_algorithm()` permite
-sobrescrevê-lo e `_resolve_jwt_algorithm()` valida o valor final via
+`RS384` está declarado em `defaults.DEFAULT_JWT_ALGORITHM`;
+`builder.SmartTokenClientBuilder.jwt_algorithm()` permite sobrescrevê-lo
+e `_resolve_jwt_algorithm()` valida o valor final via
 `algorithms.resolve()` (item 2); `client.SmartTokenClient._build_client_assertion()`
 usa o resultado para montar o header `alg` (item 3) e para assinar o
 JWS, incluindo a conversão P1363 para `ES*` (item 4, RF-01).
@@ -545,12 +540,15 @@ O SDK DEVE expor, com nomes idiomáticos da linguagem: `obtainToken(scope)`,
 `get_jwt_algorithm()` e `close()` (idempotente, também disponível via
 `with SmartTokenClient(...) as c:`). A construção validada é
 `builder.SmartTokenClientBuilder` (métodos encadeáveis +
-`build()` fail-fast). Nomes em `snake_case`, idiomático em Python — o
-módulo público (`hubsaude_client/__init__.py`) continua reexportando
-apenas `SmartTokenError`, `SigningStrategy` e `TraceContext`; os
-consumidores importam `SmartTokenClient`/`SmartTokenClientBuilder`
-diretamente de `hubsaude_client.client`/`hubsaude_client.builder`,
-mesma convenção já usada pelos demais colaboradores internos.
+`build()` fail-fast). Os nomes seguem `snake_case`, idiomático em
+Python — o módulo público (`hubsaude_client/__init__.py`) reexporta
+`SmartTokenError`, `SigningStrategy`, `TraceContext` e as
+configurações agregadas `SigningSettings`/`ResolvedSigning` e
+`TlsSettings` (ver [§9](#9-diretrizes-de-implementação) e a tabela em
+"Política da API pública" no `README.md`). `SmartTokenClient`/
+`SmartTokenClientBuilder` não são reexportados na raiz do pacote: os
+consumidores os importam diretamente de
+`hubsaude_client.client`/`hubsaude_client.builder`.
 
 #### RF-18 — Validações de configuração — ✅ Implementado
 
@@ -562,17 +560,23 @@ positivos de TTL/`maxRetries`/margem do cache; rejeição de
 
 *Como implementado:* `builder.SmartTokenClientBuilder.build()`
 orquestra, fail-fast, todas as validações: `client_id` obrigatório
-(`_require_non_blank`); exclusividade entre `signing_strategy`/
-`private_key_pem` (`_resolve_signing_strategy`); `tls_context_provider`
-obrigatório e conforme o Protocol; exclusividade e esquema `https` de
+(`_require_non_blank`); exclusividade mútua entre as três fontes de
+assinatura — `signing_strategy`/`private_key_pem`/`client_key_store`
+(`_resolve_signing_material`, que delega a `SigningSettings.resolve()`
+no caso de `private_key_pem`); exclusividade entre `tls_context_provider`
+e os métodos de conveniência TLS — `certificate_pem`/`client_key_store`/
+`server_trust_anchor` (`_resolve_tls_context_provider`, que monta um
+`TlsSettings` internamente quando algum deles é usado); `tls_context_provider`
+obrigatório e conforme o Protocol quando nenhum método de conveniência é
+usado; exclusividade e esquema `https` de
 `token_endpoint`/`fhir_base` (`_validate_endpoint_config`); algoritmo
 JWT válido (`_resolve_jwt_algorithm`, via `algorithms.resolve`);
 timeouts positivos (`_validate_timeouts`); `token_cache_max_entries`
 positivo (`_validate_token_cache_max_entries`); e formato de
 `hub_context` (`_build_hub_context`). A normalização (em vez de
-rejeição) de TTL/`max_retries` não positivos continua em
-`fault_tolerance.FaultToleranceConfig.__post_init__`, e a rejeição de
-`max_entries` não positivo também é reforçada em
+rejeição) de TTL/`max_retries` não positivos está em
+`fault_tolerance.FaultToleranceConfig.__post_init__`; a rejeição de
+`max_entries` não positivo é reforçada também em
 `token_cache.TokenCacheStrategy.__init__` (defesa em profundidade,
 `ValueError`, além do `SmartTokenError` do builder).
 
@@ -588,16 +592,16 @@ rejeição) de TTL/`max_retries` não positivos continua em
 *Como implementado:* `exceptions.SmartTokenError(RuntimeError)` e
 `exceptions.SigningError(RuntimeError)`, ambas aceitando uma mensagem
 obrigatória e uma causa original opcional (`cause`), disponibilizada em
-`__cause__` quando fornecida. `SmartTokenError` agora é usada em todo o
+`__cause__` quando fornecida. `SmartTokenError` é usada em todo o
 cliente — algoritmo JWT não reconhecido (`algorithms.resolve`),
 respostas inesperadas do token endpoint (`response_guard.py`), falhas
 de rede/HTTP e suspeita de rejeição de certificado de cliente
 (`error_classifier.py`), falha de descoberta (`discovery.py`) e
-validações de configuração (`builder.py`). O item "sem expor segredos"
-já tem cenário de teste: `error_classifier.sanitize_error_response()`
-redige `access_token`/`token` (JSON e form-encoded) antes de truncar o
-corpo em mensagens de erro, e `TokenResult`/`TokenResponse`/`CachedToken`
-mascaram o token em `__repr__`.
+validações de configuração (`builder.py`). O requisito de não expor
+segredos é coberto por `error_classifier.sanitize_error_response()`,
+que redige `access_token`/`token` (JSON e form-encoded) antes de
+truncar o corpo em mensagens de erro; `TokenResult`/`TokenResponse`/
+`CachedToken` mascaram o token em `__repr__`.
 
 ## 7. Requisitos não funcionais
 
@@ -614,7 +618,7 @@ tomam o lock de leitura (fan-out concorrente entre scopes distintos);
 `close()` toma o lock de escrita, concedido só após todas as leituras em
 voo terminarem, invalida todo o cache e fecha o `httpx.Client` interno —
 chamadas subsequentes a `close()` são no-op (`self._closed`).
-Individualmente, `TokenCacheStrategy` já é thread-safe (todo acesso à
+Individualmente, `TokenCacheStrategy` é thread-safe (todo acesso à
 estrutura interna é protegido por um único `threading.Lock` de
 instância) e `FaultToleranceConfig`/`TraceContext`, por serem
 dataclasses imutáveis, são seguras para compartilhamento entre threads
@@ -654,29 +658,29 @@ bytearray, alias=None)` recebem a senha (chave PEM e bundle PKCS#12,
 respectivamente) como `bytearray` (mutável); `pem_loader.clear_password`
 zera o conteúdo após o uso — sucesso ou erro — em
 `_load_private_key_from_bytes` (PEM) e em `strategy_factory.from_pkcs12`/
-`load_pkcs12_key_and_certificate` (PKCS#12). Ambas são as únicas senhas
+`load_pkcs12_key_and_certificate` (PKCS#12). São as únicas senhas
 retidas em campo do builder entre a chamada de conveniência e `build()`.
 
-O PIN de `from_pkcs11` permanece `str` — decisão deliberada e final, não
-lacuna: é consumido uma única vez, na própria chamada de `from_pkcs11`,
-para abrir a sessão PKCS#11, e nunca fica retido em campo de builder
-entre chamadas (perfil de retenção diferente do das duas senhas acima).
+O PIN de `from_pkcs11` é recebido como `str` — escolha deliberada de
+design, não uma lacuna: ele é consumido uma única vez, na própria
+chamada de `from_pkcs11`, para abrir a sessão PKCS#11, e não fica
+retido em campo de builder entre chamadas (perfil de retenção
+diferente do das duas senhas acima).
 
-#### RNF-04 — Dependências mínimas — ✅ Implementado (nesta fase)
+#### RNF-04 — Dependências mínimas — ✅ Implementado
 
 O SDK DEVERIA usar primordialmente a biblioteca padrão da plataforma,
 admitindo dependências pontuais apenas para lacunas reais. NÃO DEVE
 depender de frameworks de aplicação.
 
 *Status atual:* as dependências de execução declaradas são um cliente
-HTTP e uma biblioteca de criptografia. `httpx` já é importado por
-`client.py`, `discovery.py`, `response_guard.py` e `error_classifier.py`;
-da biblioteca de criptografia, além da parte de assinatura
-ECDSA (conversão DER/`R||S`, `algorithms.py`), o restante do código também já usa
-`cryptography` para carga de PEM/PKCS#12 e verificação de par
-chave-certificado. Uma dependência opcional para HSM/PKCS#11 está
-declarada para uso futuro. Nenhuma dependência de framework de
-aplicação é usada.
+HTTP e uma biblioteca de criptografia. `httpx` é importado por
+`client.py`, `discovery.py`, `response_guard.py` e
+`error_classifier.py`; `cryptography` é usada tanto para a assinatura
+ECDSA (conversão DER/`R||S`, `algorithms.py`) quanto para carga de
+PEM/PKCS#12 e verificação de par chave-certificado. Uma dependência
+opcional cobre o caminho de HSM/PKCS#11. Nenhuma dependência de
+framework de aplicação é usada.
 
 #### RNF-05 — Desempenho — ✅ Implementado (estruturalmente)
 
@@ -689,35 +693,36 @@ consulta `TokenCacheStrategy.cached_if_valid()` antes de qualquer I/O de
 rede, servindo do cache sem nova requisição enquanto o token for válido.
 A estrutura de *lock striping* (`_scope_locks`, tamanho fixo
 `_SCOPE_LOCK_STRIPES = 32`) tem memória O(1) em relação ao número de
-scopes distintos (RF-05). Nenhum teste de carga real foi conduzido
-ainda — a garantia é estrutural, verificada pelos testes unitários de
-`test_client.py`/`test_token_cache.py`.
+scopes distintos (RF-05). A garantia é estrutural — verificada pelos
+testes unitários de `test_client.py`/`test_token_cache.py` — e não por
+um teste de carga dedicado.
 
-#### RNF-06 — Testes e cobertura — ✅ Implementado (para o que existe)
+#### RNF-06 — Testes e cobertura — ✅ Implementado
 
 1. O SDK DEVE ter testes automatizados independentes de serviços
    externos.
 2. Cobertura mínima de linha: **85%**, aplicada como *gate*.
 
-*Status atual:* a suíte de testes cobre os componentes já
-implementados (JWT/`client_assertion`, requisição/resposta HTTP,
+*Status atual:* a suíte de testes cobre a autenticação SMART Backend
+Services (JWT/`client_assertion`, requisição/resposta HTTP,
 single-flight, retry, classificação de erro, descoberta, invalidação de
 cache, validações do builder — `test_client.py`, `test_builder.py`,
 `test_discovery.py`, `test_error_classifier.py`,
-`test_response_guard.py`) além dos já existentes na fundação
-(algoritmos, protocolo de assinatura, cache de tokens, cálculo de
-retry, configuração de tolerância a falhas, contexto de trace, exceções,
-constantes padrão), sem dependência de serviços externos (`httpx.MockTransport`
-em vez de rede real), com o *gate* de 85% de cobertura de linha
-configurado em `tox.ini` (`pytest --cov-fail-under=85`; cobertura
-medida atualmente em 100%). Além da suíte unitária, dois grupos de
-teste já exercitam mTLS real (sockets/OpenSSL de verdade, não apenas
-fakes): `tests/test_error_classifier_real_mtls.py` (handshake real com
-certificado de cliente rejeitado, contra um servidor loopback) e a
-suíte de integração `tests/test_smart_token_client_integration.py`
-(fluxo completo do `SmartTokenClient` contra o `hubsaude-simulador`
-real via mTLS) — esta última fica fora da execução padrão por design
-(marcador `integration`, ver [§ Testes de integração em
+`test_response_guard.py`) e os componentes de base (algoritmos,
+protocolo de assinatura, cache de tokens, cálculo de retry,
+configuração de tolerância a falhas, contexto de trace, exceções,
+constantes padrão), sem dependência de serviços externos
+(`httpx.MockTransport` em vez de rede real). O *gate* de 85% de
+cobertura de linha está configurado em `tox.ini`
+(`pytest --cov-fail-under=85`; cobertura medida atualmente em 100%).
+Além da suíte unitária, dois grupos de teste exercitam mTLS real
+(sockets/OpenSSL de verdade, não apenas fakes): `tests/test_error_classifier_real_mtls.py`
+(handshake real com certificado de cliente rejeitado, contra um
+servidor loopback) e a suíte de integração
+`tests/test_smart_token_client_integration.py` (fluxo completo do
+`SmartTokenClient` contra o `hubsaude-simulador` real via mTLS) — esta
+última fica fora da execução padrão por design (marcador
+`integration`, ver [§ Testes de integração em
 CONTRIBUTING.md](CONTRIBUTING.md)).
 
 #### RNF-07 — Documentação — ✅ Implementado
@@ -725,16 +730,16 @@ CONTRIBUTING.md](CONTRIBUTING.md)).
 API pública documentada no formato da plataforma, incluindo exemplos de
 uso por fonte de chave e a recomendação de circuit breaker externo.
 
-*Status atual:* todo o código implementado tem docstrings em
-português cobrindo módulo, classes e métodos públicos. `docs/troubleshooting.md`
-tem conteúdo completo (guia de diagnóstico de confiança de
-certificado SSL/TLS, com detecção via OpenSSL/Python/Java/C#/Node.js).
-`README.md` reflete o estado real do cliente HTTP/builder, das
-fontes de chave/TLS e já inclui uma tabela de erros específicos da lib
-(seção "Troubleshooting"). `docs/integracao-enterprise.md` documenta a
-regra "uma única renovação após 401", a recomendação de circuit
-breaker externo, ownership/ciclo de vida da instância e a convenção de
-métricas/trace — tudo fora do escopo do próprio SDK por design.
+*Status atual:* todo o código tem docstrings em português cobrindo
+módulo, classes e métodos públicos. `docs/troubleshooting.md` traz um
+guia de diagnóstico de confiança de certificado SSL/TLS, com detecção
+via OpenSSL/Python/Java/C#/Node.js. `README.md` reflete o cliente
+HTTP/builder, as fontes de chave/TLS e inclui uma tabela de erros
+específicos da lib (seção "Troubleshooting"). `docs/integracao-enterprise.md`
+documenta a regra "uma única renovação após 401", a recomendação de
+circuit breaker externo, ownership/ciclo de vida da instância e a
+convenção de métricas/trace — tudo fora do escopo do próprio SDK por
+design.
 
 #### RNF-08 — Licença, versionamento e release — ⚠️ Parcial
 
@@ -743,59 +748,66 @@ acompanhado de SBOM quando o ecossistema suportar.
 
 *Status atual:* o pacote está versionado como `0.1.0`
 (`pyproject.toml`); o arquivo `LICENSE` contém o texto completo da
-Apache License 2.0. Não há automação de release nem geração de SBOM
-configuradas ainda — isso, junto com metadados de publicação
+Apache License 2.0. Ainda não há automação de release nem geração de
+SBOM configuradas; isso, junto com metadados de publicação
 (`authors`/`classifiers`/`urls` em `[project]`, `__version__` exposto,
-`CHANGELOG.md`, `py.typed`, `NOTICE`), é tratado como pendência de
-**publicação**, não de implementação.
+`CHANGELOG.md`, `py.typed`, `NOTICE`), é pendência de **publicação**,
+não de implementação do SDK em si.
 
 ## 8. Parâmetros de configuração
 
-Parâmetros já suportados por algum componente, mesmo sem uma classe de
-configuração unificada de cliente:
+Parâmetros suportados e seus pontos de configuração no builder:
 
-| Parâmetro | Padrão | Onde já existe | Observações |
+| Parâmetro | Padrão | Onde é configurado | Observações |
 |-----------|--------|-----------------|-------------|
 | `assertionTtlSeconds` | 60 | `FaultToleranceConfig`, `builder.assertion_ttl_seconds()` | ≤ 0 → padrão; consumido por `client._build_client_assertion()` |
 | `maxRetries` | 3 | `FaultToleranceConfig`, `builder.max_retries()` | ≤ 0 → padrão; laço de tentativas em `client._fetch_token()` |
 | `connectTimeout` | 10 s | `FaultToleranceConfig`, `builder.connect_timeout()` | obrigatório; usado no `httpx.Timeout` de `client.SmartTokenClient` |
 | `requestTimeout` | 30 s | `FaultToleranceConfig`, `builder.request_timeout()` | obrigatório; usado no `httpx.Timeout` de `client.SmartTokenClient` |
-| `enableTokenCache` | `true` (semântica) | `TokenCacheStrategy(enabled=...)`, `builder.enable_token_cache()` | flag obrigatória no construtor da estratégia; o builder já a define com padrão `True` |
+| `enableTokenCache` | `true` (semântica) | `TokenCacheStrategy(enabled=...)`, `builder.enable_token_cache()` | flag obrigatória no construtor da estratégia; o builder a define com padrão `True` |
 | `tokenCacheMarginSeconds` | 30 | `TokenCacheStrategy`, `builder.token_cache_margin_seconds()` | |
 | `tokenCacheMaxEntries` | 1.000 | `TokenCacheStrategy`, `builder.token_cache_max_entries()` | deve ser positivo; descarte LRU por scope |
 | `jwtAlgorithm` | `RS384` | `defaults.DEFAULT_JWT_ALGORITHM`, `algorithms.resolve`, `builder.jwt_algorithm()` | consumido em `client._build_client_assertion()` (header `alg`) e na assinatura |
 | `tlsProtocol` | `TLSv1.3` | `defaults.DEFAULT_TLS_PROTOCOL`, `ssl_context_factory.build_ssl_context()` | `TLSv1.2` também suportado; consumido via `builder.server_trust_anchor()`/`certificate_pem()`/`client_key_store()` |
 
-Os demais parâmetros do contrato completo já têm ponto de configuração
-no `builder.SmartTokenClientBuilder`: `tokenEndpoint`/`fhirBase`
+Os demais parâmetros do contrato têm ponto de configuração no
+`builder.SmartTokenClientBuilder`: `tokenEndpoint`/`fhirBase`
 (mutuamente exclusivos, `token_endpoint()`/`fhir_base()`), `clientId`
 (`client_id()`), `privateKeyPem`/`privateKeyPassword`
 (`private_key_pem()`, delega a `strategy_factory.from_pem_file`),
 `signingStrategy` (`signing_strategy()`), `keyId` (`key_id()`) e
 `hubContext` (`hub_context(ig, versao)`). `certificatePem`
 (`certificate_pem()`), `clientKeyStore` (`client_key_store()`) e
-`serverTrustAnchor` (`server_trust_anchor()`) também já têm
-implementação concreta no builder, apoiada em
+`serverTrustAnchor` (`server_trust_anchor()`) também têm implementação
+concreta no builder, apoiada em
 `ssl_context_factory.py`/`key_certificate_consistency.py`; quem precisa
-de uma fonte TLS fora desses três continua podendo fornecer a própria
+de uma fonte TLS fora desses três pode fornecer a própria
 `TlsContextProvider` via `tls_context_provider()`.
 
-## 9. Diretrizes de implementação já adotadas
+## 9. Diretrizes de implementação
 
 - **Separação assinatura ↔ HTTP:** um contrato arquitetural bloqueante
   (`import-linter`, `pyproject.toml`) impede que o módulo de algoritmos
   criptográficos (`algorithms.py`) importe a biblioteca de cliente HTTP,
   preservando a independência entre os dois eixos previstos em RF-12 e
-  RF-01/RF-02 mesmo antes de o segundo existir.
+  RF-01/RF-02.
 - **Assinaturas ECDSA (`ES*`):** a API de assinatura em uso produz DER;
   a conversão para o formato bruto `R||S` exigido por um JWS é feita
   explicitamente (`algorithms.encode_p1363`/`decode_p1363`), conforme
   RF-16.4.
 - **Concorrência do cache:** um único lock de instância protege toda a
   estrutura de dados do cache; o *single-flight* de renovação (RF-05) é
-  deliberadamente responsabilidade de outro componente
-  (`client.SmartTokenClient`, *lock striping* + *double-checked
-  locking*), por design documentado no próprio módulo de cache.
+  responsabilidade de outro componente (`client.SmartTokenClient`,
+  *lock striping* + *double-checked locking*), por design documentado
+  no próprio módulo de cache.
+- **Agregação de configuração (`settings.py`/`tls_settings.py`):**
+  `SigningSettings`/`ResolvedSigning` encapsulam a resolução da fonte
+  de assinatura efetiva a partir de uma chave PEM em arquivo, e
+  `TlsSettings` encapsula a resolução do `ssl.SSLContext` efetivo a
+  partir do material de mTLS. O builder as usa internamente
+  (`_resolve_signing_material`, `_resolve_tls_context_provider`) e as
+  reexporta na raiz do pacote (RF-17) para quem quiser montá-las
+  diretamente, fora do fluxo do builder.
 
 ## 10. Rastreabilidade — requisito → implementação
 
@@ -823,21 +835,20 @@ de uma fonte TLS fora desses três continua podendo fornecer a própria
 | RF-19 | `exceptions.SmartTokenError`, `exceptions.SigningError` | ✅ |
 | RNF-01 | `client.SmartTokenClient` (`_ReadersWriterLock`) | ✅ |
 | RNF-02 | `error_classifier.sanitize_error_response()`, `CachedToken`/`TokenResult`/`TokenResponse.__repr__` | ✅ |
-| RNF-03 | `pem_loader.clear_password()`, `builder.private_key_pem()`, `builder.client_key_store()` | ✅ (senha do PEM e do PKCS#12 são `bytearray` zerado; PIN de `from_pkcs11` permanece `str` por decisão deliberada — não fica retido em campo de builder, ver §5) |
+| RNF-03 | `pem_loader.clear_password()`, `builder.private_key_pem()`, `builder.client_key_store()` | ✅ (senha do PEM e do PKCS#12 são `bytearray` zerado; PIN de `from_pkcs11` permanece `str` por escolha deliberada de design — não fica retido em campo de builder, ver §7) |
 | RNF-04 | `pyproject.toml` → `[tool.importlinter]` | ✅ |
 | RNF-05 | `client.SmartTokenClient` (cache-aside + lock striping O(1)) | ✅ (estrutural) |
 | RNF-06 | `tox.ini` (`pytest --cov-fail-under=85`) | ✅ |
 | RNF-07 | `docs/troubleshooting.md`, `docs/integracao-enterprise.md`, docstrings, `README.md` | ✅ |
 | RNF-08 | `pyproject.toml` (`version = "0.1.0"`), `LICENSE` | ⚠️ (versionado e licenciado; falta automação de release, geração de SBOM e metadados de publicação — ver o texto do requisito RNF-08 acima) |
 
-> **Nota sobre RF-10 a RF-15:** a tabela acima reflete o
-> código verificado nesta rodada — `pem_loader.py`,
+> **Nota sobre RF-10 a RF-15:** `pem_loader.py`,
 > `ssl_context_factory.py`, `strategy_factory.py` e
-> `key_certificate_consistency.py` existem, estão implementados e têm
-> cobertura de teste (100% nos três primeiros). Não há requisito
-> funcional "não revisado" nesta base: a validação end-to-end de RF-08
-> (handshake mTLS real) e a cobertura do caminho PKCS#11/HSM contra
-> SoftHSM2 real já foram confirmadas.
+> `key_certificate_consistency.py` estão implementados e têm cobertura
+> de teste (100% nos três primeiros). Não há requisito funcional sem
+> implementação nesta base: a validação end-to-end de RF-08 (handshake
+> mTLS real) e a cobertura do caminho PKCS#11/HSM contra SoftHSM2 real
+> estão confirmadas.
 
 ## 11. Casos de teste mínimos de conformidade
 
@@ -879,34 +890,35 @@ seguintes já têm cobertura nesta base (arquivo entre parênteses):
     exclusividade com `token_endpoint`; resposta ≠ 200 ou sem
     `token_endpoint` é erro (`test_discovery.py`).
 
-PEM/certificado, par chave–certificado e PKCS#12 já têm
-casos de teste com material real (autoassinado, gerado em memória via
+PEM/certificado, par chave–certificado e PKCS#12 têm casos de teste com
+material real (autoassinado, gerado em memória via
 `tests/conftest.py::fake_pem_pair`) para carga de PEM, validação de
 certificado e consistência chave–certificado (`test_pem_loader.py`,
 `test_key_certificate_consistency.py`, `test_ssl_context_factory.py`).
-Dois cenários que antes só existiam simulados já têm cobertura real:
-(a) um handshake TLS/mTLS de verdade contra um servidor loopback com
-certificado de cliente rejeitado, validando RF-08 além da simulação de
-`ssl.SSLError` (`tests/test_error_classifier_real_mtls.py`); e (b) a
-suíte de PKCS#11/HSM (`test_pkcs11_strategy_factory.py`, caso
-equivalente em `test_builder.py`) exercitada contra SoftHSM2 real — os
-7 testes correspondentes passam de fato quando o ambiente tem SoftHSM2
-instalado, e continuam sendo pulados automaticamente (`SKIPPED`), não
-falhando, nos ambientes que não o têm (ver
+Dois cenários têm cobertura contra material/infraestrutura real, além
+dos casos simulados: (a) um handshake TLS/mTLS de verdade contra um
+servidor loopback com certificado de cliente rejeitado, validando RF-08
+além da simulação de `ssl.SSLError`
+(`tests/test_error_classifier_real_mtls.py`); e (b) a suíte de
+PKCS#11/HSM (`test_pkcs11_strategy_factory.py`, caso equivalente em
+`test_builder.py`) exercitada contra SoftHSM2 real — os 7 testes
+correspondentes passam quando o ambiente tem SoftHSM2 instalado, e são
+pulados automaticamente (`SKIPPED`), não falhando, nos ambientes que
+não o têm (ver
 [CONTRIBUTING.md](CONTRIBUTING.md#testes-do-caminho-pkcs11hsm-softhsm2)).
 
-## 12. Evolução prevista
+## 12. Status geral e pendências
 
 Todos os requisitos funcionais e não funcionais cobertos por este
-documento (RF-01 a RF-19, RNF-01 a RNF-07) estão concluídos, testados
-e documentados nesta base de código: `client.SmartTokenClient` e
+documento (RF-01 a RF-19, RNF-01 a RNF-07) estão implementados,
+testados e documentados: `client.SmartTokenClient` e
 `builder.SmartTokenClientBuilder` compõem `retry.py`, `token_cache.py`,
 `trace.py`, `response_guard.py`, `error_classifier.py`, `discovery.py`,
 `ssl_context_factory.py`, `pem_loader.py`,
-`key_certificate_consistency.py` e `strategy_factory.py` no
-fluxo completo de obtenção de token com TLS/mTLS configurável.
+`key_certificate_consistency.py` e `strategy_factory.py` no fluxo
+completo de obtenção de token com TLS/mTLS configurável.
 
-O que resta como pendência genuína é o que já está descrito em
+A pendência genuína é a descrita em
 [RNF-08](#rnf-08--licença-versionamento-e-release): automação de
 release, geração de SBOM e os metadados de publicação
 (`authors`/`classifiers`/`urls`, `__version__`, `CHANGELOG.md`,
