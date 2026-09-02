@@ -2,12 +2,10 @@
 (chave privada ou SigningStrategy) e o certificado X.509 do cliente.
 
 Assina um desafio fixo e confere a assinatura com a chave publica
-extraida do certificado -- porte de ``KeyCertificateConsistency.java``.
-Dois pontos de entrada:
+extraida do certificado. Dois pontos de entrada:
 
 - :func:`verify_key_pair`: recebe uma chave privada "solta" (RSA ou EC)
-  diretamente -- equivalente publico de
-  ``SmartTokenClient.verifyKeyPairConsistency``. O algoritmo da assinatura de teste e' inferido do tipo/curva da
+  diretamente. O algoritmo da assinatura de teste e' inferido do tipo/curva da
   chave (RSA -> RS256; EC -> ES256/ES384/ES512 conforme a curva).
 - :func:`verify_strategy`: recebe uma ``SigningStrategy`` ja construida.
   Limitacao: so e possivel verificar quando a estrategia e uma
@@ -37,11 +35,10 @@ _CHALLENGE = b"key-pair-consistency-check"
 
 #: Mapeia a curva EC (nome retornado por ``EllipticCurve.name``) para o
 #: algoritmo JWT (JWA) cujo tamanho de assinatura R||S (RFC 7518 Sec3.4)
-#: e' compativel -- necessario porque, ao contrario do lado Java (que usa
-#: sempre "SHA256withECDSA", independente da curva), a conversao
-#: DER->R||S do Python (``algorithms.encode_p1363``) exige um
-#: ``signature_length`` que corresponde ao tamanho da curva; usar sempre
-#: ES256 quebraria (overflow) para chaves P-384/P-521.
+#: e' compativel -- necessario porque a conversao DER->R||S
+#: (``algorithms.encode_p1363``) exige um ``signature_length`` que
+#: corresponde ao tamanho da curva; usar sempre ES256 quebraria (overflow)
+#: para chaves P-384/P-521.
 _EC_CURVE_TO_JWT_ALGORITHM: dict[str, str] = {
     "secp256r1": "ES256",
     "secp384r1": "ES384",
@@ -53,8 +50,6 @@ def verify_key_pair(private_key: PrivateKeyTypes, certificate: x509.Certificate)
     """Verifica que uma chave privada "solta" corresponde a chave publica
     do certificado, assinando um desafio e conferindo a assinatura.
 
-    Porte de ``KeyCertificateConsistency.verifyKeyPair`` (``.java``, via o
-    wrapper publico ``SmartTokenClient.verifyKeyPairConsistency``).
     Complementa :func:`verify_strategy`: aquela
     funcao exige uma :class:`~hubsaude_client.ports.SigningStrategy` ja
     construida (e so consegue validar quando ela e uma
@@ -95,9 +90,8 @@ def _determine_verification_algorithm(private_key: PrivateKeyTypes) -> str:
     Raises:
         SmartTokenError: se o tipo de chave, ou a curva EC, nao for
             suportado por esta biblioteca (ver ``algorithms.py`` --
-            apenas RSA e EC/P-256/P-384/P-521 sao suportados; ao
-            contrario do Java, que tambem aceita Ed25519/Ed448, este
-            pacote nao os mapeia em ``algorithms.py``).
+            apenas RSA e EC/P-256/P-384/P-521 sao suportados; Ed25519/Ed448
+            nao sao mapeados em ``algorithms.py``).
     """
     if isinstance(private_key, rsa.RSAPrivateKey):
         return "RS256"
