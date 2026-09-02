@@ -1,10 +1,10 @@
 """Descoberta do token endpoint via ``.well-known/smart-configuration``
 (SMART App Launch — Backend Services, RF-09).
 
-Porte de ``SmartConfigurationDiscovery.java`` (colaborador interno de
-``SmartTokenClient``): resolve o ``token_endpoint`` a partir de uma URL
-base FHIR, para os consumidores que preferem informar ``fhir_base`` em
-vez de um ``token_endpoint`` explicito. A exclusividade mutua entre
+Colaborador interno de ``SmartTokenClient``: resolve o ``token_endpoint``
+a partir de uma URL base FHIR, para os consumidores que preferem informar
+``fhir_base`` em vez de um ``token_endpoint`` explicito. A exclusividade
+mutua entre
 ``token_endpoint``/``fhir_base`` e a decisao de *quando* chamar esta
 classe (uma unica vez, na construcao do cliente — RF-09 item 5) sao
 responsabilidade do builder/orquestrador (``builder.py``/``client.py``),
