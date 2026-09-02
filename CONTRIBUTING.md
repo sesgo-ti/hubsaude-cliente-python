@@ -50,16 +50,22 @@ licença do projeto, conforme o texto integral do DCO. Commits sem
    ou atualização do existente. Cobertura é monitorada via `pytest-cov`
    (mínimo de 85% no `hubsaude-cliente-python`).
 5. **Build verde** localmente antes de abrir PR:
-   ou, sem `tox`:
    ```bash
-   cd hubsaude/projetos/hubsaude-cliente-python && pytest --cov=<pacote> --cov-fail-under=85
+   tox
    ```
-   O projeto não participa de um workspace/monorepo compartilhado na raiz
-   do repositório — o build deve ser executado dentro do diretório do
-   projeto (dentro do `virtualenv`/`venv` correspondente).
-   Opcionalmente, execute também as demais verificações de qualidade:
-   `tox -e lint` (Flake8/Ruff, Black --check, isort --check-only, mypy) e
-   `tox -e security` (pip-audit / Safety para checagem de dependências).
+   Isso roda a suíte de testes (`py312`, cobertura mínima de 85%), lint
+   (`lint`) e checagem de dependências/SAST (`security`) — os mesmos
+   três ambientes usados no CI (`envlist` padrão do `tox.ini`). Sem
+   `tox`, equivalente manual:
+   ```bash
+   pytest --cov=hubsaude_client --cov-report=term-missing --cov-fail-under=85
+   ```
+   O projeto não participa de um workspace/monorepo compartilhado — o
+   build deve ser executado a partir da raiz deste repositório, dentro
+   do `virtualenv`/`venv` correspondente.
+   Para rodar um ambiente isoladamente: `tox -e lint` (Ruff, Black
+   `--check`, mypy `--strict`), `tox -e security` (pip-audit `--strict`,
+   Bandit) ou `tox -e archrules` (import-linter).
 6. **PR pequeno e focado**: prefira PRs de até ~400 linhas modificadas.
 7. **Descrição do PR**: explique *o quê*, *por quê* e *como testar*.
    Referencie issues com `Closes #123`.
@@ -101,23 +107,19 @@ Os 14 casos de `tests/test_smart_token_client_integration.py` (marcados
 autorização SMART Backend Services simulado, empacotado como JAR
 executável Spring Boot — como processo filho real e falam mTLS real com
 ele. São a tradução direta de `SmartTokenClientIntegrationTestBase.java`
-/ `SmartTokenClientJarIT.java` do lado `.java` (ver
-`roadmap-testes-integracao-java-para-python.md` para o mapeamento
-completo). Assim como os testes de SoftHSM2 acima, são pulados
-automaticamente (`SKIPPED`) quando o pré-requisito não está disponível
-no ambiente — o que **não** significa ausência de cobertura, apenas que
-o teste não roda sem essa dependência de sistema; ficam fora da suíte
-padrão (`pytest`/`tox` sem seletor de marker roda com
-`-m "not integration"`).
+/ `SmartTokenClientJarIT.java` do lado `.java`. Assim como os testes de
+SoftHSM2 acima, são pulados automaticamente (`SKIPPED`) quando o
+pré-requisito não está disponível no ambiente — o que **não** significa
+ausência de cobertura, apenas que o teste não roda sem essa dependência
+de sistema; ficam fora da suíte padrão (`pytest`/`tox` sem seletor de
+marker roda com `-m "not integration"`).
 
 Pré-requisitos: Java 21+ no `PATH`, mais o JAR do `hubsaude-simulador`
 localizado via `HUBSAUDE_SIMULADOR_JAR` (variável de ambiente) ou, como
 alternativa de conveniência, copiado para `.simulator/hubsaude-simulador.jar`
 na raiz do repositório (diretório já coberto pelo `.gitignore`). O JAR
 em si não é distribuído neste repositório — obtenha-o com quem mantém o
-`hubsaude-simulador` (o `pom.xml` do cliente `.java` não declara essa
-dependência de forma explícita neste export; a forma de obtenção fora
-do build Maven ainda está em aberto, ver seção 3 do roadmap).
+`hubsaude-simulador`.
 
 ```bash
 export HUBSAUDE_SIMULADOR_JAR=/caminho/para/hubsaude-simulador.jar
