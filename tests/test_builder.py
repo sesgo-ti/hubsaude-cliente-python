@@ -148,16 +148,17 @@ def test_uses_configured_fault_tolerance_and_cache_settings(
     client = (
         _valid_builder()
         .assertion_ttl_seconds(120)
+        .token_cache_margin_seconds(15)
         .max_retries(5)
         .connect_timeout(timedelta(seconds=3))
         .request_timeout(timedelta(seconds=9))
         .enable_token_cache(False)
-        .token_cache_margin_seconds(15)
         .token_cache_max_entries(50)
         .build()
     )
 
     assert client.fault_tolerance.assertion_ttl_seconds == 120
+    assert client.fault_tolerance.token_cache_margin_seconds == 15
     assert client.fault_tolerance.max_retries == 5
     assert client.fault_tolerance.connect_timeout == timedelta(seconds=3)
     assert client.fault_tolerance.request_timeout == timedelta(seconds=9)
