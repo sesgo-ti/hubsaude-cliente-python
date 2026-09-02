@@ -14,7 +14,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import timedelta
 
-from hubsaude_client.defaults import DEFAULT_ASSERTION_TTL_SECONDS, DEFAULT_MAX_RETRIES
+from hubsaude_client.defaults import (
+    DEFAULT_ASSERTION_TTL_SECONDS,
+    DEFAULT_MAX_RETRIES,
+    DEFAULT_TOKEN_CACHE_MARGIN_SECONDS,
+)
 
 
 @dataclass(frozen=True)
@@ -34,6 +38,7 @@ class FaultToleranceConfig:
     connect_timeout: timedelta
     request_timeout: timedelta
     assertion_ttl_seconds: int
+    token_cache_margin_seconds: int
     max_retries: int
 
     def __post_init__(self) -> None:
@@ -53,5 +58,7 @@ class FaultToleranceConfig:
         """
         if self.assertion_ttl_seconds <= 0:
             object.__setattr__(self, "assertion_ttl_seconds", DEFAULT_ASSERTION_TTL_SECONDS)
+        if self.token_cache_margin_seconds <= 0:
+            object.__setattr__(self, "token_cache_margin_seconds", DEFAULT_TOKEN_CACHE_MARGIN_SECONDS)
         if self.max_retries <= 0:
             object.__setattr__(self, "max_retries", DEFAULT_MAX_RETRIES)
