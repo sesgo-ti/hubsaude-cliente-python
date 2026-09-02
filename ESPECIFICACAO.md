@@ -765,7 +765,7 @@ Parâmetros suportados e seus pontos de configuração no builder:
 | `connectTimeout` | 10 s | `FaultToleranceConfig`, `builder.connect_timeout()` | obrigatório; usado no `httpx.Timeout` de `client.SmartTokenClient` |
 | `requestTimeout` | 30 s | `FaultToleranceConfig`, `builder.request_timeout()` | obrigatório; usado no `httpx.Timeout` de `client.SmartTokenClient` |
 | `enableTokenCache` | `true` (semântica) | `TokenCacheStrategy(enabled=...)`, `builder.enable_token_cache()` | flag obrigatória no construtor da estratégia; o builder a define com padrão `True` |
-| `tokenCacheMarginSeconds` | 30 | `TokenCacheStrategy`, `builder.token_cache_margin_seconds()` | |
+| `tokenCacheMarginSeconds` | 30 | `TokenCacheStrategy`, `builder.token_cache_margin_seconds()` | ≤ 0 → padrão |
 | `tokenCacheMaxEntries` | 1.000 | `TokenCacheStrategy`, `builder.token_cache_max_entries()` | deve ser positivo; descarte LRU por scope |
 | `jwtAlgorithm` | `RS384` | `defaults.DEFAULT_JWT_ALGORITHM`, `algorithms.resolve`, `builder.jwt_algorithm()` | consumido em `client._build_client_assertion()` (header `alg`) e na assinatura |
 | `tlsProtocol` | `TLSv1.3` | `defaults.DEFAULT_TLS_PROTOCOL`, `ssl_context_factory.build_ssl_context()` | `TLSv1.2` também suportado; consumido via `builder.server_trust_anchor()`/`certificate_pem()`/`client_key_store()` |
