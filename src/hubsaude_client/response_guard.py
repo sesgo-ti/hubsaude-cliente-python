@@ -4,24 +4,22 @@ corpos anormalmente grandes, maliciosos ou por bug do servidor) e sanitiza
 o campo ``expires_in``, aplicando o padrao documentado quando ausente ou
 invalido.
 
-Porte de ``TokenResponseGuard.java`` (colaborador interno de
-``SmartTokenClient``). Nao
+Colaborador interno de ``SmartTokenClient``. Nao
 faz parte da API publica da biblioteca (nao exportado em ``__init__.py``).
 
-- o valor exato de ``MAX_RESPONSE_BODY_BYTES`` usado em producao no Java
-  (aqui adotado 1 MiB, sem referencia direta -- ver comentario na
-  constante abaixo, que coincide com o valor documentado no ``.java``);
+- ``MAX_RESPONSE_BODY_BYTES`` (1 MiB) e um teto de sanidade para o corpo
+  da resposta -- ver comentario na constante abaixo;
 - ``expires_in`` como string numerica e' aceito (por tolerancia a
   respostas nao estritamente conformes); qualquer outro tipo diferente
-  de inteiro/float/string numerica e' tratado como invalido de imediato
-  -- decisao alinhada ao Java: ``expires_in``
+  de inteiro/float/string numerica e' tratado como invalido de imediato:
+  ``expires_in``
   *ausente* aplica o padrao silenciosamente, mas ``expires_in``
   *presente e invalido* (zero, negativo ou nao numerico) e' rejeitado
   com ``SmartTokenError`` em vez de absorvido com um warning -- um
-  ``expires_in`` adulterado nao pode reter tokens no cache (a mesma
-  protecao da issue #730 do Java). Um ``expires_in`` valido mas acima do
+  ``expires_in`` adulterado nao pode reter tokens indevidamente no
+  cache. Um ``expires_in`` valido mas acima do
   teto de sanidade (``MAX_EXPIRES_IN_SECONDS``, 24h) e' normalizado para
-  o teto com apenas um warning, tambem espelhando o Java.
+  o teto com apenas um warning.
 
 Validacao de sucesso (RF-03, ``ESPECIFICACAO.md``):
 
@@ -134,7 +132,7 @@ class TokenResponseGuard:
     def read_body(self, response: httpx.Response, trace: TraceContext) -> bytes:
         """Le o corpo da resposta em streaming, interrompendo assim que
         ultrapassar o limite configurado -- sem esperar o corpo inteiro
-        chegar (equivalente a ``unwrapBodyLimitViolation`` do ``.java``).
+        chegar.
 
         Args:
             response: resposta do token endpoint (idealmente obtida com
@@ -211,8 +209,7 @@ class TokenResponseGuard:
 def sanitize_expires_in(raw_expires_in: object, trace: TraceContext | None = None) -> int:
     """Sanitiza o campo ``expires_in`` da resposta do token endpoint.
 
-    Regras explicitas (alinhadas ao Java
-    ``TokenResponseGuard.sanitizeExpiresIn``):
+    Regras explicitas:
 
     - **Ausente** (``None``): assume ``DEFAULT_EXPIRES_IN_SECONDS``
       (1h) silenciosamente -- caso esperado quando o servidor
@@ -220,9 +217,7 @@ def sanitize_expires_in(raw_expires_in: object, trace: TraceContext | None = Non
     - **Zero, negativo ou nao numerico** (tipo inesperado, ou string nao
       numerica): rejeitado com ``SmartTokenError``. Um ``expires_in``
       adulterado (por bug ou por um servidor de autorizacao
-      comprometido) nunca deve alimentar o cache de tokens -- e' a
-      mesma protecao da issue #730 do Java; ver nota de porte no topo
-      do modulo.
+      comprometido) nunca deve alimentar o cache de tokens.
     - **Acima de ``MAX_EXPIRES_IN_SECONDS``** (24h): normalizado para o
       teto, com log de aviso -- o token continua utilizavel, mas o
       cache nao retem entradas alem do limite de sanidade.
