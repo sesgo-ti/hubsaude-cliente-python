@@ -527,6 +527,7 @@ class SmartTokenClientBuilder:
             connect_timeout=self._connect_timeout,
             request_timeout=self._request_timeout,
             assertion_ttl_seconds=self._assertion_ttl_seconds,
+            token_cache_margin_seconds=self._token_cache_margin_seconds,
             max_retries=self._max_retries,
         )
         token_cache = TokenCacheStrategy(
