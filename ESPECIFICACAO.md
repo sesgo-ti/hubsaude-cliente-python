@@ -149,8 +149,7 @@ partir de um cofre).
      que NÃO DEVE ser reutilizado;
    - `hub_ctx` = objeto `{"ig": "<alias>", "versao": "<semver>"}` com o
      contexto de Guia de Implementação pretendido, quando configurado
-     via `hubContext(ig, versao)` (concern
-     `client-assertion-contexto-ig.md` §3.4). O `ig` DEVE seguir
+     via `hubContext(ig, versao)`. O `ig` DEVE seguir
      `[a-z][a-z0-9-]{1,30}` e a `versao` DEVE ser SemVer completo
      `MAJOR.MINOR.PATCH` (sem pre-release); valores inválidos DEVEM
      ser rejeitados na configuração. Quando não configurado, o claim
@@ -320,7 +319,7 @@ o esgotamento com erro final (itens 3, 5) estão em
 (`raise ... from last_exc`). A normalização de `max_retries` não
 positivo continua em outro componente — ver RF-18.
 
-#### RF-08 — Diagnóstico de rejeição de certificado de cliente (mTLS) — ⚠️ Parcial
+#### RF-08 — Diagnóstico de rejeição de certificado de cliente (mTLS) — ✅ Implementado
 
 1. Quando uma falha de I/O indicar, heuristicamente, que o servidor
    rejeitou o certificado de cliente após o handshake mTLS, o SDK DEVE
@@ -334,17 +333,22 @@ fragmentos de alerta TLS típicos desse cenário (`bad_record_mac`,
 `ssl.SSLCertVerificationError`, que é rejeição do certificado do
 *servidor*, não do cliente) e `ErrorClassifier.retriable_or_reraise()`
 falha imediatamente, sem retry, com mensagem diagnóstica (itens 1–2).
-Há um ponto em aberto documentado no próprio código
-(`# TODO(duvida)` em `error_classifier.py`): o equivalente Python de
-`AEADBadTagException` (Java) não existe como exceção própria no stack
-`ssl`/OpenSSL — a implementação assume que o sintoma equivalente do
-lado do cliente (`bad_record_mac` após o `Finished`) já é coberto pela
-heurística acima, mas isso não foi confirmado contra o comportamento
-real do `.java`. O que falta para tirar o "Parcial": mesmo com
-`ports.TlsContextProvider` já implementado (`ssl_context_factory.py`,
-ver RF-10/RF-11), a heurística só foi exercitada com exceções
-`ssl.SSLError` simuladas em teste, nunca contra uma conexão mTLS real
-com certificado rejeitado de fato — validação end-to-end pendente.
+O ponto que antes ficava em aberto no código (equivalente Python de
+`AEADBadTagException`, do lado Java) já foi decidido e documentado no
+próprio `error_classifier.py`: a stdlib `ssl`/OpenSSL não expõe uma
+exceção própria para falha de tag AEAD, e a fonte de verdade do lado
+`.java` já registra que o mesmo evento de servidor aparece como
+`bad_record_mac` no peer OpenSSL e como `AEADBadTagException` no peer
+JSSE — logo, a heurística já cobre a superfície equivalente em Python.
+Essa decisão foi validada contra um handshake mTLS **real** (sockets
+loopback + OpenSSL de verdade, não apenas `ssl.SSLError` simulado) em
+`tests/test_error_classifier_real_mtls.py`: sob TLS 1.2, a rejeição do
+certificado de cliente produz `ssl.SSLError` com o alerta `unknown ca`;
+sob TLS 1.3 (protocolo padrão desta lib), a superfície observada varia
+por plataforma/versão do OpenSSL (`ssl.SSLEOFError` numa máquina,
+alerta `unknown ca` limpo em outra) — ambas as variantes já são
+reconhecidas pela heurística e, em qualquer caso, nunca são tratadas
+como retriáveis.
 
 ### 6.4 Descoberta de endpoint
 
@@ -705,29 +709,32 @@ cache, validações do builder — `test_client.py`, `test_builder.py`,
 retry, configuração de tolerância a falhas, contexto de trace, exceções,
 constantes padrão), sem dependência de serviços externos (`httpx.MockTransport`
 em vez de rede real), com o *gate* de 85% de cobertura de linha
-configurado em `tox.ini` (`pytest --cov-fail-under=85`). Os casos de
-teste que dependem de uma implementação concreta de mTLS —
-handshake real com certificado de cliente contra um servidor de
-verdade — ainda não têm como existir, já que só o *port*
-`ports.TlsContextProvider` e um fake de teste (`FakeTlsContextProvider`)
-existem hoje.
+configurado em `tox.ini` (`pytest --cov-fail-under=85`; cobertura
+medida atualmente em 100%). Além da suíte unitária, dois grupos de
+teste já exercitam mTLS real (sockets/OpenSSL de verdade, não apenas
+fakes): `tests/test_error_classifier_real_mtls.py` (handshake real com
+certificado de cliente rejeitado, contra um servidor loopback) e a
+suíte de integração `tests/test_smart_token_client_integration.py`
+(fluxo completo do `SmartTokenClient` contra o `hubsaude-simulador`
+real via mTLS) — esta última fica fora da execução padrão por design
+(marcador `integration`, ver [§ Testes de integração em
+CONTRIBUTING.md](CONTRIBUTING.md)).
 
-#### RNF-07 — Documentação — ⚠️ Parcial
+#### RNF-07 — Documentação — ✅ Implementado
 
 API pública documentada no formato da plataforma, incluindo exemplos de
 uso por fonte de chave e a recomendação de circuit breaker externo.
 
 *Status atual:* todo o código implementado tem docstrings em
 português cobrindo módulo, classes e métodos públicos. `docs/troubleshooting.md`
-já tem conteúdo completo (guia de diagnóstico de confiança de
+tem conteúdo completo (guia de diagnóstico de confiança de
 certificado SSL/TLS, com detecção via OpenSSL/Python/Java/C#/Node.js).
-`README.md` já reflete o estado real do cliente HTTP/builder e das
-fontes de chave/TLS. `docs/integracao-enterprise.md`
-continua vazio (0 bytes) — é onde a regra "uma única renovação após
-401", citada como possível conteúdo futuro em `client.py`, e a
-recomendação de circuit breaker externo deveriam ser documentadas.
-Uma tabela de erros específicos da lib (README, seção
-"Troubleshooting") também ainda não foi escrita.
+`README.md` reflete o estado real do cliente HTTP/builder, das
+fontes de chave/TLS e já inclui uma tabela de erros específicos da lib
+(seção "Troubleshooting"). `docs/integracao-enterprise.md` documenta a
+regra "uma única renovação após 401", a recomendação de circuit
+breaker externo, ownership/ciclo de vida da instância e a convenção de
+métricas/trace — tudo fora do escopo do próprio SDK por design.
 
 #### RNF-08 — Licença, versionamento e release — ⚠️ Parcial
 
@@ -802,7 +809,7 @@ de uma fonte TLS fora desses três continua podendo fornecer a própria
 | RF-05 | `client.SmartTokenClient` (`_scope_locks`, *double-checked locking*) | ✅ |
 | RF-06 | `client.SmartTokenClient.invalidate_cache()` (delega a `TokenCacheStrategy`) | ✅ |
 | RF-07 | `client.SmartTokenClient._fetch_token()`, `error_classifier.py`, `retry.compute_retry_delay_seconds()` | ✅ |
-| RF-08 | `error_classifier.is_likely_client_certificate_rejection()` | ⚠️ (heurística pronta e testada; ainda não exercitada contra um handshake mTLS real, só contra `ssl.SSLError` simulado) |
+| RF-08 | `error_classifier.is_likely_client_certificate_rejection()` | ✅ (validada contra handshake mTLS real em `tests/test_error_classifier_real_mtls.py`, além dos casos com `ssl.SSLError` simulado) |
 | RF-09 | `discovery.SmartConfigurationDiscovery` | ✅ |
 | RF-10 | `ssl_context_factory.build_ssl_context()` | ✅ |
 | RF-11 | `ssl_context_factory.build_ssl_context()` (mesma função, `load_cert_chain` condicional) | ✅ |
@@ -820,19 +827,17 @@ de uma fonte TLS fora desses três continua podendo fornecer a própria
 | RNF-04 | `pyproject.toml` → `[tool.importlinter]` | ✅ |
 | RNF-05 | `client.SmartTokenClient` (cache-aside + lock striping O(1)) | ✅ (estrutural) |
 | RNF-06 | `tox.ini` (`pytest --cov-fail-under=85`) | ✅ |
-| RNF-07 | `docs/troubleshooting.md`, docstrings, `README.md` | ⚠️ (`docs/integracao-enterprise.md` vazio; tabela de erros do README ainda não escrita) |
-| RNF-08 | `pyproject.toml` (`version = "0.1.0"`), `LICENSE` | ⚠️ (versionado e licenciado; falta automação de release e SBOM, ver `zPENDENCIAS-PUBLICACAO.md`) |
+| RNF-07 | `docs/troubleshooting.md`, `docs/integracao-enterprise.md`, docstrings, `README.md` | ✅ |
+| RNF-08 | `pyproject.toml` (`version = "0.1.0"`), `LICENSE` | ⚠️ (versionado e licenciado; falta automação de release, geração de SBOM e metadados de publicação — ver o texto do requisito RNF-08 acima) |
 
 > **Nota sobre RF-10 a RF-15:** a tabela acima reflete o
 > código verificado nesta rodada — `pem_loader.py`,
 > `ssl_context_factory.py`, `strategy_factory.py` e
 > `key_certificate_consistency.py` existem, estão implementados e têm
-> cobertura de teste (100% nos três primeiros). Não há mais requisito
-> funcional "não revisado" nesta base. O que resta é validação end-to-end (RF-08,
-> handshake mTLS real) e cobertura do caminho PKCS#11/HSM contra
-> SoftHSM2 real (ver [§12](#12-evolução-prevista)) — nenhum dos dois é
-> uma lacuna de implementação, e sim de exercício/validação do que já
-> existe.
+> cobertura de teste (100% nos três primeiros). Não há requisito
+> funcional "não revisado" nesta base: a validação end-to-end de RF-08
+> (handshake mTLS real) e a cobertura do caminho PKCS#11/HSM contra
+> SoftHSM2 real já foram confirmadas.
 
 ## 11. Casos de teste mínimos de conformidade
 
@@ -879,33 +884,31 @@ casos de teste com material real (autoassinado, gerado em memória via
 `tests/conftest.py::fake_pem_pair`) para carga de PEM, validação de
 certificado e consistência chave–certificado (`test_pem_loader.py`,
 `test_key_certificate_consistency.py`, `test_ssl_context_factory.py`).
-O que ainda não existe é: (a) um handshake TLS/mTLS de verdade contra
-um servidor real com certificado de cliente rejeitado, para validar
-RF-08 além da simulação de `ssl.SSLError`; e (b) a suíte de
-PKCS#11/HSM exercitada com SoftHSM2 presente no ambiente — os 7 testes
-correspondentes (`test_pkcs11_strategy_factory.py`, caso equivalente em
-`test_builder.py`) hoje aparecem como `SKIPPED` por ausência do
-SoftHSM2 no ambiente em que a suíte foi rodada, não por ausência de
-código.
+Dois cenários que antes só existiam simulados já têm cobertura real:
+(a) um handshake TLS/mTLS de verdade contra um servidor loopback com
+certificado de cliente rejeitado, validando RF-08 além da simulação de
+`ssl.SSLError` (`tests/test_error_classifier_real_mtls.py`); e (b) a
+suíte de PKCS#11/HSM (`test_pkcs11_strategy_factory.py`, caso
+equivalente em `test_builder.py`) exercitada contra SoftHSM2 real — os
+7 testes correspondentes passam de fato quando o ambiente tem SoftHSM2
+instalado, e continuam sendo pulados automaticamente (`SKIPPED`), não
+falhando, nos ambientes que não o têm (ver
+[CONTRIBUTING.md](CONTRIBUTING.md#testes-do-caminho-pkcs11hsm-softhsm2)).
 
 ## 12. Evolução prevista
 
 Todos os requisitos funcionais e não funcionais cobertos por este
-documento (RF-01 a RF-19, RNF-01 a RNF-06) estão concluídos e testados
-nesta base de código: `client.SmartTokenClient` e
+documento (RF-01 a RF-19, RNF-01 a RNF-07) estão concluídos, testados
+e documentados nesta base de código: `client.SmartTokenClient` e
 `builder.SmartTokenClientBuilder` compõem `retry.py`, `token_cache.py`,
 `trace.py`, `response_guard.py`, `error_classifier.py`, `discovery.py`,
 `ssl_context_factory.py`, `pem_loader.py`,
 `key_certificate_consistency.py` e `strategy_factory.py` no
-fluxo completo de obtenção de token com TLS/mTLS configurável. O que
-resta é:
+fluxo completo de obtenção de token com TLS/mTLS configurável.
 
-1. **Validação end-to-end do caminho PKCS#11/HSM** — código
-   implementado (`pkcs11_signing_strategy.py`,
-   `strategy_factory.from_pkcs11`) mas com cobertura de teste ainda não
-   confirmada contra SoftHSM2 real (7 testes hoje `SKIPPED` por
-   ambiente, não por ausência de implementação).
-2. **Decisão sobre o `# TODO(duvida)` de `error_classifier.py`** — se a
-   suposição de que `bad_record_mac` cobre o equivalente Python de
-   `AEADBadTagException` (Java) é válida ou se há caso de borda não
-   tratado (afeta o status ⚠️ de RF-08).
+O que resta como pendência genuína é o que já está descrito em
+[RNF-08](#rnf-08--licença-versionamento-e-release): automação de
+release, geração de SBOM e os metadados de publicação
+(`authors`/`classifiers`/`urls`, `__version__`, `CHANGELOG.md`,
+`py.typed`, `NOTICE`) — trabalho de infraestrutura de publicação, não
+de implementação do SDK em si.
