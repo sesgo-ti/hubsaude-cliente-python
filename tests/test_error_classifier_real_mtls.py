@@ -57,8 +57,7 @@ def test_real_unknown_ca_rejection_tls13_is_never_treated_as_retriable(real_mtls
     depender de qual OpenSSL roda a maquina) -- ver
     ``test_real_unknown_ca_rejection_tls13_is_classified_when_surface_is_recognized``,
     abaixo, para a classificacao fina das duas superficies conhecidas
-    (confirmadas com base na fonte de verdade ``.java``, ver
-    topo de ``error_classifier.py``).
+    (ver nota no topo de ``error_classifier.py``).
 
     O que este teste garante, e que *nao* varia por plataforma: a
     conexao nunca e' tratada como retriavel nesse cenario, porque
@@ -83,11 +82,9 @@ def test_real_unknown_ca_rejection_tls13_is_classified_when_surface_is_recognize
 
     - alerta ``unknown ca`` limpo (mesmo fragmento ja coberto para TLS 1.2);
     - ``ssl.SSLEOFError`` com a mensagem "EOF occurred in violation of
-      protocol" -- confirmada nesta rodada, com base na propria fonte de
-      verdade ``.java`` (``ErrorClassifier.java`` / seu teste
-      ``SmartTokenClientCertRejectionTest``), como a superficie OpenSSL do
-      mesmo evento que o JSSE reporta como ``AEADBadTagException`` (ver
-      nota no topo de ``error_classifier.py``).
+      protocol" -- confirmada nesta rodada como a superficie OpenSSL
+      desse mesmo evento de servidor (ver nota no topo de
+      ``error_classifier.py``).
 
     Uma terceira superficie nao mapeada, se aparecer numa plataforma ainda
     nao observada, resulta em ``skip`` explicativo -- nao em falso
