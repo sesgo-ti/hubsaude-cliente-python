@@ -62,8 +62,8 @@ def test_from_pkcs11_generic_key_access_error_raises(softhsm2_token) -> None:  #
     """Cobre o branch ``except Exception`` (nao ``NoSuchKey``) de
     ``from_pkcs11`` ao acessar a chave, com um erro real de hardware: dois
     pares de chave com o mesmo rotulo no token fazem ``session.get_key``
-    levantar ``pkcs11.exceptions.MultipleObjectsReturned`` (confirmado
-    nesta maquina via SoftHSM2 real, sem qualquer monkeypatch)."""
+    levantar ``pkcs11.exceptions.MultipleObjectsReturned``, via SoftHSM2
+    real, sem qualquer monkeypatch."""
     import pkcs11
 
     lib = pkcs11.lib(softhsm2_token["module_path"])
@@ -89,8 +89,8 @@ def test_pkcs11_signing_strategy_sign_wraps_hardware_error(
     usada para construir a estrategia, mas o metodo ``sign`` do objeto de
     chave retornado pela biblioteca (uma instancia comum, nao a classe
     Cython em si) e substituido via ``monkeypatch`` para simular uma falha
-    de hardware -- confirmado nesta maquina que atribuir um atributo de
-    instancia em ``pkcs11.PrivateKey`` funciona (ao contrario de
+    de hardware -- atribuir um atributo de instancia em
+    ``pkcs11.PrivateKey`` funciona normalmente (ao contrario de
     monkeypatch na *classe* de alguns outros objetos da biblioteca)."""
     strategy = strategy_factory.from_pkcs11(
         pkcs11_module_path=softhsm2_token["module_path"],
