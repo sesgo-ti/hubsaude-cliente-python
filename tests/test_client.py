@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 import ssl
 import threading
 import time
@@ -27,7 +28,13 @@ import httpx
 import pytest
 
 from hubsaude_client.builder import HubContext
-from hubsaude_client.client import SmartTokenClient, TokenResult, _ReadersWriterLock
+from hubsaude_client.client import (
+    _SCOPE_LOCK_STRIPES,
+    SmartTokenClient,
+    TokenResult,
+    _normalize_scope,
+    _ReadersWriterLock,
+)
 from hubsaude_client.exceptions import SmartTokenError
 from hubsaude_client.fault_tolerance import FaultToleranceConfig
 from hubsaude_client.token_cache import TokenCacheStrategy
@@ -629,6 +636,33 @@ def test_single_flight_does_not_serialize_distinct_scopes(install_mock_transport
     client.close()
 
 
+def test_scope_lock_striping_bounds_lock_count_for_many_dynamic_scopes(install_mock_transport) -> None:
+    """Mesmo com uma quantidade grande de scopes dinamicos, o numero de
+    locks distintos de single-flight efetivamente usados nao deve crescer
+    sem limite -- deve permanecer <= _SCOPE_LOCK_STRIPES (RF-05 item 3,
+    memoria O(1) independente do numero de scopes observados). O mesmo
+    scope tambem deve sempre selecionar o mesmo lock (determinismo do
+    striping via ``hash(scope) % _SCOPE_LOCK_STRIPES``), pre-requisito
+    para o single-flight funcionar de fato."""
+    install_mock_transport(_token_success_handler())
+    client = SmartTokenClient(**_base_kwargs())
+
+    def lock_for(scope: str) -> threading.Lock:
+        normalized = _normalize_scope(scope)
+        return client._scope_locks[hash(normalized) % _SCOPE_LOCK_STRIPES]
+
+    scopes = [f"system/Resource{i}.rs" for i in range(10_000)]
+    locks_used = {id(lock_for(scope)) for scope in scopes}
+
+    assert len(locks_used) <= _SCOPE_LOCK_STRIPES
+
+    sample_scope = scopes[42]
+    first_lock = lock_for(sample_scope)
+    assert all(lock_for(sample_scope) is first_lock for _ in range(5))  # determinismo
+
+    client.close()
+
+
 # ---------------------------------------------------------------------------
 # Retry em falha transitoria (RF-07)
 # ---------------------------------------------------------------------------
@@ -681,6 +715,44 @@ def test_exhausts_retries_and_raises_smart_token_error(install_mock_transport, m
 
     assert attempts == 2  # nao excede max_retries
     assert isinstance(excinfo.value.__cause__, httpx.ConnectTimeout)
+
+
+def test_retry_warning_logs_the_trace_id_of_the_failed_attempt(
+    install_mock_transport, monkeypatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """O warning emitido a cada tentativa transitoria (RF-07) deve trazer
+    o traceId da MESMA requisicao que falhou -- e um traceId diferente por
+    tentativa, ja que ``TraceContext.generate()`` e chamado a cada volta
+    do laco de retry, nunca reaproveitado entre tentativas."""
+    captured: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.append(request)
+        if len(captured) < 3:
+            raise httpx.ConnectError("connection refused")
+        return httpx.Response(status_code=200, json={"access_token": "tok-ok", "expires_in": 3600})
+
+    install_mock_transport(handler)
+    monkeypatch.setattr("hubsaude_client.client.time.sleep", lambda _seconds: None)
+
+    client = SmartTokenClient(**_base_kwargs())
+
+    with caplog.at_level(logging.WARNING, logger="hubsaude_client.SmartTokenClient"):
+        assert client.obtain_token() == "tok-ok"
+
+    warning_records = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warning_records) == 2  # uma por tentativa falha (attempt < max_retries)
+
+    # traceId enviado de fato no header traceparent das duas requisicoes
+    # que falharam (formato "00-<trace-id>-<span-id>-00", ver trace.py).
+    expected_trace_ids = [req.headers[TraceContext.TRACEPARENT_HEADER].split("-")[1] for req in captured[:2]]
+    # _LOG.warning(msg, attempt, max_retries, client_id, trace.trace_id, last_exc) -> args[3] e' o traceId.
+    logged_trace_ids = [record.args[3] for record in warning_records]
+
+    assert logged_trace_ids == expected_trace_ids
+    assert len(set(logged_trace_ids)) == 2  # trace fresco a cada tentativa, nunca reaproveitado
+
+    client.close()
 
 
 def test_non_200_http_response_is_not_retried(install_mock_transport) -> None:
