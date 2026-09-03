@@ -108,6 +108,7 @@ testpaths = ["tests"]
 # roda no mvn verify/Failsafe) -- ver [testenv:integration] no tox.ini.
 markers = [
     "integration: sobe o simulador real (hubsaude-simulador via subprocess) e fala mTLS real; mais lento, requer JDK + HUBSAUDE_SIMULADOR_JAR",
+    "quarantine: teste isolado por instabilidade/flakiness conhecida, fora da execucao padrao ate ser corrigido; categoria independente de 'integration' -- nenhum teste usa este marker ainda, e' so' infraestrutura de categorizacao.",
 ]
 
 
