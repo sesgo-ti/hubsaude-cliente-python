@@ -780,7 +780,7 @@ def test_tls_protocol_invalid_value_raises_on_context_resolution(
 # signing_strategy() com PKCS#11 -- prova de conexao ponta a ponta.
 #
 # strategy_factory.from_pkcs11 (Task 7) nao tem metodo de conveniencia
-# dedicado no builder (nem o .java original tem -- ver docstring do modulo);
+# dedicado no builder (ver docstring do modulo);
 # e usado via signing_strategy(strategy_factory.from_pkcs11(...)), o mesmo
 # caminho de qualquer SigningStrategy customizada. Este teste roda contra um
 # token SoftHSM2 real (nao mock), provando que o resultado de from_pkcs11 e
