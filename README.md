@@ -341,6 +341,47 @@ openssl rsa -noout -modulus -in chave-privada.pem | openssl md5
 Os dois hashes devem ser idênticos. Para chaves EC, compare a chave
 pública derivada (`openssl ec -pubout`) em vez do *modulus*.
 
+## Teste com credenciais reais (pós-credenciamento)
+
+Toda a suíte de testes desta biblioteca usa material criptográfico
+**sintético** — chaves e certificados autoassinados gerados em memória
+a cada execução (ver `tests/conftest.py`), nunca uma credencial real.
+Essa é uma fronteira deliberada: a biblioteca (e os testes que a
+acompanham) cobrem o *comportamento* do cliente; verificar se uma
+credencial real específica (`client_id` + chave/certificado emitidos no
+credenciamento) efetivamente funciona contra um HubSaúde de verdade é
+responsabilidade de quem integra, feita uma vez, pontualmente, depois
+do credenciamento.
+
+Não há — e não está nos planos haver — uma ferramenta de linha de
+comando própria desta biblioteca para esse teste pontual. Do lado Java,
+esse papel é cumprido por uma ferramenta irmã e independente,
+[`hubsaude-cliente-cli`](https://github.com/sesgo-ti/hubsaude-cliente-cli);
+do lado Python, o caminho é escrever as poucas linhas de código abaixo
+diretamente, usando a própria biblioteca:
+
+```python
+from hubsaude_client.builder import SmartTokenClientBuilder
+
+client = (
+    SmartTokenClientBuilder()
+    .client_id("client-id-do-credenciamento")
+    .fhir_base("https://hub-homolog.saude.go.gov.br/")  # ou .token_endpoint(...)
+    .private_key_pem("/caminho/para/chave-privada-real.pem")
+    .certificate_pem("/caminho/para/certificado-real.pem")
+    .build()
+)
+
+resultado = client.obtain_token_response(scope="system/Patient.rs")
+print(resultado.access_token, resultado.expires_in)
+client.close()
+```
+
+Se preferir rodar isso já dentro do repositório (em vez de um script
+avulso), a suíte de desenvolvimento tem uma categoria de teste pronta
+para isso — marker `real_hub`, opt-in, documentado em
+[`CONTRIBUTING.md`](CONTRIBUTING.md).
+
 ## Resiliência em produção
 
 O cálculo do atraso de *backoff* exponencial entre tentativas está
