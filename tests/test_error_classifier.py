@@ -133,9 +133,8 @@ def test_server_cert_verification_failure_excludes_even_with_alert_text_elsewher
 def test_recognizes_tls13_eof_after_handshake_variant() -> None:
     """Sob TLS 1.3, alguns builds de OpenSSL encerram a conexao sem alerta
     textual reconhecivel quando o servidor rejeita o certificado de
-    cliente apos o ``Finished`` -- confirmado equivalente a
-    ``bad_record_mac``/``AEADBadTagException`` pela fonte de verdade
-    ``.java`` (ver nota no topo de ``error_classifier.py``)."""
+    cliente apos o ``Finished`` (ver nota no topo de
+    ``error_classifier.py``)."""
     exc = ssl.SSLEOFError("EOF occurred in violation of protocol (_ssl.c:1006)")
     assert is_likely_client_certificate_rejection(exc) is True
 
