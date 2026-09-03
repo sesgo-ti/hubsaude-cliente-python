@@ -92,6 +92,49 @@ def fake_ec_pem_pair(tmp_path):
 
 
 @pytest.fixture
+def fake_pkcs1_pem_key(tmp_path):
+    """Chave privada RSA nao criptografada, em formato PKCS#1 tradicional
+    (``-----BEGIN RSA PRIVATE KEY-----``, sem o envelope PKCS#8 usado
+    pelas demais fixtures deste modulo)."""
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    key_path = tmp_path / "test_key_pkcs1.pem"
+    key_path.write_bytes(
+        key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.TraditionalOpenSSL,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+    )
+    return {"key": key_path}
+
+
+@pytest.fixture
+def fake_openssl_legacy_encrypted_pem_key(tmp_path):
+    """Chave privada RSA cifrada com senha conhecida, no formato OpenSSL
+    tradicional (``-----BEGIN RSA PRIVATE KEY-----`` com cabecalho
+    ``Proc-Type: 4,ENCRYPTED``), distinto do PKCS#8 cifrado usado por
+    ``fake_encrypted_pem_key``."""
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    password = b"senha-legado-correta-123"
+    key_path = tmp_path / "test_key_openssl_legacy_encrypted.pem"
+    key_path.write_bytes(
+        key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.TraditionalOpenSSL,
+            encryption_algorithm=serialization.BestAvailableEncryption(password),
+        )
+    )
+    # bytearray (mutavel): pem_loader.load_private_key consome e zera a senha apos o uso.
+    return {"key": key_path, "password": bytearray(password)}
+
+
+@pytest.fixture
 def fake_mismatched_pem_pair(tmp_path, fake_pem_pair):
     """Certificado de uma chave RSA diferente da chave de fake_pem_pair,
     para testar deteccao de par chave/certificado inconsistente."""
@@ -324,7 +367,9 @@ def real_mtls_client_cert_rejection(tmp_path):
     Usada para validar heuristicas de classificacao de erro
     (``error_classifier.is_likely_client_certificate_rejection``) contra
     o comportamento real do OpenSSL, e nao apenas contra mensagens de
-    ``ssl.SSLError`` construidas manualmente no restante da suite.
+    ``ssl.SSLError`` construidas manualmente no restante da suite -- essa
+    cobertura contra handshake real e' uma adicao genuina desta suite,
+    sem equivalente na implementacao de referencia.
     """
     import datetime
     import socket

@@ -28,17 +28,17 @@ espaco).
 O modulo ``ssl`` tambem nao expoe uma excecao propria para falha de tag
 AEAD -- detalhe interno do OpenSSL, nao presente no binding Python.
 Testes com handshake mTLS real (``tests/test_error_classifier_real_mtls.py``,
-nao apenas ``ssl.SSLError`` simulado) confirmaram como essa superficie se
+nao apenas ``ssl.SSLError`` simulado) confirmam como essa superficie se
 manifesta na pratica: sob TLS 1.2, um certificado de cliente com CA
 desconhecida do servidor produz ``ssl.SSLError`` com o alerta
 ``unknown ca`` do lado do cliente. Sob TLS 1.3 (protocolo padrao desta
 lib, ver ``defaults.DEFAULT_TLS_PROTOCOL``), a superficie exata do erro
 que chega ao cliente para o mesmo cenario de rejeicao **varia por
-plataforma/versao do OpenSSL**: em ``OpenSSL 3.0.13`` observou-se
-``ssl.SSLEOFError`` ("EOF occurred in violation of protocol"), sem
-alerta textual reconhecivel; em outra maquina (mesma lib, OpenSSL
-diferente), o mesmo cenario produziu um alerta ``unknown ca`` limpo, ja
-coberto pelo fragmento acima. Essa variante ``ssl.SSLEOFError`` tambem
+plataforma/versao do OpenSSL**: em algumas combinacoes (ex.:
+``OpenSSL 3.0.13``) o cliente recebe ``ssl.SSLEOFError`` ("EOF occurred
+in violation of protocol"), sem alerta textual reconhecivel; em outras,
+o mesmo cenario produz um alerta ``unknown ca`` limpo, ja coberto pelo
+fragmento acima. Essa variante ``ssl.SSLEOFError`` tambem
 passou a ser reconhecida por
 :func:`is_likely_client_certificate_rejection` (fragmento
 ``_TLS13_EOF_AFTER_HANDSHAKE_MESSAGE_FRAGMENT``, restrito ao tipo

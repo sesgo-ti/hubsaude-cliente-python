@@ -69,14 +69,20 @@ def load_private_key(path: Path, password: bytearray | None = None) -> PrivateKe
         A chave privada carregada.
 
     Raises:
-        SmartTokenError: se a chave requer senha nao fornecida, a senha for
-            incorreta, ou o formato for invalido.
+        SmartTokenError: se o arquivo nao puder ser lido (inexistente,
+            sem permissao, ou um diretorio), se a chave requer senha nao
+            fornecida, a senha for incorreta, ou o formato for invalido.
     """
+    try:
+        raw = path.read_bytes()
+    except OSError as exc:
+        clear_password(password)
+        raise SmartTokenError(f"Nao foi possivel ler o arquivo de chave privada: {path}", exc) from exc
     # O conteudo lido do arquivo (que pode ser a propria chave privada em
     # texto claro, quando nao criptografada) e mantido num bytearray
     # mutavel e zerado no finally -- minimiza a janela em que o material de
     # chave fica exposto em heap dump apos o uso.
-    pem_buffer = bytearray(path.read_bytes())
+    pem_buffer = bytearray(raw)
     try:
         return _load_private_key_from_bytes(bytes(pem_buffer), password, str(path))
     finally:
@@ -148,10 +154,14 @@ def load_certificate(path: Path) -> x509.Certificate:
         O certificado X.509, ja validado quanto ao periodo de validade.
 
     Raises:
-        SmartTokenError: se nao for um certificado X.509 valido ou estiver
-            fora do periodo de validade.
+        SmartTokenError: se o arquivo nao puder ser lido (inexistente,
+            sem permissao, ou um diretorio), se nao for um certificado
+            X.509 valido, ou se estiver fora do periodo de validade.
     """
-    pem = path.read_text(encoding="utf-8")
+    try:
+        pem = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise SmartTokenError(f"Nao foi possivel ler o arquivo de certificado: {path}", exc) from exc
     return load_certificate_from_string(pem, str(path))
 
 

@@ -10,6 +10,11 @@ usam ``ssl.SSLError`` simulado), usando
 de producao) para o lado do cliente, contra um servidor loopback que
 exige certificado de cliente de uma CA que ele deliberadamente nao
 confia -- ver ``tests/conftest.py::real_mtls_client_cert_rejection``.
+
+Esta cobertura contra handshake mTLS real e' uma adicao genuina desta
+suite: a implementacao de referencia valida a mesma heuristica apenas
+com excecoes simuladas, sem um teste equivalente contra um handshake de
+verdade.
 """
 
 from __future__ import annotations
@@ -24,11 +29,10 @@ from hubsaude_client.error_classifier import is_likely_client_certificate_reject
 def test_real_unknown_ca_rejection_tls12_is_classified(real_mtls_client_cert_rejection) -> None:
     """Sob TLS 1.2, um certificado de cliente com CA desconhecida do
     servidor produz um ``ssl.SSLError`` com o alerta ``unknown ca`` do
-    lado do cliente -- caso real que nao estava coberto pelos fragmentos
-    de ``error_classifier.py`` antes desta rodada (so' cobria
-    ``certificate_unknown``, um alerta TLS diferente). Este teste teria
-    falhado antes do fragmento ``unknown_ca``/``unknown ca`` ser
-    adicionado.
+    lado do cliente. Teste de regressao: sem o fragmento
+    ``unknown_ca``/``unknown ca`` em ``error_classifier.py``, esse
+    alerta nao seria reconhecido pela heuristica (que cobre
+    ``certificate_unknown``, um alerta TLS diferente, separadamente).
     """
     captured = real_mtls_client_cert_rejection("TLSv1.2")
 
@@ -42,17 +46,15 @@ def test_real_unknown_ca_rejection_tls13_is_never_treated_as_retriable(real_mtls
     lib (``defaults.DEFAULT_TLS_PROTOCOL``) -- sem travar numa suposicao
     de plataforma especifica.
 
-    Achado desta rodada (corrigido apos rodar em duas maquinas
-    diferentes): a superficie exata do ``ssl.SSLError`` que o cliente
+    A superficie exata do ``ssl.SSLError`` que o cliente
     recebe quando o servidor rejeita seu certificado sob TLS 1.3 *varia
-    por plataforma/versao do OpenSSL*. Em ``OpenSSL 3.0.13`` observou-se
+    por plataforma/versao do OpenSSL*: em ``OpenSSL 3.0.13`` observa-se
     ``ssl.SSLEOFError`` ("EOF occurred in violation of protocol"), sem
     nenhum fragmento de alerta reconhecivel -- nesse caso,
     ``is_likely_client_certificate_rejection`` devolve ``False``. Em
-    outra maquina (mesma versao de Python, OpenSSL diferente), o mesmo
-    cenario produziu um alerta ``unknown ca`` limpo -- caso em que, apos
-    o fix desta rodada, ``is_likely_client_certificate_rejection``
-    devolve ``True``. Por isso este teste nao afirma um valor especifico
+    outras combinacoes de plataforma/OpenSSL, o mesmo cenario produz um
+    alerta ``unknown ca`` limpo, caso em que
+    ``is_likely_client_certificate_rejection`` devolve ``True``. Por isso este teste nao afirma um valor especifico
     de :func:`is_likely_client_certificate_rejection` (faria o teste
     depender de qual OpenSSL roda a maquina) -- ver
     ``test_real_unknown_ca_rejection_tls13_is_classified_when_surface_is_recognized``,
@@ -82,9 +84,8 @@ def test_real_unknown_ca_rejection_tls13_is_classified_when_surface_is_recognize
 
     - alerta ``unknown ca`` limpo (mesmo fragmento ja coberto para TLS 1.2);
     - ``ssl.SSLEOFError`` com a mensagem "EOF occurred in violation of
-      protocol" -- confirmada nesta rodada como a superficie OpenSSL
-      desse mesmo evento de servidor (ver nota no topo de
-      ``error_classifier.py``).
+      protocol", a outra superficie OpenSSL conhecida desse mesmo
+      evento de servidor (ver nota no topo de ``error_classifier.py``).
 
     Uma terceira superficie nao mapeada, se aparecer numa plataforma ainda
     nao observada, resulta em ``skip`` explicativo -- nao em falso

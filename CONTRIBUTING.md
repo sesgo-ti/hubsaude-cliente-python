@@ -132,6 +132,41 @@ A resolução do caminho do JAR (variável de ambiente vs. fallback) tem
 teste unitário dedicado, sem depender de JDK, em
 `tests/test_hubsaude_simulator_helper.py`.
 
+## Teste contra um HubSaúde real (`real_hub`, opt-in)
+
+Diferente da suíte de integração acima (que sobe o `hubsaude-simulador`
+localmente), `tests/test_smart_token_client_real_hub.py` (marcados
+`@pytest.mark.real_hub`) fala com um HubSaúde **real** — via mTLS de
+verdade, usando uma credencial (`client_id` + chave/certificado) já
+emitida no credenciamento. Ver [Teste com credenciais
+reais](README.md#teste-com-credenciais-reais-pós-credenciamento) no
+`README.md` para o contexto de por que esse teste existe (a lib não tem
+— nem terá — uma ferramenta CLI própria para isso).
+
+Nunca disparado por `tox -e integration` nem pela suíte padrão — só
+roda com `pytest -m real_hub`, e mesmo assim fica `SKIPPED` sem as
+variáveis de ambiente `HUBSAUDE_REAL_CLIENT_ID`,
+`HUBSAUDE_REAL_KEY_PATH` e `HUBSAUDE_REAL_CERT_PATH` (mais opcionais —
+`HUBSAUDE_REAL_FHIR_BASE`, `HUBSAUDE_REAL_IG`/`HUBSAUDE_REAL_IG_VERSAO`,
+`HUBSAUDE_REAL_SCOPE`, `HUBSAUDE_REAL_TLS_PROTOCOL` — ver docstring do
+módulo para o papel de cada uma):
+
+```bash
+export HUBSAUDE_REAL_CLIENT_ID=...
+export HUBSAUDE_REAL_KEY_PATH=/caminho/para/chave-privada-real.pem
+export HUBSAUDE_REAL_CERT_PATH=/caminho/para/certificado-real.pem
+pytest -m real_hub -v
+```
+
+## Categoria `quarantine`
+
+Marker reservado para isolar um teste especificamente instável
+(flakiness conhecida) da execução padrão, sem misturá-lo com
+`integration` (que exclui por *dependência de sistema*, não por
+instabilidade). Nenhum teste usa este marker hoje — é infraestrutura de
+categorização disponível para quando for necessário, não uma pendência
+de implementação.
+
 ## Padrões técnicos
 
 - **Python 3.12**. Build com **pip + venv** (`python -m venv .venv && pip install -e ".[dev]"`_)

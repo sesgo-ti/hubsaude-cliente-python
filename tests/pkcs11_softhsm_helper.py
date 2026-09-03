@@ -1,6 +1,10 @@
 """Helper de setup/teardown de um slot SoftHSM2 efemero para os testes de
 strategy_factory.from_pkcs11. Usa softhsm2-util (instalado no ambiente) para
-criar um token isolado por execucao de teste, em um diretorio temporario."""
+criar um token isolado por execucao de teste, em um diretorio temporario.
+
+O caminho PKCS#11/HSM desta biblioteca e' exercitado contra um token
+SoftHSM2 real (nao apenas mocks) -- cobertura que nao existe na
+implementacao de referencia para este ponto especifico."""
 
 from __future__ import annotations
 
@@ -35,38 +39,36 @@ def _pkcs11_lib(tmp_path_factory: pytest.TempPathFactory) -> Iterator[object]:
     """Objeto ``pkcs11.lib(...)`` unico, compartilhado por toda a sessao de
     testes.
 
-    Achado de ambiente (confirmado nesta maquina, nao previsto no plano
-    original): a biblioteca PKCS#11 subjacente (``libsofthsm2.so``) so le
+    A biblioteca PKCS#11 subjacente (``libsofthsm2.so``) so' le
     ``SOFTHSM2_CONF`` e enumera tokens na primeira chamada de
-    ``C_Initialize`` dentro do processo -- esse estado e global ao
+    ``C_Initialize`` dentro do processo -- esse estado e' global ao
     *processo*, nao a instancia Python de ``pkcs11.lib``. Criar um novo
-    ``pkcs11.lib(mesmo_caminho)`` em cada teste (como o pseudocodigo
-    original assumia) faz com que testes subsequentes enxerguem o token do
-    *primeiro* teste (mesmo apontando para um ``SOFTHSM2_CONF`` novo),
-    causando ``NoSuchToken`` ou ``UserAlreadyLoggedIn`` (sessao do teste
-    anterior, nunca fechada por design -- ``Pkcs11SigningStrategy`` mantem a
-    sessao viva pelo seu tempo de vida). A correcao e reciclar a *mesma*
-    instancia de ``lib`` via ``finalize()`` + ``reinitialize()`` a cada
-    teste, o que forca a biblioteca a reler ``SOFTHSM2_CONF`` corrente --
-    testado ponta a ponta nesta maquina, inclusive com uma sessao anterior
-    deixada aberta (cenario real do ``Pkcs11SigningStrategy``).
+    ``pkcs11.lib(mesmo_caminho)`` a cada teste nao reseta esse estado:
+    testes subsequentes enxergariam o token do *primeiro* teste (mesmo
+    apontando para um ``SOFTHSM2_CONF`` novo), causando ``NoSuchToken`` ou
+    ``UserAlreadyLoggedIn`` (sessao do teste anterior, nunca fechada por
+    design -- ``Pkcs11SigningStrategy`` mantem a sessao viva pelo seu
+    tempo de vida). A correcao e' reciclar a *mesma* instancia de ``lib``
+    via ``finalize()`` + ``reinitialize()`` a cada teste, o que forca a
+    biblioteca a reler o ``SOFTHSM2_CONF`` corrente -- inclusive quando
+    uma sessao anterior ficou aberta (cenario real do
+    ``Pkcs11SigningStrategy``).
 
-    Segundo achado de ambiente (esta rodada): a *primeira* ``C_Initialize``
-    -- a que acontece aqui, antes de qualquer teste rodar -- le qualquer
-    ``SOFTHSM2_CONF`` que ja estiver no ambiente do processo pytest ou,
-    na ausencia dele, a config padrao do sistema instalada pelo pacote
-    (``/etc/softhsm2.conf``), cujo ``directories.tokendir`` (geralmente
-    ``/var/lib/softhsm2/tokens/``) costuma so' ser gravavel pelo usuario
-    ``root``/grupo ``softhsm``. Num usuario comum sem esse grupo, isso
-    faz ``pkcs11.lib(module_path)`` falhar com
-    ``pkcs11.exceptions.GeneralError`` na fixture de sessao, antes mesmo
-    do primeiro teste comecar -- nao e' um problema de instalacao do
-    SoftHSM2 em si, e' a primeira inicializacao apontando pra um
-    diretorio que este usuario nao pode acessar. A correcao e' apontar
-    ``SOFTHSM2_CONF`` para um diretorio proprio, gravavel e efemero
-    (``tmp_path_factory``, escopo de sessao) *antes* dessa primeira
-    inicializacao, restaurando a variavel de ambiente logo em seguida --
-    o diretorio real usado por cada teste continua sendo o de
+    A *primeira* ``C_Initialize`` -- a que acontece aqui, antes de
+    qualquer teste rodar -- le qualquer ``SOFTHSM2_CONF`` que ja estiver
+    no ambiente do processo pytest ou, na ausencia dele, a config padrao
+    do sistema instalada pelo pacote (``/etc/softhsm2.conf``), cujo
+    ``directories.tokendir`` (geralmente ``/var/lib/softhsm2/tokens/``)
+    costuma so' ser gravavel pelo usuario ``root``/grupo ``softhsm``. Num
+    usuario comum sem esse grupo, isso faz ``pkcs11.lib(module_path)``
+    falhar com ``pkcs11.exceptions.GeneralError`` na fixture de sessao,
+    antes mesmo do primeiro teste comecar -- nao e' um problema de
+    instalacao do SoftHSM2 em si, e' a primeira inicializacao apontando
+    pra um diretorio que este usuario nao pode acessar. A correcao e'
+    apontar ``SOFTHSM2_CONF`` para um diretorio proprio, gravavel e
+    efemero (``tmp_path_factory``, escopo de sessao) *antes* dessa
+    primeira inicializacao, restaurando a variavel de ambiente logo em
+    seguida -- o diretorio real usado por cada teste continua sendo o de
     :func:`softhsm2_token`, que troca essa variavel de novo e recicla
     esta mesma instancia via ``finalize()``/``reinitialize()``.
     """
