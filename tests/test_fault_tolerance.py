@@ -53,6 +53,42 @@ def test_invalid_max_retries_falls_back_to_default(max_retries: int) -> None:
     assert config.max_retries == DEFAULT_MAX_RETRIES
 
 
+@pytest.mark.parametrize("assertion_ttl_seconds", [1, 60, 120])
+def test_valid_assertion_ttl_is_preserved(assertion_ttl_seconds: int) -> None:
+    config = _config(assertion_ttl_seconds=assertion_ttl_seconds, token_cache_margin_seconds=30, max_retries=3)
+    assert config.assertion_ttl_seconds == assertion_ttl_seconds
+
+
+@pytest.mark.parametrize("token_cache_margin_seconds", [1, 30, 60])
+def test_valid_token_cache_margin_seconds_is_preserved(token_cache_margin_seconds: int) -> None:
+    config = _config(assertion_ttl_seconds=60, token_cache_margin_seconds=token_cache_margin_seconds, max_retries=3)
+    assert config.token_cache_margin_seconds == token_cache_margin_seconds
+
+
+@pytest.mark.parametrize("max_retries", [3, 5, 10])
+def test_valid_max_retries_is_preserved(max_retries: int) -> None:
+    config = _config(assertion_ttl_seconds=60, token_cache_margin_seconds=30, max_retries=max_retries)
+    assert config.max_retries == max_retries
+
+
+@pytest.mark.parametrize("assertion_ttl_seconds", [3600, 86400])
+def test_big_valid_assertion_ttl_is_preserved(assertion_ttl_seconds: int) -> None:
+    config = _config(assertion_ttl_seconds=assertion_ttl_seconds, token_cache_margin_seconds=30, max_retries=3)
+    assert config.assertion_ttl_seconds == assertion_ttl_seconds
+
+
+@pytest.mark.parametrize("token_cache_margin_seconds", [3600, 86400])
+def test_big_valid_token_cache_margin_seconds_is_preserved(token_cache_margin_seconds: int) -> None:
+    config = _config(assertion_ttl_seconds=60, token_cache_margin_seconds=token_cache_margin_seconds, max_retries=3)
+    assert config.token_cache_margin_seconds == token_cache_margin_seconds
+
+
+@pytest.mark.parametrize("max_retries", [100, 1000])
+def test_big_valid_max_retries_is_preserved(max_retries: int) -> None:
+    config = _config(assertion_ttl_seconds=60, token_cache_margin_seconds=30, max_retries=max_retries)
+    assert config.max_retries == max_retries
+
+
 def test_is_frozen_dataclass() -> None:
     config = _config(assertion_ttl_seconds=60, token_cache_margin_seconds=30, max_retries=3)
     with pytest.raises(AttributeError):
