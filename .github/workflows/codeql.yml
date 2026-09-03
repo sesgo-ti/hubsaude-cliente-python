@@ -11,7 +11,6 @@ on:
 permissions:
   actions: read
   contents: read
-  security-events: write
 
 jobs:
   analyze:
@@ -21,4 +20,16 @@ jobs:
       - uses: github/codeql-action/init@v4
         with:
           languages: python
+      # upload: false -- este repositorio e' privado, e o upload de
+      # resultados pra aba "Security" do GitHub (code scanning) exige
+      # GitHub Advanced Security habilitado no repositorio/organizacao,
+      # o que nao esta disponivel hoje (falha com "Advanced Security
+      # must be enabled for this repository to use code scanning").
+      # A analise em si roda normalmente -- so' o upload fica desligado.
+      # Quando o GHAS for habilitado (ou o repositorio se tornar
+      # publico, como o hubsaude-cliente-java), remover esta flag (ou
+      # trocar por "always"/"failure-only") restaura a integracao com o
+      # Security tab e as anotacoes de PR.
       - uses: github/codeql-action/analyze@v4
+        with:
+          upload: false
