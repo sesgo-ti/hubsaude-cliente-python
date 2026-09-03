@@ -1,12 +1,10 @@
 """Helper de disponibilidade e ciclo de vida do simulador
 ``hubsaude-simulador`` (servidor de autorização SMART Backend Services
-simulado, empacotado como JAR executável Spring Boot) para a suíte de
+simulado, empacotado como JAR executável) para a suíte de
 testes de integração (``tests/test_smart_token_client_integration.py``).
 
-Mesma estratégia usada pelos testes de integração ``.java``
-(``SmartTokenClientJarIT``): sobe o **mesmo** JAR via processo filho
-(``subprocess.Popen`` — equivalente Python do ``ProcessBuilder`` do
-Java), numa porta TCP livre, e aguarda o health-check em
+Sobe o JAR via processo filho (``subprocess.Popen``), numa porta TCP
+livre, e aguarda o health-check em
 ``/.well-known/smart-configuration`` responder ``200`` antes de liberar
 os testes.
 
@@ -20,11 +18,9 @@ fallback, ver :func:`simulator_jar_path`):
    a variável a cada sessão de shell (não versionado, ver
    ``.gitignore``).
 
-Diferente do lado Java (que resolve o JAR via Maven/classpath —
-``target/simulator/...`` ou dependência de teste resolvida via
-``~/.m2``), o lado Python não tem equivalente de gerenciador de
-dependência para artefatos Java; a variável de ambiente (ou o caminho
-de conveniência) é a forma mais simples e explícita de apontar para o
+Este repositório não tem um gerenciador de dependência para artefatos
+externos como este JAR; a variável de ambiente (ou o caminho de
+conveniência) é a forma mais simples e explícita de apontar para o
 mesmo artefato nos ambientes (dev local e CI) onde a suíte roda.
 
 Segue o mesmo padrão já usado por ``tests/pkcs11_softhsm_helper.py``
@@ -51,7 +47,7 @@ import httpx
 from cryptography import x509
 
 #: Nome da variável de ambiente que aponta para o JAR executável do
-#: hubsaude-simulador (Spring Boot). Ver docstring do módulo.
+#: hubsaude-simulador. Ver docstring do módulo.
 ENV_VAR_SIMULATOR_JAR: Final[str] = "HUBSAUDE_SIMULADOR_JAR"
 
 #: Caminho de conveniência checado quando ``ENV_VAR_SIMULATOR_JAR`` não
@@ -62,12 +58,10 @@ ENV_VAR_SIMULATOR_JAR: Final[str] = "HUBSAUDE_SIMULADOR_JAR"
 #: via ``monkeypatch.setattr``, sem depender de filesystem real.
 _LOCAL_JAR_FALLBACK: Final[Path] = Path(__file__).resolve().parent.parent / ".simulator" / "hubsaude-simulador.jar"
 
-#: Caminho do documento de descoberta SMART, usado como health-check
-#: (mesmo endpoint usado por ``SmartTokenClientJarIT.waitForSimulator``).
+#: Caminho do documento de descoberta SMART, usado como health-check.
 _HEALTH_PATH: Final[str] = "/.well-known/smart-configuration"
 
-#: Tentativas/atraso padrão do polling de health-check (espelha
-#: ``maxAttempts``/``delayMs`` de ``SmartTokenClientJarIT.java``).
+#: Tentativas/atraso padrão do polling de health-check.
 _DEFAULT_MAX_ATTEMPTS: Final[int] = 60
 _DEFAULT_DELAY_SECONDS: Final[float] = 1.0
 
@@ -106,8 +100,7 @@ def simulator_available() -> bool:
 
 
 def allocate_free_port() -> int:
-    """Aloca uma porta TCP livre no host (equivalente Python de
-    ``allocateFreePort()``/``new ServerSocket(0)`` do lado Java)."""
+    """Aloca uma porta TCP livre no host."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.bind(("127.0.0.1", 0))
@@ -135,8 +128,7 @@ class SimulatorProcess:
         return self._process.poll() is None
 
     def stop(self, timeout: float = 10.0) -> None:
-        """Encerra o processo do simulador (equivalente a
-        ``pararSimulador``/``@AfterAll`` do lado Java): pede término
+        """Encerra o processo do simulador: pede término
         gracioso, aguarda até ``timeout`` segundos, força o kill se
         necessário. Idempotente — chamadas extras são no-op.
         """
@@ -154,9 +146,6 @@ def start_simulator(port: int | None = None) -> SimulatorProcess:
     """Sobe o simulador via ``subprocess.Popen`` do JAR localizado por
     :func:`simulator_jar_path`, numa porta livre (ou na porta informada),
     e aguarda o health-check responder antes de retornar.
-
-    Equivalente Python de ``SmartTokenClientJarIT.startJarSimulator()`` +
-    ``waitForSimulator()``.
 
     Args:
         port: porta TCP a usar; quando ``None``, aloca uma porta livre
@@ -204,8 +193,7 @@ def start_simulator(port: int | None = None) -> SimulatorProcess:
         _wait_until_ready(simulator)
     except Exception:
         # Nao deixa um processo filho orfao para tras se o health-check
-        # nunca ficar verde (equivalente ao processo nao ser "esquecido"
-        # mesmo quando @BeforeAll falha do lado Java).
+        # nunca ficar verde.
         simulator.stop()
         raise
     return simulator
@@ -213,8 +201,7 @@ def start_simulator(port: int | None = None) -> SimulatorProcess:
 
 def _drain_output_in_background(process: "subprocess.Popen[str]") -> None:
     """Consome o stdout/stderr combinados do processo numa thread daemon,
-    para o buffer do subprocess nunca encher e travar o simulador
-    (equivalente a ``outputThread`` em ``SmartTokenClientJarIT.java``)."""
+    para o buffer do subprocess nunca encher e travar o simulador."""
 
     def _drain() -> None:
         assert process.stdout is not None
@@ -232,13 +219,12 @@ def _wait_until_ready(
 ) -> None:
     """Aguarda o health-check (``/.well-known/smart-configuration``)
     responder ``200``, verificando a cada tentativa se o processo ainda
-    está vivo (equivalente a ``waitForSimulator`` do lado Java)."""
+    está vivo."""
     health_url = simulator.base_url + _HEALTH_PATH
     # verify=False: trust-all temporario, so' para o polling do
     # health-check -- o certificado real do simulador ainda nao foi
     # extraido neste ponto (isso e feito por extract_server_certificate,
-    # depois que o simulador ja esta de pe). Mesmo papel de
-    # TestSslContextFactory.buildTrustAllSslContext no lado Java.
+    # depois que o simulador ja esta de pe).
     with httpx.Client(verify=False, timeout=5.0) as client:  # noqa: S501 (trust-all deliberado, so' health-check local)
         for attempt in range(1, max_attempts + 1):
             if not simulator.is_alive():
@@ -262,8 +248,6 @@ def extract_server_certificate(host: str, port: int, timeout: float = 5.0) -> x5
     verificação desabilitada temporariamente (trust-all), para depois
     confiar nele "de verdade" via
     ``hubsaude_client.ssl_context_factory.build_ssl_context(trusted_cert=...)``.
-
-    Equivalente Python de ``SmartTokenClientJarIT.extractServerCertificate``.
 
     Args:
         host: hostname do servidor (ex.: ``"localhost"``).
