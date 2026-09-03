@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [develop]
+  pull_request:
+    branches: [develop]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Instalar tox
+        run: pip install tox
+      - name: Testes e cobertura
+        run: tox -e py312 -- --cov-report=xml:coverage.xml --junitxml=junit.xml
+      - name: Lint, formatação e checagem de tipos
+        run: tox -e lint
+      - name: Dependências e SAST
+        run: tox -e security
+      - name: Regras arquiteturais
+        run: tox -e archrules
+      - name: Publicar relatórios de testes
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-reports
+          path: |
+            junit.xml
+            coverage.xml
+          if-no-files-found: ignore

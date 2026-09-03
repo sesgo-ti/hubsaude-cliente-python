@@ -54,9 +54,11 @@ licença do projeto, conforme o texto integral do DCO. Commits sem
    tox
    ```
    Isso roda a suíte de testes (`py312`, cobertura mínima de 85%), lint
-   (`lint`) e checagem de dependências/SAST (`security`) — os mesmos
-   três ambientes usados no CI (`envlist` padrão do `tox.ini`). Sem
-   `tox`, equivalente manual:
+   (`lint`) e checagem de dependências/SAST (`security`) — o `envlist`
+   padrão do `tox.ini`. O CI (`.github/workflows/ci.yml`) roda esses
+   três mais `archrules` (regras arquiteturais, não incluído no
+   `envlist` padrão porque é rápido o bastante para não precisar de
+   isolamento de ambiente próprio). Sem `tox`, equivalente manual:
    ```bash
    pytest --cov=hubsaude_client --cov-report=term-missing --cov-fail-under=85
    ```
