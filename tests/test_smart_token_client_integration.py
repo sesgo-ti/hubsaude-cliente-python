@@ -1,29 +1,24 @@
 """Testes de integração do ``SmartTokenClient`` contra o simulador real
-(``hubsaude-simulador``) -- sobe um processo real (via ``subprocess``,
-mesmo JAR usado pelo lado ``.java``), fala TLS/mTLS real, faz chamadas
-HTTP reais.
+(``hubsaude-simulador``) -- sobe um processo real (via ``subprocess``),
+fala TLS/mTLS real, faz chamadas HTTP reais.
 
-Tradução (não recriação) de ``SmartTokenClientIntegrationTestBase.java``
-+ ``SmartTokenClientJarIT.java`` -- ver
-``roadmap-testes-integracao-java-para-python.md`` (raiz do repositório
-no momento da tradução) para o mapeamento teste-a-teste completo e as
-decisões de tradução (estratégia do simulador via ``subprocess`` do
-mesmo JAR, localizado via ``HUBSAUDE_SIMULADOR_JAR``; client_assertion
-cru montado à mão com ``cryptography``, sem dependência nova).
+Sobe o simulador via ``subprocess`` a partir do JAR localizado por
+``HUBSAUDE_SIMULADOR_JAR`` (ou pelo caminho de conveniência, ver
+``tests/hubsaude_simulator_helper.py``); o ``client_assertion`` cru dos
+testes 10-14 (caracterização do elemento ``kid``, abaixo) é montado à
+mão com ``cryptography``, sem dependência nova -- ver
+``tests/raw_client_assertion_helper.py``.
 
-Diferente do lado Java (``extends SmartTokenClientIntegrationTestBase``
-+ subclasse concreta ``SmartTokenClientJarIT``, necessário porque JUnit
-precisa de uma classe para portar ``@BeforeAll``/``@BeforeEach``), este
-módulo não replica herança de classe de teste: os 14 casos são funções
-de teste normais, e tudo que no ``.java`` é ``@BeforeAll``/``@BeforeEach``
-vira fixture pytest (``simulator``/``client_credentials``/
-``register_test_client`` abaixo).
+Os 14 casos são funções de teste normais; a infraestrutura de
+setup/teardown (subir/derrubar o simulador, gerar e registrar as
+credenciais de teste) fica em fixtures pytest de escopo module/autouse
+(``simulator``/``client_credentials``/``register_test_client`` abaixo).
 
 Pré-requisitos para esta suíte rodar (senão os testes são ``SKIPPED``,
 não falham):
 
 - Java 21+ no ``PATH``;
-- o JAR executável (Spring Boot) do ``hubsaude-simulador``, localizado
+- o JAR executável do ``hubsaude-simulador``, localizado
   via ``HUBSAUDE_SIMULADOR_JAR`` (variável de ambiente) ou, na
   ausência dela, via ``.simulator/hubsaude-simulador.jar`` na raiz do
   repositório (caminho de conveniência) — ver
@@ -77,22 +72,19 @@ pytestmark = [
     ),
 ]
 
-#: Mesmos scopes liberados para o cliente de teste em toda a suíte
-#: (equivalente a ``ALLOWED_SCOPES`` em ``SmartTokenClientIntegrationTestBase.java``).
+#: Mesmos scopes liberados para o cliente de teste em toda a suíte.
 ALLOWED_SCOPES: str = "system/Patient.rs system/Observation.rs"
 
 
 # ============================================================
-# Fixtures de infraestrutura (equivalentes a @BeforeAll/@BeforeEach)
+# Fixtures de infraestrutura (setup/teardown da suíte)
 # ============================================================
 
 
 @dataclass(frozen=True)
 class SimulatorInfo:
     """URL base e material de confiança do simulador em execução, já
-    prontos para uso pelos testes (equivalente aos campos
-    ``simulatorCert``/``simulatorSslContext`` protegidos de
-    ``SmartTokenClientIntegrationTestBase.java``)."""
+    prontos para uso pelos testes."""
 
     base_url: str
     cert: x509.Certificate
@@ -113,11 +105,10 @@ class SimulatorInfo:
 
 @pytest.fixture(scope="module")
 def simulator() -> Iterator[SimulatorInfo]:
-    """Sobe o simulador uma única vez por módulo (equivalente a
-    ``@BeforeAll iniciarSimulador``): aloca porta livre, sobe o JAR,
-    extrai o certificado do servidor e monta o ``ssl.SSLContext`` de
-    confiança nele. Derruba o processo ao final do módulo (equivalente
-    a ``@AfterAll pararSimulador``).
+    """Sobe o simulador uma única vez por módulo: aloca porta livre,
+    sobe o JAR, extrai o certificado do servidor e monta o
+    ``ssl.SSLContext`` de confiança nele. Derruba o processo ao final
+    do módulo.
     """
     process: SimulatorProcess = start_simulator()
     try:
@@ -132,8 +123,7 @@ def simulator() -> Iterator[SimulatorInfo]:
 class ClientCredentials:
     """Credenciais (chave privada + certificado autoassinado) do
     cliente de teste, geradas uma vez por módulo e registradas no
-    simulador antes de cada teste (equivalente a
-    ``gerarCredenciais``/``@BeforeEach registrarClienteNoSimulador``)."""
+    simulador antes de cada teste."""
 
     client_id: str
     key_path: Path
@@ -146,8 +136,7 @@ class ClientCredentials:
 @pytest.fixture(scope="module")
 def client_credentials(tmp_path_factory: pytest.TempPathFactory) -> ClientCredentials:
     """Gera credenciais de teste (par de chaves RSA + certificado
-    autoassinado) em disco, uma vez por módulo -- equivalente Python de
-    ``gerarCredenciais(tempDir)`` (``.java``)."""
+    autoassinado) em disco, uma vez por módulo."""
     client_id = f"integration-test-client-{uuid.uuid4()}"
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
@@ -189,13 +178,11 @@ def client_credentials(tmp_path_factory: pytest.TempPathFactory) -> ClientCreden
 
 @pytest.fixture(autouse=True)
 def register_test_client(simulator: SimulatorInfo, client_credentials: ClientCredentials) -> None:
-    """Registra o cliente de teste no simulador antes de cada teste
-    (equivalente a ``@BeforeEach registrarClienteNoSimulador``).
+    """Registra o cliente de teste no simulador antes de cada teste.
 
-    ``409`` (já registrado) é aceito como sucesso, assim como no lado
-    Java -- o registro é idempotente por design desta suíte, já que
-    ``client_credentials`` é reaproveitado por todos os testes do
-    módulo.
+    ``409`` (já registrado) é aceito como sucesso -- o registro é
+    idempotente por design desta suíte, já que ``client_credentials``
+    é reaproveitado por todos os testes do módulo.
     """
     payload = {
         "client_id": client_credentials.client_id,
@@ -237,7 +224,7 @@ def _builder(
 
 def test_obtem_token_com_sucesso(simulator: SimulatorInfo, client_credentials: ClientCredentials) -> None:
     """Fluxo feliz completo: client_assertion assinado -> mTLS -> token
-    emitido. Traduz ``deveObterTokenComSucesso`` (``.java``)."""
+    emitido."""
     with _builder(simulator, client_credentials).build() as client:
         access_token = client.obtain_token("system/Patient.rs")
 
@@ -246,16 +233,14 @@ def test_obtem_token_com_sucesso(simulator: SimulatorInfo, client_credentials: C
 
 
 def test_falha_com_scope_nao_permitido(simulator: SimulatorInfo, client_credentials: ClientCredentials) -> None:
-    """Simulador rejeita scope fora do ``allowed_scopes`` do registro.
-    Traduz ``deveFalharComScopeNaoPermitido`` (``.java``)."""
+    """Simulador rejeita scope fora do ``allowed_scopes`` do registro."""
     with _builder(simulator, client_credentials).build() as client:
         with pytest.raises(SmartTokenError, match="scope"):
             client.obtain_token("system/Encounter.rs")
 
 
 def test_reutiliza_token_do_cache(simulator: SimulatorInfo, client_credentials: ClientCredentials) -> None:
-    """Cache de token evita nova chamada de rede. Traduz
-    ``deveReutilizarTokenDoCache`` (``.java``)."""
+    """Cache de token evita nova chamada de rede."""
     builder = _builder(simulator, client_credentials).enable_token_cache(True).token_cache_margin_seconds(30)
 
     with builder.build() as client:
@@ -267,8 +252,7 @@ def test_reutiliza_token_do_cache(simulator: SimulatorInfo, client_credentials: 
 
 
 def test_tokens_diferentes_por_scope(simulator: SimulatorInfo, client_credentials: ClientCredentials) -> None:
-    """Cache é por-escopo, não global. Traduz
-    ``deveObterTokensDiferentesParaScopesDiferentes`` (``.java``)."""
+    """Cache é por-escopo, não global."""
     builder = _builder(simulator, client_credentials).enable_token_cache(True)
 
     with builder.build() as client:
@@ -279,8 +263,7 @@ def test_tokens_diferentes_por_scope(simulator: SimulatorInfo, client_credential
 
 
 def test_invalida_cache_e_obtem_novo_token(simulator: SimulatorInfo, client_credentials: ClientCredentials) -> None:
-    """Invalidação manual de cache força nova emissão. Traduz
-    ``deveInvalidarCacheEObterNovoToken`` (``.java``)."""
+    """Invalidação manual de cache força nova emissão."""
     builder = _builder(simulator, client_credentials).enable_token_cache(True)
     scope = "system/Patient.rs"
 
@@ -296,8 +279,7 @@ def test_invalida_cache_e_obtem_novo_token(simulator: SimulatorInfo, client_cred
 
 
 def test_falha_com_client_id_nao_registrado(simulator: SimulatorInfo, client_credentials: ClientCredentials) -> None:
-    """``client_id`` desconhecido é rejeitado pelo simulador. Traduz
-    ``deveFalharComClientIdNaoRegistrado`` (``.java``)."""
+    """``client_id`` desconhecido é rejeitado pelo simulador."""
     builder = _builder(simulator, client_credentials, client_id="cliente-inexistente-xyz")
 
     with builder.build() as client:
@@ -306,8 +288,7 @@ def test_falha_com_client_id_nao_registrado(simulator: SimulatorInfo, client_cre
 
 
 def test_funciona_com_multiplos_scopes(simulator: SimulatorInfo, client_credentials: ClientCredentials) -> None:
-    """Múltiplos scopes num único pedido de token. Traduz
-    ``deveFuncionarComMultiplosScopes`` (``.java``)."""
+    """Múltiplos scopes num único pedido de token."""
     with _builder(simulator, client_credentials).build() as client:
         access_token = client.obtain_token("system/Patient.rs system/Observation.rs")
 
@@ -316,8 +297,7 @@ def test_funciona_com_multiplos_scopes(simulator: SimulatorInfo, client_credenti
 
 def test_respeita_timeout_configurado(simulator: SimulatorInfo, client_credentials: ClientCredentials) -> None:
     """Timeout de HTTP configurado é respeitado ponta a ponta (fluxo
-    feliz completa dentro do timeout). Traduz
-    ``deveRespeitarTimeoutConfigurado`` (``.java``)."""
+    feliz completa dentro do timeout)."""
     builder = (
         _builder(simulator, client_credentials)
         .connect_timeout(timedelta(seconds=5))
@@ -333,8 +313,7 @@ def test_respeita_timeout_configurado(simulator: SimulatorInfo, client_credentia
 def test_obtem_token_via_discovery(simulator: SimulatorInfo, client_credentials: ClientCredentials) -> None:
     """Descoberta de ``token_endpoint`` via
     ``.well-known/smart-configuration`` real (``fhir_base`` em vez de
-    ``token_endpoint`` explícito). Traduz ``deveObterTokenUsandoDiscovery``
-    (``.java``)."""
+    ``token_endpoint`` explícito)."""
     builder = (
         SmartTokenClientBuilder()
         .fhir_base(simulator.base_url)
@@ -369,7 +348,7 @@ def test_obtem_token_via_discovery(simulator: SimulatorInfo, client_credentials:
 #
 # Se algum destes testes falhar após atualização do simulador, o
 # comportamento do SA quanto ao "kid" mudou -- revisar a documentação e
-# a issue #408 (mesma nota do ``.java`` original).
+# a issue #408.
 #
 # Diferente dos testes 1-9, estes contornam a API pública
 # (``SmartTokenClient``) de propósito, para inspecionar o protocolo bruto
@@ -379,8 +358,7 @@ def test_obtem_token_via_discovery(simulator: SimulatorInfo, client_credentials:
 def test_access_token_emitido_com_kid_no_header(
     simulator: SimulatorInfo, client_credentials: ClientCredentials
 ) -> None:
-    """SA emite access token com ``kid`` no header JOSE. Traduz
-    ``saEmiteAccessTokenComKidNoHeader`` (``.java``)."""
+    """SA emite access token com ``kid`` no header JOSE."""
     with _builder(simulator, client_credentials).build() as client:
         access_token = client.obtain_token("system/Patient.rs")
 
@@ -391,7 +369,7 @@ def test_access_token_emitido_com_kid_no_header(
 
 def test_kid_do_token_corresponde_ao_jwks(simulator: SimulatorInfo, client_credentials: ClientCredentials) -> None:
     """``kid`` do access token bate com o publicado no JWKS (``/certs``)
-    do simulador. Traduz ``kidDoAccessTokenCorrespondeAoJwks`` (``.java``)."""
+    do simulador."""
     with _builder(simulator, client_credentials).build() as client:
         access_token = client.obtain_token("system/Patient.rs")
 
@@ -403,7 +381,7 @@ def test_kid_do_token_corresponde_ao_jwks(simulator: SimulatorInfo, client_crede
 
 def test_sa_aceita_client_assertion_sem_kid(simulator: SimulatorInfo, client_credentials: ClientCredentials) -> None:
     """SA aceita ``client_assertion`` sem ``kid`` quando há chave única
-    registrada. Traduz ``saAceitaClientAssertionSemKid`` (``.java``)."""
+    registrada."""
     mtls_context = ssl_context_factory.build_ssl_context(
         trusted_cert=simulator.cert,
         client_key=client_credentials.private_key,
@@ -430,8 +408,7 @@ def test_sa_ignora_kid_desconhecido(simulator: SimulatorInfo, client_credentials
     """Caracterização: o SA atual NÃO lê o ``kid`` do ``client_assertion``
     -- valida a assinatura com a única chave registrada do cliente. O
     concern normativo (Sec5.1) prevê 401 invalid_client ("kid
-    desconhecido") quando houver suporte a múltiplas chaves. Traduz
-    ``saIgnoraKidDesconhecidoNoClientAssertion`` (``.java``)."""
+    desconhecido") quando houver suporte a múltiplas chaves."""
     assertion = build_client_assertion(
         client_id=client_credentials.client_id,
         token_endpoint=simulator.token_endpoint,
@@ -457,9 +434,8 @@ def test_sa_ignora_kid_desconhecido(simulator: SimulatorInfo, client_credentials
 
 
 def test_jwks_publica_kid_para_cada_chave(simulator: SimulatorInfo, client_credentials: ClientCredentials) -> None:
-    """Toda chave publicada no JWKS do SA deve ter ``kid``. Traduz
-    ``jwksDoSaPublicaKid`` (``.java`` -- que, apesar do nome, também
-    inspeciona apenas a primeira chave publicada; ver
+    """Toda chave publicada no JWKS do SA deve ter ``kid``. Inspeciona
+    apenas a primeira chave publicada (ver
     ``raw_client_assertion_helper.extract_kid_from_jwks``)."""
     kid = extract_kid_from_jwks(simulator.certs_endpoint, simulator.ssl_context)
 

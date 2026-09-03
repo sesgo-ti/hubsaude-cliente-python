@@ -27,5 +27,5 @@ def test_get_logger_returns_the_same_shared_instance() -> None:
 def test_no_module_creates_a_logger_with_dunder_name() -> None:
     """Contrato de observabilidade: nenhum modulo interno usa
     logging.getLogger(__name__), pois isso quebraria o filtro estavel por
-    "hubsaude_client.SmartTokenClient" herdado do .java original."""
+    "hubsaude_client.SmartTokenClient"."""
     assert get_logger().name != __name__

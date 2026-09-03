@@ -467,7 +467,7 @@ fora da execução padrão (`pytest`/`tox` sem seletor de marker roda com
 Pré-requisitos (ausentes, os testes ficam `SKIPPED`, não falham):
 
 - Java 21+ no `PATH`;
-- o JAR executável (Spring Boot) do `hubsaude-simulador`, localizado de
+- o JAR executável do `hubsaude-simulador`, localizado de
   uma das duas formas (a variável de ambiente tem precedência sobre o
   caminho de conveniência):
 
