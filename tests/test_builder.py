@@ -29,6 +29,7 @@ import pytest
 
 from hubsaude_client import strategy_factory
 from hubsaude_client.builder import HubContext, SmartTokenClientBuilder
+from hubsaude_client.defaults import DEFAULT_TOKEN_CACHE_MARGIN_SECONDS
 from hubsaude_client.exceptions import SmartTokenError
 from hubsaude_client.fault_tolerance import FaultToleranceConfig
 from hubsaude_client.pkcs11_signing_strategy import Pkcs11SigningStrategy
@@ -164,6 +165,24 @@ def test_uses_configured_fault_tolerance_and_cache_settings(
     assert client.fault_tolerance.request_timeout == timedelta(seconds=9)
     assert isinstance(client.token_cache, TokenCacheStrategy)
     assert client.token_cache.size() == 0
+
+
+@pytest.mark.parametrize("token_cache_margin_seconds", [0, -1, -60])
+def test_invalid_token_cache_margin_seconds_is_normalized_the_same_way_in_cache_and_fault_tolerance(
+    fake_smart_token_client_module: type[_FakeSmartTokenClient], token_cache_margin_seconds: int
+) -> None:
+    """Regressao: uma margem de cache invalida (``<= 0``) deve virar o
+    mesmo valor normalizado (``DEFAULT_TOKEN_CACHE_MARGIN_SECONDS``) tanto
+    em ``fault_tolerance.token_cache_margin_seconds`` quanto no
+    ``TokenCacheStrategy`` efetivamente usado pelo cliente. Antes desta
+    correcao, ``build()`` repassava o valor cru (nao normalizado) para
+    ``TokenCacheStrategy``, divergindo do valor ja normalizado em
+    ``FaultToleranceConfig`` -- um token expirado podia ser servido do
+    cache como valido por ate ``|margem|`` segundos apos a expiracao real."""
+    client = _valid_builder().token_cache_margin_seconds(token_cache_margin_seconds).build()
+
+    assert client.fault_tolerance.token_cache_margin_seconds == DEFAULT_TOKEN_CACHE_MARGIN_SECONDS
+    assert client.token_cache._margin_seconds == DEFAULT_TOKEN_CACHE_MARGIN_SECONDS
 
 
 def test_normalizes_jwt_algorithm_case(fake_smart_token_client_module: type[_FakeSmartTokenClient]) -> None:

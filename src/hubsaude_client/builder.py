@@ -343,7 +343,9 @@ class SmartTokenClientBuilder:
         """Define a margem de renovacao antecipada do cache. Padrao: 30s.
 
         Valores ``<= 0`` sao normalizados para o padrao por
-        ``FaultToleranceConfig``.
+        ``FaultToleranceConfig`` -- e :meth:`build` garante que o mesmo
+        valor ja normalizado (nunca o valor cru passado aqui) e' o que
+        chega ao cache de tokens efetivamente usado pelo cliente.
         """
         self._token_cache_margin_seconds = seconds
         return self
@@ -536,7 +538,14 @@ class SmartTokenClientBuilder:
         )
         token_cache = TokenCacheStrategy(
             enabled=self._enable_token_cache,
-            margin_seconds=self._token_cache_margin_seconds,
+            # Usa o valor ja normalizado por FaultToleranceConfig (nunca
+            # self._token_cache_margin_seconds cru): TokenCacheStrategy nao
+            # normaliza internamente (ver docstring de seu __init__), entao
+            # repassar o valor cru aqui reintroduziria margens <= 0 vivas no
+            # cache mesmo quando fault_tolerance ja caiu para o default --
+            # os dois colaboradores devem enxergar exatamente a mesma margem
+            # efetiva.
+            margin_seconds=fault_tolerance.token_cache_margin_seconds,
             max_entries=self._token_cache_max_entries,
         )
 
