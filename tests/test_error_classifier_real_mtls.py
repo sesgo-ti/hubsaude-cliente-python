@@ -10,6 +10,11 @@ usam ``ssl.SSLError`` simulado), usando
 de producao) para o lado do cliente, contra um servidor loopback que
 exige certificado de cliente de uma CA que ele deliberadamente nao
 confia -- ver ``tests/conftest.py::real_mtls_client_cert_rejection``.
+
+Esta cobertura contra handshake mTLS real e' uma adicao genuina desta
+suite: a implementacao de referencia valida a mesma heuristica apenas
+com excecoes simuladas, sem um teste equivalente contra um handshake de
+verdade.
 """
 
 from __future__ import annotations

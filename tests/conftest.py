@@ -367,7 +367,9 @@ def real_mtls_client_cert_rejection(tmp_path):
     Usada para validar heuristicas de classificacao de erro
     (``error_classifier.is_likely_client_certificate_rejection``) contra
     o comportamento real do OpenSSL, e nao apenas contra mensagens de
-    ``ssl.SSLError`` construidas manualmente no restante da suite.
+    ``ssl.SSLError`` construidas manualmente no restante da suite -- essa
+    cobertura contra handshake real e' uma adicao genuina desta suite,
+    sem equivalente na implementacao de referencia.
     """
     import datetime
     import socket

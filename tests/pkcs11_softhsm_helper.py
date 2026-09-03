@@ -1,6 +1,10 @@
 """Helper de setup/teardown de um slot SoftHSM2 efemero para os testes de
 strategy_factory.from_pkcs11. Usa softhsm2-util (instalado no ambiente) para
-criar um token isolado por execucao de teste, em um diretorio temporario."""
+criar um token isolado por execucao de teste, em um diretorio temporario.
+
+O caminho PKCS#11/HSM desta biblioteca e' exercitado contra um token
+SoftHSM2 real (nao apenas mocks) -- cobertura que nao existe na
+implementacao de referencia para este ponto especifico."""
 
 from __future__ import annotations
 
