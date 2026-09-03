@@ -2,19 +2,14 @@
 (sem passar pela API pública ``SmartTokenClient``/``builder.py``) e
 inspecionar o protocolo bruto (header JOSE, JWKS) — usado pelos testes
 de caracterização do elemento ``kid`` (issue #408) em
-``tests/test_smart_token_client_integration.py``, itens 10-14 do
-roadmap de tradução.
-
-Equivalente Python de ``construirClientAssertion``/``solicitarTokenDireto``/
-``extrairKidDoHeaderJwt``/``extrairKidDoJwks`` em
-``SmartTokenClientIntegrationTestBase.java``.
+``tests/test_smart_token_client_integration.py``.
 
 Construído com ``cryptography`` (já dependência de runtime do projeto —
 ver ``pem_loader.py``/``ssl_context_factory.py``), sem introduzir
-nenhuma dependência nova só para teste (decisão tomada na Fase 0 do
-roadmap: uma lib de JWT dedicada, tipo ``pyjwt``, resolveria pouco a
-mais do que estas ~poucas dezenas de linhas de
-base64/JSON/assinatura RSA, ao custo de mais uma dependência a manter).
+nenhuma dependência nova só para teste: uma lib de JWT dedicada, tipo
+``pyjwt``, resolveria pouco a mais do que estas ~poucas dezenas de
+linhas de base64/JSON/assinatura RSA, ao custo de mais uma dependência
+a manter.
 """
 
 from __future__ import annotations
@@ -31,13 +26,13 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 
 #: Algoritmo fixo usado pelos testes de kid (mesmo RS384 usado pelo
-#: restante da suíte, via ``Jwts.SIG.RS384`` no lado Java).
+#: restante da suíte).
 _JWT_ALG: Final[str] = "RS384"
 _JWT_TYPE: Final[str] = "JWT"
 
-#: TTL fixo do client_assertion cru montado por estes testes (mesmo
-#: valor do ``.java`` original -- não é o TTL configurável do builder,
-#: já que estes testes contornam o builder de propósito).
+#: TTL fixo do client_assertion cru montado por estes testes -- não é o
+#: TTL configurável do builder, já que estes testes contornam o builder
+#: de propósito.
 _ASSERTION_TTL_SECONDS: Final[int] = 60
 
 _CLIENT_ASSERTION_TYPE: Final[str] = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
@@ -52,8 +47,6 @@ def build_client_assertion(
 ) -> str:
     """Monta um ``client_assertion`` JWT compacto, assinado com RS384,
     com ou sem o elemento ``kid`` no header JOSE.
-
-    Equivalente Python de ``construirClientAssertion(kid)`` (``.java``).
 
     Args:
         client_id: usado como ``iss``/``sub`` do JWT.
@@ -100,8 +93,7 @@ def request_token_directo(
 
     Contorna a classe ``SmartTokenClient`` de propósito, para inspecionar
     o protocolo bruto (JWT/JWKS) em vez de apenas o comportamento do
-    cliente -- equivalente Python de ``solicitarTokenDireto(assertion)``
-    (``.java``).
+    cliente.
 
     Args:
         token_endpoint: URL do token endpoint do simulador.
@@ -130,8 +122,6 @@ def request_token_directo(
 def extract_kid_from_jwt_header(jwt: str) -> str | None:
     """Decodifica o header JOSE (primeiro segmento) de um JWT compacto e
     retorna o valor de ``kid``, ou ``None`` se ausente.
-
-    Equivalente Python de ``extrairKidDoHeaderJwt`` (``.java``).
     """
     header_segment = jwt.split(".", 1)[0]
     header = json.loads(_b64url_decode(header_segment))
@@ -141,10 +131,8 @@ def extract_kid_from_jwt_header(jwt: str) -> str | None:
 
 def extract_kid_from_jwks(certs_endpoint: str, ssl_context: ssl.SSLContext, timeout: float = 30.0) -> str | None:
     """Obtém o ``kid`` da primeira chave publicada no JWKS do simulador
-    (``GET /certs``).
-
-    Equivalente Python de ``extrairKidDoJwks`` (``.java`` -- que também
-    inspeciona apenas a primeira chave publicada).
+    (``GET /certs``). Inspeciona apenas a primeira chave publicada, não
+    itera todas.
 
     Raises:
         RuntimeError: se o JWKS não estiver disponível (status != 200)
