@@ -8,6 +8,13 @@ livre, e aguarda o health-check em
 ``/.well-known/smart-configuration`` responder ``200`` antes de liberar
 os testes.
 
+Processo local, deliberadamente, em vez de container (Docker/Testcontainers):
+o único pré-requisito é ``java`` no ``PATH`` e o JAR em si -- sem
+depender de um daemon de container disponível no ambiente (nem sempre
+verdade em CI ou na máquina de um contribuidor). Isso também deixa o
+ciclo start/health-check/stop mais rápido, sem o overhead de build/pull
+de imagem a cada execução da suíte.
+
 Localização do JAR (variável de ambiente tem precedência sobre o
 fallback, ver :func:`simulator_jar_path`):
 
