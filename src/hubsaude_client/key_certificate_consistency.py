@@ -16,20 +16,23 @@ extraida do certificado. Dois pontos de entrada:
 
 from __future__ import annotations
 
-import logging
-
 from cryptography import x509
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from cryptography.hazmat.primitives.asymmetric.types import PrivateKeyTypes
 
 from hubsaude_client import algorithms
+from hubsaude_client._log import get_logger
 from hubsaude_client.algorithms import AlgorithmParams, EcdsaParams, RsaPkcs1Params, RsaPssParams
 from hubsaude_client.exceptions import SmartTokenError
 from hubsaude_client.ports import SigningStrategy
 from hubsaude_client.private_key_signing_strategy import PrivateKeySigningStrategy
 
-_LOGGER = logging.getLogger(__name__)
+# Logger compartilhado com o restante da lib (ver _log.py) -- usar
+# logging.getLogger(__name__) diretamente faria os logs deste modulo
+# saírem sob um nome distinto do contrato de observabilidade estavel
+# (hubsaude_client.SmartTokenClient) documentado em _log.py.
+_LOGGER = get_logger()
 
 _CHALLENGE = b"key-pair-consistency-check"
 
@@ -73,7 +76,7 @@ def verify_key_pair(private_key: PrivateKeyTypes, certificate: x509.Certificate)
     except SmartTokenError:
         raise
     except Exception as exc:
-        raise SmartTokenError(f"Falha ao verificar consistencia entre chave privada e certificado: {exc}", exc) from exc
+        raise SmartTokenError(f"Falha ao verificar consistencia entre chave privada e certificado: {exc}", exc)
     verify_strategy(strategy, certificate)
 
 
@@ -134,7 +137,7 @@ def verify_strategy(strategy: SigningStrategy, certificate: x509.Certificate) ->
     except SmartTokenError:
         raise
     except Exception as exc:
-        raise SmartTokenError(f"Falha ao verificar consistencia entre chave privada e certificado: {exc}", exc) from exc
+        raise SmartTokenError(f"Falha ao verificar consistencia entre chave privada e certificado: {exc}", exc)
 
 
 def _verify_signature(public_key: object, params: AlgorithmParams, signature: bytes) -> None:
@@ -160,4 +163,4 @@ def _verify_signature(public_key: object, params: AlgorithmParams, signature: by
         else:
             raise SmartTokenError(f"Parametro de algoritmo nao suportado: {type(params).__name__}")
     except InvalidSignature as exc:
-        raise SmartTokenError("Chave privada nao corresponde ao certificado: assinatura invalida", exc) from exc
+        raise SmartTokenError("Chave privada nao corresponde ao certificado: assinatura invalida", exc)
