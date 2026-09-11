@@ -56,7 +56,7 @@ def require_https_scheme(url: str, field_name: str) -> None:
     try:
         parts = urlsplit(url)
     except ValueError as exc:
-        raise SmartTokenError(f"{field_name} e uma URL malformada: {url!r}", exc) from exc
+        raise SmartTokenError(f"{field_name} e uma URL malformada: {url!r}", exc)
     scheme = parts.scheme.lower()
     if scheme == _REQUIRED_URL_SCHEME:
         return
