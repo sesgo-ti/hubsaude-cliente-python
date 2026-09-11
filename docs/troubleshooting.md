@@ -166,6 +166,66 @@ https.get(endpoint, (res) => {
 
 ## Resolução de problemas
 
+### Solução mais direta: `server_trust_anchor` (recomendada para simulador local/homologação)
+
+Antes de qualquer alteração no sistema operacional/runtime, considere se
+o problema pode ser resolvido **sem tocar em nada fora do processo**: o
+builder desta biblioteca (`SmartTokenClientBuilder`) tem um método feito
+especificamente para isso, `server_trust_anchor()`. Ele configura uma CA
+customizada apenas para a instância do `SmartTokenClient` sendo
+construída, sem alterar o trust store do sistema, do `certifi`, nem de
+qualquer outra aplicação no mesmo processo/host:
+
+```python
+from hubsaude_client import SmartTokenClientBuilder
+
+client = (
+    SmartTokenClientBuilder()
+    # ... demais configurações obrigatórias (client_id, signing_strategy, etc.) ...
+    .server_trust_anchor("/caminho/para/root-ou-ca-do-simulador.pem")
+    .build()
+)
+```
+
+Aceita tanto o caminho de um arquivo PEM quanto um `cryptography.x509.Certificate`
+já carregado em memória. É a via recomendada para:
+
+- testar contra um simulador HubSaúde local (certificado autoassinado
+  ou emitido por uma CA de desenvolvimento);
+- homologação contra um ambiente com CA interna, ainda não presente no
+  trust store público;
+- qualquer cenário em que alterar o SO/runtime (`update-ca-certificates`,
+  `certifi`, `cacerts` do JDK, etc. — ver seções abaixo) seria
+  desproporcional ao problema, ou simplesmente não é uma opção
+  disponível no ambiente (ex.: CI efêmero, container somente leitura).
+
+As alternativas de sistema operacional/runtime cobertas no restante
+desta seção continuam válidas e são necessárias quando o problema afeta
+**outras aplicações no mesmo host**, não apenas este cliente — mas para
+uso exclusivo desta biblioteca, `server_trust_anchor()` resolve o
+problema com uma única linha de configuração, sem privilégios de admin.
+
+### Diagnóstico de HSM/PKCS#11
+
+Sintomas comuns ao configurar `strategy_factory.from_pkcs11()` e como
+diagnosticá-los:
+
+| Sintoma | Causa provável | Onde investigar |
+| --- | --- | --- |
+| `SmartTokenError` ao carregar o módulo (`pkcs11_module_path`) | Caminho incorreto para a biblioteca `.so`/`.dll` do fabricante, ou biblioteca não instalada no ambiente de execução | Confirme o caminho com o fabricante do HSM/smart card; em containers, confirme que a biblioteca nativa foi copiada para a imagem |
+| `SmartTokenError` "Token nao encontrado" | `token_label` não corresponde a nenhum token inicializado no dispositivo | Liste os tokens disponíveis com a ferramenta do fabricante (ex.: `pkcs11-tool --list-slots` para a maioria dos dispositivos compatíveis com OpenSC) |
+| `SmartTokenError` "Falha ao abrir sessao" | PIN incorreto, ou token bloqueado após tentativas malsucedidas anteriores | Verifique o PIN com o responsável pelo dispositivo; nunca tente PINs repetidamente sem confirmar o contador de tentativas restantes |
+| `SmartTokenError` "Chave nao encontrada" | `key_label` não corresponde a nenhuma chave privada no token, ou a chave existe mas não é do tipo `PRIVATE_KEY` | Liste os objetos do token com a ferramenta do fabricante e confirme o rótulo exato (sensível a maiúsculas/minúsculas) |
+| Assinatura falha em produção com `ES256`/`ES384`/`ES512` contra um HSM/token específico | Firmware/driver do dispositivo sem suporte ao mecanismo PKCS#11 combinado — mitigado nesta biblioteca desde a correção que passou a usar sempre o mecanismo puro `CKM_ECDSA` com o resumo calculado no cliente | Confirme a versão desta biblioteca em uso; se o problema persistir mesmo na versão corrigida, verifique com o fabricante quais mecanismos ECDSA o dispositivo expõe |
+
+Ferramentas de linha de comando genéricas (não específicas desta
+biblioteca) úteis para inspecionar um token PKCS#11 diretamente:
+`pkcs11-tool` (pacote `opensc`) e `p11tool` (pacote `gnutls-bin`/
+`gnutls-utils`, conforme a distribuição).
+
+
+### Importando a CA raiz no trust store do sistema/runtime
+
 Se detectar um erro de confiança, o problema geralmente é que a
 CA raiz (atualmente ISRG Root X1 do Let's Encrypt) não está no
 trust store do seu ambiente. Primeiro,
