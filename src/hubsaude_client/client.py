@@ -389,7 +389,10 @@ class SmartTokenClient:
 
         Aguarda todas as operacoes ``obtain_token``/``obtain_token_response``
         em voo terminarem (lock de escrita do ``_ReadersWriterLock``),
-        invalida todo o cache e fecha o ``httpx.Client`` interno.
+        invalida todo o cache, fecha o ``httpx.Client`` interno e, quando a
+        ``signing_strategy`` configurada expuser um ``close()`` (ex.:
+        estrategia PKCS#11 que mantem uma sessao de hardware aberta),
+        invoca-o em modo best-effort -- ver nota em ``ports.SigningStrategy``.
         Chamadas subsequentes sao no-op.
         """
         with self._rw_lock.write_lock():
@@ -398,6 +401,28 @@ class SmartTokenClient:
             self._closed = True
             self._token_cache.invalidate_all()
             self._http_client.close()
+            self._close_signing_strategy_if_supported()
+
+    def _close_signing_strategy_if_supported(self) -> None:
+        """Fecha a ``signing_strategy``, se ela expuser ``close()`` (duck
+        typing best-effort -- ``close()`` nao faz parte do Protocol
+        ``ports.SigningStrategy``, ver docstring la).
+
+        Falhas aqui sao apenas logadas (nao propagadas): o cliente ja esta
+        encerrando e o cache/http client ja foram liberados nesta chamada
+        a :meth:`close`.
+        """
+        close_fn = getattr(self._signing_strategy, "close", None)
+        if not callable(close_fn):
+            return
+        try:
+            close_fn()
+        except Exception as exc:  # noqa: BLE001 -- best-effort, nunca propaga de close()
+            _LOG.warning(
+                "Falha ao fechar signing_strategy (clientId=%s): %s",
+                self._client_id,
+                exc,
+            )
 
     def __enter__(self) -> "SmartTokenClient":
         """Permite uso como *context manager* (``with SmartTokenClient(...) as c``)."""

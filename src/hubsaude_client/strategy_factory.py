@@ -114,7 +114,7 @@ def from_pkcs12(data: bytes | Path, password: bytearray, jwt_algorithm: str = DE
         # chamada retorna. O bytearray original do chamador e zerado no finally.
         private_key, _certificate, _additional = pkcs12.load_key_and_certificates(raw, bytes(password))
     except ValueError as exc:
-        raise SmartTokenError(f"Falha ao carregar PKCS#12 (senha incorreta ou arquivo invalido?): {exc}", exc) from exc
+        raise SmartTokenError(f"Falha ao carregar PKCS#12 (senha incorreta ou arquivo invalido?): {exc}", exc)
     finally:
         pem_loader.clear_password(password)
     if private_key is None:
@@ -153,8 +153,10 @@ def from_pkcs11(
         Estrategia de assinatura que usa o hardware.
 
     Raises:
-        SmartTokenError: se o PIN for invalido, a sessao nao puder ser
-            aberta, ou a chave nao for encontrada no token.
+        SmartTokenError: se o modulo PKCS#11 nao puder ser carregado, o
+            token nao for encontrado pelo rotulo informado, o PIN for
+            invalido, a sessao nao puder ser aberta, ou a chave nao for
+            encontrada no token.
     """
     # Import local, nao no topo do modulo: python-pkcs11 e dependencia
     # opcional (extra "hsm" em pyproject.toml), com bindings nativos que a
@@ -164,20 +166,26 @@ def from_pkcs11(
     # ModuleNotFoundError para quem nao instalou o extra.
     import pkcs11 as pkcs11_lib
 
-    lib = pkcs11_lib.lib(str(pkcs11_module_path))
-    token = lib.get_token(token_label=token_label)
+    try:
+        lib = pkcs11_lib.lib(str(pkcs11_module_path))
+    except Exception as exc:
+        raise SmartTokenError(f"Falha ao carregar modulo PKCS#11: {pkcs11_module_path}: {exc}", exc)
+    try:
+        token = lib.get_token(token_label=token_label)
+    except Exception as exc:
+        raise SmartTokenError(f"Token PKCS#11 nao encontrado: {token_label}: {exc}", exc)
     try:
         session = token.open(user_pin=user_pin)
     except pkcs11_lib.PKCS11Error as exc:
-        raise SmartTokenError(f"Falha ao abrir sessao PKCS#11 (PIN incorreto?): {exc}", exc) from exc
+        raise SmartTokenError(f"Falha ao abrir sessao PKCS#11 (PIN incorreto?): {exc}", exc)
     try:
         key = session.get_key(label=key_label, object_class=pkcs11_lib.ObjectClass.PRIVATE_KEY)
     except pkcs11_lib.NoSuchKey as exc:
         session.close()
-        raise SmartTokenError(f"Chave nao encontrada no token PKCS#11: {key_label}", exc) from exc
+        raise SmartTokenError(f"Chave nao encontrada no token PKCS#11: {key_label}", exc)
     except Exception as exc:
         session.close()
-        raise SmartTokenError(f"Falha ao acessar chave PKCS#11: {exc}", exc) from exc
+        raise SmartTokenError(f"Falha ao acessar chave PKCS#11: {exc}", exc)
     return Pkcs11SigningStrategy(session, key, jwt_algorithm)
 
 
@@ -209,7 +217,7 @@ def load_pkcs12_key_and_certificate(
     try:
         private_key, certificate, _additional = pkcs12.load_key_and_certificates(raw, bytes(password))
     except ValueError as exc:
-        raise SmartTokenError(f"Falha ao carregar PKCS#12 (senha incorreta ou arquivo invalido?): {exc}", exc) from exc
+        raise SmartTokenError(f"Falha ao carregar PKCS#12 (senha incorreta ou arquivo invalido?): {exc}", exc)
     finally:
         pem_loader.clear_password(password)
     if private_key is None:

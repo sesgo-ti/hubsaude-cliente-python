@@ -17,9 +17,19 @@ from typing import Protocol, runtime_checkable
 class SigningStrategy(Protocol):
     """Estrategia de assinatura digital que abstrai o mecanismo criptografico.
 
-    Interface com um unico metodo, permitindo que chaves em memoria,
-    HSM/PKCS#11 ou servicos remotos de assinatura sejam intercambiaveis
-    sem alterar o cliente (padrao Strategy).
+    Interface com um unico metodo obrigatorio, permitindo que chaves em
+    memoria, HSM/PKCS#11 ou servicos remotos de assinatura sejam
+    intercambiaveis sem alterar o cliente (padrao Strategy).
+
+    Metodo opcional ``close() -> None``: implementacoes que retenham um
+    recurso que precise ser liberado explicitamente (ex.: uma sessao
+    PKCS#11 aberta em hardware com limite de sessoes simultaneas) podem
+    definir ``close()``. Deliberadamente NAO faz parte da assinatura
+    formal deste ``Protocol`` (checagem via ``isinstance`` continua
+    exigindo apenas ``sign()``) para nao quebrar, de forma retroativa,
+    implementacoes de terceiros existentes que so implementam ``sign()``.
+    Quando presente, ``SmartTokenClient.close()`` a invoca via duck typing
+    (``getattr(strategy, "close", None)``), em modo best-effort.
     """
 
     def sign(self, data: bytes) -> bytes:

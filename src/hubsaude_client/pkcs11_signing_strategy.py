@@ -6,12 +6,33 @@ Divergencia de plataforma: a mecanica CKM_*_RSA_PKCS/CKM_ECDSA do PKCS#11 ja
 produz a assinatura no formato exigido (RSA PKCS#1v1.5/PSS identico ao
 software; ECDSA como R||S bruto, NAO DER) -- diferente de
 private_key_signing_strategy.py, aqui NAO ha conversao DER->P1363 a fazer.
+
+ECDSA usa sempre o mecanismo puro ``CKM_ECDSA`` (assinatura sobre um resumo
+ja calculado pelo chamador), nunca os mecanismos combinados
+``CKM_ECDSA_SHA*`` (hash + assinatura numa unica operacao do dispositivo):
+nem todo hardware/software de token PKCS#11 implementa as variantes
+combinadas, enquanto o mecanismo puro tem suporte praticamente universal
+entre fabricantes (confirmado em reproducao real contra SoftHSM2 -- ver
+achados tecnicos). O resumo (SHA-256/384/512) e calculado aqui, do lado do
+cliente, via ``hashlib`` da biblioteca padrao, antes de enviar ao
+dispositivo. RSA (PKCS#1v1.5 e PSS) continua usando os mecanismos
+combinados ``CKM_SHA*_RSA_PKCS[_PSS]``, que nao tem o mesmo problema de
+suporte.
 """
 
 from __future__ import annotations
 
+import hashlib
+from typing import Callable
+
+from hubsaude_client._log import get_logger
 from hubsaude_client.algorithms import resolve
 from hubsaude_client.exceptions import SigningError
+
+# Logger compartilhado com o restante da lib (ver _log.py) -- este modulo
+# nao deve usar logging.getLogger(__name__) diretamente (ver contrato de
+# observabilidade documentado em _log.py).
+_LOG = get_logger()
 
 _MECHANISM_BY_ALGORITHM: dict[str, str] = {
     "RS256": "SHA256_RSA_PKCS",
@@ -20,9 +41,19 @@ _MECHANISM_BY_ALGORITHM: dict[str, str] = {
     "PS256": "SHA256_RSA_PKCS_PSS",
     "PS384": "SHA384_RSA_PKCS_PSS",
     "PS512": "SHA512_RSA_PKCS_PSS",
-    "ES256": "ECDSA_SHA256",
-    "ES384": "ECDSA_SHA384",
-    "ES512": "ECDSA_SHA512",
+    # Mecanismo puro (nao combinado) -- ver nota no docstring do modulo.
+    "ES256": "ECDSA",
+    "ES384": "ECDSA",
+    "ES512": "ECDSA",
+}
+
+#: Funcao de resumo (digest) a aplicar do lado do cliente antes de assinar,
+#: por algoritmo ECDSA. Algoritmos RSA nao aparecem aqui: seus mecanismos
+#: PKCS#11 permanecem combinados (hash + assinatura no dispositivo).
+_ECDSA_DIGEST_BY_ALGORITHM: dict[str, Callable[[bytes], bytes]] = {
+    "ES256": lambda data: hashlib.sha256(data).digest(),
+    "ES384": lambda data: hashlib.sha384(data).digest(),
+    "ES512": lambda data: hashlib.sha512(data).digest(),
 }
 
 
@@ -69,12 +100,39 @@ class Pkcs11SigningStrategy:
 
         mechanism_name = _MECHANISM_BY_ALGORITHM[self._jwt_algorithm]
         mechanism = getattr(pkcs11.Mechanism, mechanism_name)
+        # Para ECDSA (mecanismo puro CKM_ECDSA), o resumo precisa ser
+        # calculado aqui, do lado do cliente -- o dispositivo espera receber
+        # o hash pronto, nao os dados originais. Para RSA (mecanismos
+        # combinados), os dados originais sao enviados como estao.
+        digest_fn = _ECDSA_DIGEST_BY_ALGORITHM.get(self._jwt_algorithm)
+        payload = digest_fn(data) if digest_fn is not None else data
         try:
             # self._key e tipado como "object" no construtor (handle opaco, sem
             # acoplar a assinatura publica da classe ao tipo concreto de
             # python-pkcs11) -- o atributo "sign" existe em tempo de execucao
             # em pkcs11.PrivateKey, mas nao e visivel estaticamente para mypy.
-            signature = self._key.sign(data, mechanism=mechanism)  # type: ignore[attr-defined]
+            signature = self._key.sign(payload, mechanism=mechanism)  # type: ignore[attr-defined]
         except Exception as exc:
-            raise SigningError(f"Falha ao assinar via PKCS#11 com algoritmo {self._jwt_algorithm}", exc) from exc
+            raise SigningError(f"Falha ao assinar via PKCS#11 com algoritmo {self._jwt_algorithm}", exc)
         return bytes(signature)
+
+    def close(self) -> None:
+        """Fecha a sessao PKCS#11 subjacente (best-effort, idempotente).
+
+        HSMs e smart cards costumam ter um limite rigido de sessoes
+        simultaneas; sem este fechamento explicito, a sessao permanece
+        aberta ate o processo inteiro terminar (o objeto de sessao da
+        biblioteca ``python-pkcs11`` nao define ``__del__``). Nao faz
+        parte do Protocol ``ports.SigningStrategy`` (que so exige
+        ``sign()``) -- e um metodo adicional, especifico desta
+        implementacao, descoberto e chamado via duck typing (``getattr``)
+        por quem mantiver o ciclo de vida desta estrategia (ver
+        ``SmartTokenClient.close()``).
+
+        Falhas ao fechar sao apenas logadas (best-effort, nao propagam) --
+        ver mesmo padrao em ``SmartTokenClient._close_signing_strategy_if_supported``.
+        """
+        try:
+            self._session.close()  # type: ignore[attr-defined]
+        except Exception as exc:  # nosec B110 -- best-effort, logado abaixo, nao propaga
+            _LOG.warning("Falha ao fechar sessao PKCS#11: %s", exc)
