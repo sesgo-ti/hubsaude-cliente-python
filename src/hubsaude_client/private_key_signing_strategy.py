@@ -13,7 +13,7 @@ from cryptography.hazmat.primitives.asymmetric.types import PrivateKeyTypes
 from hubsaude_client import algorithms
 from hubsaude_client.algorithms import AlgorithmParams, EcdsaParams, RsaPkcs1Params, RsaPssParams
 from hubsaude_client.defaults import DEFAULT_JWT_ALGORITHM
-from hubsaude_client.exceptions import SigningError
+from hubsaude_client.exceptions import SigningError, SmartTokenError
 from hubsaude_client.pem_loader import validate_minimum_key_size
 
 
@@ -28,20 +28,26 @@ class PrivateKeySigningStrategy:
     """
 
     def __init__(self, private_key: PrivateKeyTypes, jwt_algorithm: str = DEFAULT_JWT_ALGORITHM) -> None:
-        """Cria a estrategia, validando o tamanho minimo da chave (fail-fast).
+        """Cria a estrategia, validando o tamanho minimo da chave e a
+        compatibilidade entre o tipo de chave e o algoritmo (fail-fast).
 
         Args:
             private_key: chave privada RSA ou EC ja carregada.
             jwt_algorithm: algoritmo JWT (JWA) a usar na assinatura.
 
         Raises:
-            SmartTokenError: se o algoritmo nao for reconhecido, ou se a
-                chave estiver abaixo do tamanho minimo aceito.
+            SmartTokenError: se o algoritmo nao for reconhecido, se a
+                chave estiver abaixo do tamanho minimo aceito, ou se o
+                tipo da chave (RSA/EC) nao for compativel com o algoritmo
+                configurado (ex.: chave RSA com algoritmo ECDSA) -- validado
+                aqui, na construcao, em vez de so na primeira chamada real a
+                :meth:`sign`.
         """
         validate_minimum_key_size(private_key, "privateKey")
         self._private_key = private_key
         self._jwt_algorithm = jwt_algorithm
         self._params: AlgorithmParams = algorithms.resolve(jwt_algorithm)
+        _require_compatible_key_type(private_key, self._params, jwt_algorithm)
 
     @property
     def jwt_algorithm(self) -> str:
@@ -72,7 +78,7 @@ class PrivateKeySigningStrategy:
         except SigningError:
             raise
         except Exception as exc:
-            raise SigningError(f"Falha ao assinar dados com algoritmo {self._jwt_algorithm}", exc) from exc
+            raise SigningError(f"Falha ao assinar dados com algoritmo {self._jwt_algorithm}", exc)
 
     def _sign(self, data: bytes) -> bytes:
         params = self._params
@@ -93,3 +99,25 @@ class PrivateKeySigningStrategy:
             der_signature = key.sign(data, ec.ECDSA(params.hash_algorithm))
             return algorithms.encode_p1363(der_signature, params.signature_length)
         raise SigningError(f"Parametro de algoritmo nao suportado: {type(params).__name__}")
+
+
+def _require_compatible_key_type(key: PrivateKeyTypes, params: AlgorithmParams, jwt_algorithm: str) -> None:
+    """Valida, na construcao (fail-fast), que o tipo da chave e compativel
+    com o algoritmo configurado -- a mesma checagem que :meth:`_sign` ja
+    fazia, so que so era exercitada na primeira assinatura real.
+
+    Args:
+        key: chave privada a validar.
+        params: parametros do algoritmo ja resolvidos (RSA PKCS#1v1.5/PSS
+            ou ECDSA).
+        jwt_algorithm: algoritmo JWT (JWA) configurado, para a mensagem
+            de erro.
+
+    Raises:
+        SmartTokenError: se o tipo da chave nao corresponder ao exigido
+            pelo algoritmo (RSA para PKCS#1v1.5/PSS, EC para ECDSA).
+    """
+    if isinstance(params, (RsaPkcs1Params, RsaPssParams)) and not isinstance(key, rsa.RSAPrivateKey):
+        raise SmartTokenError(f"Algoritmo {jwt_algorithm} requer chave RSA, recebida {type(key).__name__}")
+    if isinstance(params, EcdsaParams) and not isinstance(key, ec.EllipticCurvePrivateKey):
+        raise SmartTokenError(f"Algoritmo {jwt_algorithm} requer chave EC, recebida {type(key).__name__}")

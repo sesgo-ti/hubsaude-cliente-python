@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa, utils
 
-from hubsaude_client.exceptions import SigningError
+from hubsaude_client.exceptions import SigningError, SmartTokenError
 from hubsaude_client.ports import SigningStrategy
 from hubsaude_client.private_key_signing_strategy import PrivateKeySigningStrategy
 
@@ -57,11 +57,21 @@ def test_sign_ecdsa_p521_pads_to_fixed_length() -> None:
     assert len(signature) == 132  # 66 bytes R + 66 bytes S, mesmo se r/s < 66 bytes
 
 
-def test_sign_wraps_key_type_mismatch_in_signing_error() -> None:
+def test_construction_rejects_key_type_mismatch() -> None:
+    """Incompatibilidade entre tipo de chave e algoritmo agora e' detectada
+    na construcao (fail-fast), nao apenas na primeira chamada a sign() --
+    ver SmartTokenError, nao SigningError (e' uma falha de configuracao,
+    nao uma falha de operacao criptografica).
+    """
     ec_key = ec.generate_private_key(ec.SECP256R1())
-    strategy = PrivateKeySigningStrategy(ec_key, "RS256")  # RS256 exige chave RSA
-    with pytest.raises(SigningError, match="RSA"):
-        strategy.sign(b"data")
+    with pytest.raises(SmartTokenError, match="RSA"):
+        PrivateKeySigningStrategy(ec_key, "RS256")  # RS256 exige chave RSA
+
+
+def test_construction_rejects_ecdsa_algorithm_with_rsa_key() -> None:
+    rsa_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    with pytest.raises(SmartTokenError, match="EC"):
+        PrivateKeySigningStrategy(rsa_key, "ES256")  # ES256 exige chave EC
 
 
 def test_rejects_weak_rsa_key_on_construction() -> None:
@@ -74,13 +84,6 @@ def test_algorithm_params_property_matches_configured_algorithm() -> None:
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     strategy = PrivateKeySigningStrategy(key, "RS256")
     assert strategy.algorithm_params.jwt_algorithm == "RS256"
-
-
-def test_sign_wraps_ecdsa_algorithm_with_rsa_key_in_signing_error() -> None:
-    rsa_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    strategy = PrivateKeySigningStrategy(rsa_key, "ES256")  # ES256 exige chave EC
-    with pytest.raises(SigningError, match="EC"):
-        strategy.sign(b"data")
 
 
 def test_sign_wraps_unexpected_error_in_signing_error(monkeypatch: pytest.MonkeyPatch) -> None:
