@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import os
 import ssl
-import stat
 import tempfile
 from pathlib import Path
 
@@ -100,15 +99,38 @@ def _configure_trust(
 def _load_client_cert_chain(
     context: ssl.SSLContext, client_key: PrivateKeyTypes, client_cert: x509.Certificate
 ) -> None:
+    """Carrega o par certificado/chave do cliente no contexto TLS, via
+    arquivo temporario (``ssl.SSLContext.load_cert_chain()`` exige um
+    caminho de arquivo real -- nao aceita a chave/certificado diretamente
+    como bytes em memoria).
+
+    Higiene de segredo em memoria (risco residual reconhecido): ``key_pem``
+    e um objeto ``bytes`` imutavel (retorno de
+    ``PrivateKeyTypes.private_bytes()`` da biblioteca ``cryptography``, que
+    so devolve ``bytes``, nunca ``bytearray``) e por isso NAO pode ser
+    zerado explicitamente apos o uso, diferente do padrao ja usado em
+    outras partes desta biblioteca para senhas (``bytearray`` mutavel,
+    zerado apos o uso -- ver ``pem_loader.clear_password``). O conteudo
+    da chave privada em texto claro permanece em memoria ate o coletor de
+    lixo do Python decidir liberar o objeto, sem controle explicito deste
+    codigo. Mesma limitacao, documentada, ja aceita para o PIN de
+    ``strategy_factory.from_pkcs11`` (tambem ``str`` imutavel) -- este e o
+    equivalente para a chave privada neste ponto especifico. O arquivo
+    temporario em si nao e o problema: e criado com permissao
+    leitura/escrita apenas para o dono e removido logo em seguida, no
+    ``finally``.
+    """
     key_pem = client_key.private_bytes(
         encoding=serialization.Encoding.PEM,
         format=serialization.PrivateFormat.PKCS8,
         encryption_algorithm=serialization.NoEncryption(),
     )
     cert_pem = client_cert.public_bytes(serialization.Encoding.PEM)
+    # tempfile.mkstemp() ja cria o arquivo com permissao 0o600 (leitura/
+    # escrita apenas para o dono) por padrao nesta plataforma -- sem
+    # necessidade de os.chmod() explicito logo em seguida.
     fd, path_str = tempfile.mkstemp(suffix=".pem")
     try:
-        os.chmod(path_str, stat.S_IRUSR | stat.S_IWUSR)
         with os.fdopen(fd, "wb") as handle:
             handle.write(key_pem)
             handle.write(cert_pem)
