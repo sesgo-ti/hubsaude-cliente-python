@@ -124,11 +124,17 @@ _RECOMMENDED_MAX_ASSERTION_TTL_SECONDS = 300
 
 #: Formato exigido para o alias de Guia de Implementacao em hub_context
 #: (client-assertion-contexto-ig.md Sec3.4, RF-01 item 3).
-_HUB_CONTEXT_IG_PATTERN = re.compile(r"^[a-z][a-z0-9-]{1,30}$")
+#:
+#: Ancora de fim em ``\Z`` (fim absoluto da string), NAO ``$`` -- no modulo
+#: ``re`` do Python, ``$`` casa tambem imediatamente antes de uma unica
+#: quebra de linha final, o que aceitaria incorretamente um valor como
+#: ``"meu-ig\n"``.
+_HUB_CONTEXT_IG_PATTERN = re.compile(r"^[a-z][a-z0-9-]{1,30}\Z")
 
 #: Formato exigido para a versao em hub_context: SemVer completo
-#: MAJOR.MINOR.PATCH, sem pre-release/build metadata (RF-01 item 3).
-_HUB_CONTEXT_VERSAO_PATTERN = re.compile(r"^\d+\.\d+\.\d+$")
+#: MAJOR.MINOR.PATCH, sem pre-release/build metadata (RF-01 item 3). Mesma
+#: nota sobre ``\Z`` vs ``$`` do ``_HUB_CONTEXT_IG_PATTERN`` acima.
+_HUB_CONTEXT_VERSAO_PATTERN = re.compile(r"^\d+\.\d+\.\d+\Z")
 
 #: Logger compartilhado com o restante da lib (ver _log.py).
 _LOG = get_logger()
