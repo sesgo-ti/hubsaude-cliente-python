@@ -25,8 +25,14 @@ from __future__ import annotations
 import hashlib
 from typing import Callable
 
+from hubsaude_client._log import get_logger
 from hubsaude_client.algorithms import resolve
 from hubsaude_client.exceptions import SigningError
+
+# Logger compartilhado com o restante da lib (ver _log.py) -- este modulo
+# nao deve usar logging.getLogger(__name__) diretamente (ver contrato de
+# observabilidade documentado em _log.py).
+_LOG = get_logger()
 
 _MECHANISM_BY_ALGORITHM: dict[str, str] = {
     "RS256": "SHA256_RSA_PKCS",
@@ -122,8 +128,11 @@ class Pkcs11SigningStrategy:
         implementacao, descoberto e chamado via duck typing (``getattr``)
         por quem mantiver o ciclo de vida desta estrategia (ver
         ``SmartTokenClient.close()``).
+
+        Falhas ao fechar sao apenas logadas (best-effort, nao propagam) --
+        ver mesmo padrao em ``SmartTokenClient._close_signing_strategy_if_supported``.
         """
         try:
             self._session.close()  # type: ignore[attr-defined]
-        except Exception:  # pragma: no cover -- best-effort, nao deve propagar
-            pass
+        except Exception as exc:  # nosec B110 -- best-effort, logado abaixo, nao propaga
+            _LOG.warning("Falha ao fechar sessao PKCS#11: %s", exc)
