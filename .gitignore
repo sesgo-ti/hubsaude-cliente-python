@@ -31,9 +31,6 @@ Thumbs.db
 .pytest_cache/
 .ruff_cache/
 .coverage
-coverage.xml
-junit.xml
-htmlcov/
 .tox/
 *.egg-info/
 
