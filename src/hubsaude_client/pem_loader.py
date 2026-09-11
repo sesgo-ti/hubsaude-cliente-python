@@ -77,7 +77,7 @@ def load_private_key(path: Path, password: bytearray | None = None) -> PrivateKe
         raw = path.read_bytes()
     except OSError as exc:
         clear_password(password)
-        raise SmartTokenError(f"Nao foi possivel ler o arquivo de chave privada: {path}", exc) from exc
+        raise SmartTokenError(f"Nao foi possivel ler o arquivo de chave privada: {path}", exc)
     # O conteudo lido do arquivo (que pode ser a propria chave privada em
     # texto claro, quando nao criptografada) e mantido num bytearray
     # mutavel e zerado no finally -- minimiza a janela em que o material de
@@ -119,12 +119,12 @@ def _load_private_key_from_bytes(pem_bytes: bytes, password: bytearray | None, s
         key = serialization.load_pem_private_key(pem_bytes, password=password_bytes)
     except TypeError as exc:
         if password is None:
-            raise SmartTokenError(f"Chave criptografada requer senha: {source}", exc) from exc
-        raise SmartTokenError(f"Senha fornecida para chave nao criptografada: {source}", exc) from exc
+            raise SmartTokenError(f"Chave criptografada requer senha: {source}", exc)
+        raise SmartTokenError(f"Senha fornecida para chave nao criptografada: {source}", exc)
     except ValueError as exc:
         if password is not None:
-            raise SmartTokenError(f"Falha ao decriptar chave, verifique a senha fornecida: {source}", exc) from exc
-        raise SmartTokenError(f"formato de chave PEM invalido: {source}", exc) from exc
+            raise SmartTokenError(f"Falha ao decriptar chave, verifique a senha fornecida: {source}", exc)
+        raise SmartTokenError(f"formato de chave PEM invalido: {source}", exc)
     finally:
         clear_password(password)
     validate_minimum_key_size(key, source)
@@ -161,7 +161,7 @@ def load_certificate(path: Path) -> x509.Certificate:
     try:
         pem = path.read_text(encoding="utf-8")
     except OSError as exc:
-        raise SmartTokenError(f"Nao foi possivel ler o arquivo de certificado: {path}", exc) from exc
+        raise SmartTokenError(f"Nao foi possivel ler o arquivo de certificado: {path}", exc)
     return load_certificate_from_string(pem, str(path))
 
 
@@ -182,7 +182,7 @@ def load_certificate_from_string(pem: str, source: str) -> x509.Certificate:
     try:
         cert = x509.load_pem_x509_certificate(pem.encode("utf-8"))
     except ValueError as exc:
-        raise SmartTokenError(f"Arquivo PEM nao contem certificado X.509 valido: {source}", exc) from exc
+        raise SmartTokenError(f"Arquivo PEM nao contem certificado X.509 valido: {source}", exc)
     check_certificate_validity(cert, source)
     return cert
 

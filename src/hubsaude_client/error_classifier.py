@@ -207,7 +207,7 @@ class ErrorClassifier:
                 "(certificate_revoked/certificate_expired) ou HTTP 401, e nao "
                 "o encerramento abrupto da conexao.",
                 exc,
-            ) from exc
+            )
         if is_transient_network_failure(exc):
             return exc
         raise exc

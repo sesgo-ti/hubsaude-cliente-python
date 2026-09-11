@@ -186,8 +186,9 @@ class TokenResponseGuard:
 
         Raises:
             SmartTokenError: o corpo excede o limite de tamanho, nao e
-                JSON valido, nao e um objeto JSON, ou nao contem
-                ``access_token``.
+                JSON valido, nao e um objeto JSON, nao contem
+                ``access_token``, ou o campo ``expires_in`` da resposta e
+                invalido (delegado a :func:`sanitize_expires_in`).
         """
         body = self.read_body(response, trace)
         try:
@@ -196,7 +197,7 @@ class TokenResponseGuard:
             raise SmartTokenError(
                 f"Resposta do token endpoint nao e JSON valido (traceId={trace.trace_id}).",
                 exc,
-            ) from exc
+            )
         if not isinstance(parsed, dict):
             raise SmartTokenError(f"Resposta do token endpoint nao e um objeto JSON (traceId={trace.trace_id}).")
         access_token = parsed.get("access_token")
