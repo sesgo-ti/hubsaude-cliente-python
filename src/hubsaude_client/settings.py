@@ -53,14 +53,21 @@ class SigningSettings:
         signing_strategy: estrategia de assinatura propria (HSM, cofre de
             segredos); exclusiva com ``private_key_pem``.
         jwt_algorithm: algoritmo JWT do client_assertion.
-        key_id: identificador da chave (``kid``) no header do JWT; opcional.
+
+    Nota: esta classe NAO tem um campo ``key_id``. O identificador de chave
+    (``kid``) do header do JWT e configurado exclusivamente via
+    ``SmartTokenClientBuilder.key_id()`` -- e' o builder quem mantem esse
+    valor vivo ate a construcao do ``SmartTokenClient``. Uma versao anterior
+    desta classe expunha um campo ``key_id`` que nunca produzia efeito
+    algum (``resolve()`` nunca o lia, e o builder nunca o repassava para
+    ca'); foi removido para nao sugerir, de forma enganosa, que configurar
+    ``SigningSettings(key_id=...)`` diretamente teria algum efeito.
     """
 
     private_key_pem: Path | None = None
     private_key_password: bytearray | None = None
     signing_strategy: SigningStrategy | None = None
     jwt_algorithm: str = DEFAULT_JWT_ALGORITHM
-    key_id: str | None = None
 
     def resolve(self) -> ResolvedSigning:
         """Resolve a estrategia de assinatura efetiva.

@@ -46,9 +46,15 @@ def test_resolve_with_no_source_raises_value_error() -> None:
         settings.resolve()
 
 
-def test_key_id_is_optional_and_defaults_to_none() -> None:
-    assert SigningSettings().key_id is None
-    assert SigningSettings(key_id="minha-chave-01").key_id == "minha-chave-01"
+def test_signing_settings_has_no_key_id_field(fake_pem_pair) -> None:
+    """SigningSettings nao expoe (e nunca expos efetivamente) um campo
+    key_id -- o kid do JWT e configurado via SmartTokenClientBuilder.key_id(),
+    unico lugar onde esse valor efetivamente chega ao cliente construido.
+    """
+    settings = SigningSettings(private_key_pem=fake_pem_pair["key"])
+    assert not hasattr(settings, "key_id")
+    with pytest.raises(TypeError):
+        SigningSettings(private_key_pem=fake_pem_pair["key"], key_id="minha-chave-01")  # type: ignore[call-arg]
 
 
 def test_private_key_password_is_bytearray_and_zeroed_after_resolve(fake_encrypted_pem_key) -> None:
