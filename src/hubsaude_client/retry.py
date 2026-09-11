@@ -48,9 +48,10 @@ def compute_retry_delay_seconds(attempt: int) -> float:
 
     Raises:
         ValueError: se ``attempt`` for menor que 1. Um ``attempt`` nao
-            positivo produziria um deslocamento de bits
-            (``1 << (attempt - 1)``) com resultado indefinido para o
-            dominio do problema; validar aqui falha rapido em vez de
+            positivo produziria um expoente negativo em
+            ``2.0 ** (attempt - 1)``, resultando num delay fracionario
+            sem sentido para o dominio do problema (backoff que diminui
+            em vez de crescer); validar aqui falha rapido em vez de
             propagar um delay sem sentido.
     """
     if attempt < 1:
