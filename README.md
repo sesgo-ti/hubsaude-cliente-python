@@ -59,7 +59,7 @@ A API pública atual é o conjunto exportado por `hubsaude_client`
 | `SmartTokenError` | Exceção de domínio para falhas de parsing/resposta inesperada do servidor de autorização. |
 | `SigningStrategy` | `Protocol` que abstrai o mecanismo de assinatura digital. |
 | `TraceContext` | Geração e formatação do contexto de trace W3C (`traceparent`). |
-| `SigningSettings` / `ResolvedSigning` | Configuração agregada de assinatura (fonte de chave, algoritmo JWT, `key_id`) e o resultado da sua resolução. |
+| `SigningSettings` / `ResolvedSigning` | Configuração agregada de assinatura (fonte de chave, algoritmo JWT) e o resultado da sua resolução. O `kid` do JWT é configurado à parte, via `SmartTokenClientBuilder.key_id()`. |
 | `TlsSettings` | Configuração agregada de TLS/mTLS (certificado de cliente, trust anchor). |
 
 `SmartTokenClientBuilder`/`SmartTokenClient` (o ponto de entrada
