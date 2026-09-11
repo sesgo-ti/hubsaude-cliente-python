@@ -180,7 +180,7 @@ class SmartConfigurationDiscovery:
             raise SmartTokenError(
                 f"Falha de rede ao descobrir configuracao SMART em {well_known_url}" f" (traceId={trace.trace_id})",
                 exc,
-            ) from exc
+            )
 
     def _parse_json(self, response: httpx.Response, well_known_url: str, trace: TraceContext) -> Any:
         """Decodifica o corpo da resposta como JSON, convertendo falha
@@ -210,7 +210,7 @@ class SmartConfigurationDiscovery:
             raise SmartTokenError(
                 f"Resposta de descoberta SMART em {well_known_url} nao e JSON valido" f" (traceId={trace.trace_id})",
                 exc,
-            ) from exc
+            )
 
 
 def _build_well_known_url(fhir_base: str) -> str:
@@ -243,4 +243,4 @@ def _extract_token_endpoint(payload: Any) -> str | None:
     token_endpoint = payload.get(_TOKEN_ENDPOINT_FIELD)
     if not isinstance(token_endpoint, str) or not token_endpoint.strip():
         return None
-    return token_endpoint
+    return token_endpoint.strip()
