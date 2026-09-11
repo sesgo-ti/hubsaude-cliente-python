@@ -43,10 +43,16 @@ _TRACE_ID_BYTES = 16
 _SPAN_ID_BYTES = 8
 
 #: Formato valido do trace-id: 32 hex minusculos, nao todo-zeros.
-_TRACE_ID_PATTERN = re.compile(r"^(?!0{32}$)[0-9a-f]{32}$")
+#:
+#: Ancora de fim em ``\Z`` (fim absoluto da string), NAO ``$`` -- no modulo
+#: ``re`` do Python, ``$`` casa tambem imediatamente antes de uma unica
+#: quebra de linha final, o que aceitaria incorretamente um valor como
+#: ``"a" * 32 + "\n"``.
+_TRACE_ID_PATTERN = re.compile(r"^(?!0{32}\Z)[0-9a-f]{32}\Z")
 
-#: Formato valido do span-id: 16 hex minusculos, nao todo-zeros.
-_SPAN_ID_PATTERN = re.compile(r"^(?!0{16}$)[0-9a-f]{16}$")
+#: Formato valido do span-id: 16 hex minusculos, nao todo-zeros. Mesma nota
+#: sobre ``\Z`` vs ``$`` do ``_TRACE_ID_PATTERN`` acima.
+_SPAN_ID_PATTERN = re.compile(r"^(?!0{16}\Z)[0-9a-f]{16}\Z")
 
 
 @dataclass(frozen=True)
