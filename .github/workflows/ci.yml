@@ -25,7 +25,7 @@ jobs:
       - name: Instalar tox
         run: pip install tox
       - name: Testes e cobertura
-        run: tox -e py312 -- --cov-report=xml:coverage.xml --junitxml=junit.xml
+        run: tox -e py312
       - name: Lint, formatação e checagem de tipos
         run: tox -e lint
       - name: Dependências e SAST
