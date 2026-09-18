@@ -3,23 +3,23 @@
 
 Colaborador interno de ``SmartTokenClient``: resolve o ``token_endpoint``
 a partir de uma URL base FHIR, para os consumidores que preferem informar
-``fhir_base`` em vez de um ``token_endpoint`` explicito. A exclusividade
-mutua entre
-``token_endpoint``/``fhir_base`` e a decisao de *quando* chamar esta
-classe (uma unica vez, na construcao do cliente — RF-09 item 5) sao
+``fhir_base`` em vez de um ``token_endpoint`` explícito. A exclusividade
+mútua entre
+``token_endpoint``/``fhir_base`` e a decisão de *quando* chamar esta
+classe (uma única vez, na construção do cliente — RF-09 item 5) são
 responsabilidade do builder/orquestrador (``builder.py``/``client.py``),
-nao deste modulo: aqui so existe a mecanica de uma resolucao isolada.
-Nao faz parte da API publica da biblioteca (nao exportado em
+não deste módulo: aqui só existe a mecânica de uma resolução isolada.
+Não faz parte da API pública da biblioteca (não exportado em
 ``__init__.py``).
 
-O ``httpx.Client`` e recebido por injecao, nunca criado internamente —
-garante que a descoberta reutiliza a mesma configuracao de TLS/mTLS e os
+O ``httpx.Client`` e recebido por injeção, nunca criado internamente —
+garante que a descoberta reutiliza a mesma configuração de TLS/mTLS e os
 mesmos timeouts do cliente principal (RF-09 item 3), sem duplicar essa
-configuracao aqui. Cada chamada gera seu proprio :class:`TraceContext`
-e envia o header ``traceparent`` (mesmo contrato de correlacao usado
+configuração aqui. Cada chamada gera seu próprio :class:`TraceContext`
+e envia o header ``traceparent`` (mesmo contrato de correlação usado
 pelo restante da lib — ver ``trace.py``); corpos de resposta de erro
-sao sanitizados com :func:`hubsaude_client.error_classifier.sanitize_error_response`
-antes de compor a mensagem de excecao, para nao vazar eventuais tokens
+são sanitizados com :func:`hubsaude_client.error_classifier.sanitize_error_response`
+antes de compor a mensagem de exceção, para não vazar eventuais tokens
 presentes num corpo de erro inesperado.
 """
 
@@ -39,14 +39,14 @@ from hubsaude_client.url_validation import require_https_scheme
 #: Services). Sempre relativo a raiz da URL base FHIR informada.
 _SMART_CONFIGURATION_PATH: Final[str] = "/.well-known/smart-configuration"
 
-#: Campo do documento de descoberta que contem o token endpoint.
+#: Campo do documento de descoberta que contém o token endpoint.
 _TOKEN_ENDPOINT_FIELD: Final[str] = "token_endpoint"
 
 #: Logger compartilhado com o restante da lib (ver _log.py): este
-#: colaborador e' detalhe interno de implementacao e o contrato de
-#: observabilidade (filtros de log por nome da classe publica) deve
-#: permanecer estavel independente de como a implementacao interna e'
-#: dividida em modulos.
+#: colaborador é detalhe interno de implementação e o contrato de
+#: observabilidade (filtros de log por nome da classe pública) deve
+#: permanecer estável independente de como a implementação interna é
+#: dividida em módulos.
 _LOG = get_logger()
 
 
@@ -55,9 +55,9 @@ class SmartConfigurationDiscovery:
     consultando ``GET <fhir_base>/.well-known/smart-configuration``.
 
     Colaborador interno de ``SmartTokenClient``/``SmartTokenClientBuilder``;
-    nao faz parte da API publica da biblioteca. Nao mantem estado entre
-    chamadas: cada :meth:`discover_token_endpoint` e uma resolucao
-    independente, com seu proprio ``TraceContext``.
+    não faz parte da API pública da biblioteca. Não mantém estado entre
+    chamadas: cada :meth:`discover_token_endpoint` e uma resolução
+    independente, com seu próprio ``TraceContext``.
     """
 
     __slots__ = ("_http_client",)
@@ -69,7 +69,7 @@ class SmartConfigurationDiscovery:
             http_client: cliente HTTP injetado pelo chamador, ja
                 configurado com o ``ssl_context`` (TLS/mTLS) e os
                 timeouts que o cliente principal usara — esta classe
-                nao cria nem configura seu proprio ``httpx.Client``.
+                não cria nem configura seu próprio ``httpx.Client``.
         """
         self._http_client = http_client
 
@@ -79,17 +79,17 @@ class SmartConfigurationDiscovery:
         Args:
             fhir_base: URL base do servidor FHIR (sem o sufixo
                 ``/.well-known/smart-configuration``, que e adicionado
-                por este metodo). Barra final e tolerada.
+                por este método). Barra final e tolerada.
 
         Returns:
             O ``token_endpoint`` resolvido.
 
         Raises:
-            SmartTokenError: se a requisicao falhar por erro de rede,
-                se a resposta nao tiver status ``200``, se o corpo nao
-                for JSON valido, se o campo ``token_endpoint`` estiver
-                ausente, vazio ou nao for uma string, ou se o
-                ``token_endpoint`` descoberto nao usar https (exceto
+            SmartTokenError: se a requisição falhar por erro de rede,
+                se a resposta não tiver status ``200``, se o corpo não
+                for JSON válido, se o campo ``token_endpoint`` estiver
+                ausente, vazio ou não for uma string, ou se o
+                ``token_endpoint`` descoberto não usar https (exceto
                 para localhost/127.0.0.1/::1 -- ver
                 ``url_validation.require_https_scheme``).
         """
@@ -111,7 +111,7 @@ class SmartConfigurationDiscovery:
                 trace.trace_id,
             )
             raise SmartTokenError(
-                f"Falha na descoberta de configuracao SMART: HTTP {response.status_code}"
+                f"Falha na descoberta de configuração SMART: HTTP {response.status_code}"
                 f" em {well_known_url} (traceId={trace.trace_id})"
                 f" — {sanitize_error_response(response.text)}"
             )
@@ -125,34 +125,34 @@ class SmartConfigurationDiscovery:
                 trace.trace_id,
             )
             raise SmartTokenError(
-                f"Documento de descoberta SMART em {well_known_url} nao contem"
-                f" '{_TOKEN_ENDPOINT_FIELD}' valido (traceId={trace.trace_id})"
+                f"Documento de descoberta SMART em {well_known_url} não contém"
+                f" '{_TOKEN_ENDPOINT_FIELD}' válido (traceId={trace.trace_id})"
             )
 
         # RF-10/RF-18: o token_endpoint devolvido
         # pelo servidor de descoberta precisa ser validado quanto ao
-        # esquema, assim como um token_endpoint informado manualmente ja e'
+        # esquema, assim como um token_endpoint informado manualmente ja é
         # em builder.py -- um .well-known comprometido (ou um MITM capaz de
-        # responder por ele) nao pode fazer este cliente enviar o
+        # responder por ele) não pode fazer este cliente enviar o
         # client_assertion (e credenciais de mTLS) para um endpoint sem TLS.
         require_https_scheme(token_endpoint, "token_endpoint descoberto")
 
         _LOG.debug(
-            "Descoberta SMART concluida: token_endpoint=%s traceId=%s",
+            "Descoberta SMART concluída: token_endpoint=%s traceId=%s",
             token_endpoint,
             trace.trace_id,
         )
         return token_endpoint
 
     def _fetch(self, well_known_url: str, trace: TraceContext) -> httpx.Response:
-        """Executa a requisicao GET, convertendo falha de transporte em
+        """Executa a requisição GET, convertendo falha de transporte em
         ``SmartTokenError``.
 
-        Nota de escopo: ao contrario do fluxo de obtencao de token
-        (``client.py``), a descoberta nao classifica a falha como
-        retriavel/nao-retriavel nem tenta novamente — RF-09 trata a
-        descoberta como uma resolucao unica na construcao do cliente;
-        decidir se vale reconstruir o cliente apos uma falha aqui e do
+        Nota de escopo: ao contrário do fluxo de obtenção de token
+        (``client.py``), a descoberta não classifica a falha como
+        retriavel/não-retriavel nem tenta novamente — RF-09 trata a
+        descoberta como uma resolução única na construção do cliente;
+        decidir se vale reconstruir o cliente após uma falha aqui e do
         chamador.
 
         Args:
@@ -163,7 +163,7 @@ class SmartConfigurationDiscovery:
             Resposta HTTP recebida.
 
         Raises:
-            SmartTokenError: se a requisicao falhar por erro de rede.
+            SmartTokenError: se a requisição falhar por erro de rede.
         """
         try:
             return self._http_client.get(
@@ -178,7 +178,7 @@ class SmartConfigurationDiscovery:
                 exc,
             )
             raise SmartTokenError(
-                f"Falha de rede ao descobrir configuracao SMART em {well_known_url}" f" (traceId={trace.trace_id})",
+                f"Falha de rede ao descobrir configuração SMART em {well_known_url}" f" (traceId={trace.trace_id})",
                 exc,
             )
 
@@ -197,18 +197,18 @@ class SmartConfigurationDiscovery:
             Corpo decodificado (tipo dependente do JSON recebido).
 
         Raises:
-            SmartTokenError: se o corpo nao for JSON valido.
+            SmartTokenError: se o corpo não for JSON válido.
         """
         try:
             return response.json()
         except ValueError as exc:
             _LOG.error(
-                "Resposta de descoberta SMART nao e JSON valido em %s traceId=%s",
+                "Resposta de descoberta SMART não e JSON válido em %s traceId=%s",
                 well_known_url,
                 trace.trace_id,
             )
             raise SmartTokenError(
-                f"Resposta de descoberta SMART em {well_known_url} nao e JSON valido" f" (traceId={trace.trace_id})",
+                f"Resposta de descoberta SMART em {well_known_url} não e JSON válido" f" (traceId={trace.trace_id})",
                 exc,
             )
 
@@ -230,13 +230,13 @@ def _extract_token_endpoint(payload: Any) -> str | None:
     ja decodificado.
 
     Args:
-        payload: corpo JSON decodificado da resposta (tipo arbitrario —
-            um documento de descoberta malformado pode nao ser sequer
+        payload: corpo JSON decodificado da resposta (tipo arbitrário —
+            um documento de descoberta malformado pode não ser sequer
             um objeto).
 
     Returns:
-        O valor de ``token_endpoint`` quando presente, nao vazio e do
-        tipo ``str``; ``None`` caso contrario.
+        O valor de ``token_endpoint`` quando presente, não vazio e do
+        tipo ``str``; ``None`` caso contrário.
     """
     if not isinstance(payload, dict):
         return None

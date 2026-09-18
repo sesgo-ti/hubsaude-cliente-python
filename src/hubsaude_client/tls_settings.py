@@ -1,8 +1,8 @@
-"""Agregacao da configuracao TLS/mTLS e resolucao do ssl.SSLContext efetivo.
+"""Agregação da configuração TLS/mTLS e resolução do ssl.SSLContext efetivo.
 
-Precedencia: ``custom_ssl_context`` (fornecido pronto) > trust anchor em
-memoria > trust anchor em arquivo/trust store padrao, cruzado com
-mTLS-ou-nao (a partir de ``client_private_key``+``client_certificate``,
+Precedência: ``custom_ssl_context`` (fornecido pronto) > trust anchor em
+memória > trust anchor em arquivo/trust store padrão, cruzado com
+mTLS-ou-não (a partir de ``client_private_key``+``client_certificate``,
 independente de terem vindo de PEM ou PKCS#12 -- ambos resolvem para o
 mesmo par chave/certificado).
 """
@@ -21,12 +21,12 @@ from hubsaude_client.defaults import DEFAULT_TLS_PROTOCOL
 
 @dataclass
 class TlsSettings:
-    """Configuracao TLS/mTLS resolvida em um ssl.SSLContext.
+    """Configuração TLS/mTLS resolvida em um ssl.SSLContext.
 
-    Precedencia na resolucao (ver resolve_ssl_context): custom_ssl_context >
-    trust anchor em memoria (server_trust_anchor_cert) > trust anchor em
-    arquivo ou trust store padrao (server_trust_anchor_path) -- cruzado com
-    mTLS quando client_private_key e client_certificate estao presentes.
+    Precedência na resolução (ver resolve_ssl_context): custom_ssl_context >
+    trust anchor em memória (server_trust_anchor_cert) > trust anchor em
+    arquivo ou trust store padrão (server_trust_anchor_path) -- cruzado com
+    mTLS quando client_private_key e client_certificate estão presentes.
     """
 
     client_certificate: x509.Certificate | None = None
@@ -37,11 +37,11 @@ class TlsSettings:
     tls_protocol: str = DEFAULT_TLS_PROTOCOL
 
     def resolve_ssl_context(self) -> ssl.SSLContext:
-        """Resolve o ssl.SSLContext efetivo conforme a precedencia documentada.
+        """Resolve o ssl.SSLContext efetivo conforme a precedência documentada.
 
         Returns:
             Contexto SSL pronto para uso, com mTLS habilitado quando o
-            material do cliente esta disponivel.
+            material do cliente está disponível.
         """
         if self.custom_ssl_context is not None:
             return self.custom_ssl_context

@@ -1,13 +1,13 @@
-"""Construcao do ssl.SSLContext efetivo a partir de material de confianca do
+"""Construção do ssl.SSLContext efetivo a partir de material de confiança do
 servidor e (opcionalmente) do certificado/chave do cliente para mTLS.
 
 - ssl.SSLContext.load_cert_chain() exige caminho de arquivo real; os
-  parametros chegam sempre como objetos em memoria (PrivateKeyTypes/
-  x509.Certificate), entao um arquivo temporario de vida curta e sempre
-  necessario para a apresentacao do certificado do cliente em mTLS.
-- ssl.SSLContext(PROTOCOL_TLS_CLIENT) NAO carrega nenhum CA
+  parâmetros chegam sempre como objetos em memória (PrivateKeyTypes/
+  x509.Certificate), então um arquivo temporário de vida curta e sempre
+  necessário para a apresentação do certificado do cliente em mTLS.
+- ssl.SSLContext(PROTOCOL_TLS_CLIENT) NÃO carrega nenhum CA
   automaticamente -- e preciso chamar load_default_certs()
-  explicitamente quando nao ha trust anchor customizado.
+  explicitamente quando não há trust anchor customizado.
 """
 
 from __future__ import annotations
@@ -39,26 +39,26 @@ def build_ssl_context(
     client_key: PrivateKeyTypes | None = None,
     client_cert: x509.Certificate | None = None,
 ) -> ssl.SSLContext:
-    """Constroi um ssl.SSLContext configurado para o cliente HubSaude.
+    """Constrói um ssl.SSLContext configurado para o cliente HubSaude.
 
     Args:
         server_trust_anchor_path: caminho de um certificado PEM do servidor
             a confiar; ignorado se ``trusted_cert`` for fornecido.
-        trusted_cert: certificado do servidor a confiar, ja em memoria; tem
-            precedencia sobre ``server_trust_anchor_path``.
+        trusted_cert: certificado do servidor a confiar, ja em memória; tem
+            precedência sobre ``server_trust_anchor_path``.
         tls_protocol: protocolo TLS ("TLSv1.2" ou "TLSv1.3").
         client_key: chave privada do cliente, para mTLS.
         client_cert: certificado do cliente, para mTLS.
 
     Returns:
         Contexto SSL configurado. Quando nem ``trusted_cert`` nem
-        ``server_trust_anchor_path`` sao fornecidos, usa o trust store padrao
-        do sistema. Quando ``client_key``/``client_cert`` estao presentes,
+        ``server_trust_anchor_path`` são fornecidos, usa o trust store padrão
+        do sistema. Quando ``client_key``/``client_cert`` estão presentes,
         habilita mTLS.
 
     Raises:
-        SmartTokenError: se o protocolo nao for suportado, ou algum
-            certificado estiver fora do periodo de validade.
+        SmartTokenError: se o protocolo não for suportado, ou algum
+            certificado estiver fora do período de validade.
     """
     version = _resolve_tls_version(tls_protocol)
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
@@ -79,7 +79,7 @@ def _resolve_tls_version(tls_protocol: str) -> ssl.TLSVersion:
         return _TLS_VERSIONS[tls_protocol]
     except KeyError as exc:
         raise SmartTokenError(
-            f"Protocolo TLS nao suportado: {tls_protocol}. Protocolos validos: {', '.join(_TLS_VERSIONS)}"
+            f"Protocolo TLS não suportado: {tls_protocol}. Protocolos válidos: {', '.join(_TLS_VERSIONS)}"
         ) from exc
 
 
@@ -90,7 +90,7 @@ def _configure_trust(
         check_certificate_validity(trusted_cert, _subject_of(trusted_cert))
         context.load_verify_locations(cadata=_to_pem_str(trusted_cert))
     elif server_trust_anchor_path is not None:
-        trusted = load_certificate(server_trust_anchor_path)  # ja valida periodo de validade
+        trusted = load_certificate(server_trust_anchor_path)  # ja valida período de validade
         context.load_verify_locations(cadata=_to_pem_str(trusted))
     else:
         context.load_default_certs(ssl.Purpose.SERVER_AUTH)
@@ -100,23 +100,23 @@ def _load_client_cert_chain(
     context: ssl.SSLContext, client_key: PrivateKeyTypes, client_cert: x509.Certificate
 ) -> None:
     """Carrega o par certificado/chave do cliente no contexto TLS, via
-    arquivo temporario (``ssl.SSLContext.load_cert_chain()`` exige um
-    caminho de arquivo real -- nao aceita a chave/certificado diretamente
-    como bytes em memoria).
+    arquivo temporário (``ssl.SSLContext.load_cert_chain()`` exige um
+    caminho de arquivo real -- não aceita a chave/certificado diretamente
+    como bytes em memória).
 
-    Higiene de segredo em memoria (risco residual reconhecido): ``key_pem``
-    e um objeto ``bytes`` imutavel (retorno de
+    Higiene de segredo em memória (risco residual reconhecido): ``key_pem``
+    e um objeto ``bytes`` imutável (retorno de
     ``PrivateKeyTypes.private_bytes()`` da biblioteca ``cryptography``, que
-    so devolve ``bytes``, nunca ``bytearray``) e por isso NAO pode ser
-    zerado explicitamente apos o uso, diferente do padrao ja usado em
-    outras partes desta biblioteca para senhas (``bytearray`` mutavel,
-    zerado apos o uso -- ver ``pem_loader.clear_password``). O conteudo
-    da chave privada em texto claro permanece em memoria ate o coletor de
-    lixo do Python decidir liberar o objeto, sem controle explicito deste
-    codigo. Mesma limitacao, documentada, ja aceita para o PIN de
-    ``strategy_factory.from_pkcs11`` (tambem ``str`` imutavel) -- este e o
-    equivalente para a chave privada neste ponto especifico. O arquivo
-    temporario em si nao e o problema: e criado com permissao
+    só devolve ``bytes``, nunca ``bytearray``) e por isso NÃO pode ser
+    zerado explicitamente após o uso, diferente do padrão ja usado em
+    outras partes desta biblioteca para senhas (``bytearray`` mutável,
+    zerado após o uso -- ver ``pem_loader.clear_password``). O conteúdo
+    da chave privada em texto claro permanece em memória até o coletor de
+    lixo do Python decidir liberar o objeto, sem controle explícito deste
+    código. Mesma limitação, documentada, ja aceita para o PIN de
+    ``strategy_factory.from_pkcs11`` (também ``str`` imutável) -- este e o
+    equivalente para a chave privada neste ponto específico. O arquivo
+    temporário em si não e o problema: e criado com permissão
     leitura/escrita apenas para o dono e removido logo em seguida, no
     ``finally``.
     """
@@ -126,9 +126,9 @@ def _load_client_cert_chain(
         encryption_algorithm=serialization.NoEncryption(),
     )
     cert_pem = client_cert.public_bytes(serialization.Encoding.PEM)
-    # tempfile.mkstemp() ja cria o arquivo com permissao 0o600 (leitura/
-    # escrita apenas para o dono) por padrao nesta plataforma -- sem
-    # necessidade de os.chmod() explicito logo em seguida.
+    # tempfile.mkstemp() ja cria o arquivo com permissão 0o600 (leitura/
+    # escrita apenas para o dono) por padrão nesta plataforma -- sem
+    # necessidade de os.chmod() explícito logo em seguida.
     fd, path_str = tempfile.mkstemp(suffix=".pem")
     try:
         with os.fdopen(fd, "wb") as handle:
