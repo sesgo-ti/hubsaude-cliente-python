@@ -1,14 +1,14 @@
-"""Agregacao da configuracao de assinatura do client_assertion JWT, e
-resolucao da SigningStrategy efetiva a partir dela.
+"""Agregação da configuração de assinatura do client_assertion JWT, e
+resolução da SigningStrategy efetiva a partir dela.
 
-Nao lida com o claim ``hub_ctx`` (ver Global Constraints do plano de
-execucao) -- isso e responsabilidade da orquestracao do cliente HTTP,
-fora do escopo deste modulo. As fontes de assinatura sao mutuamente
-exclusivas: uma SigningStrategy propria (HSM, cofre de segredos) ou uma
-chave privada em arquivo PEM, da qual a estrategia e derivada conforme o
+Não lida com o claim ``hub_ctx`` (ver Global Constraints do plano de
+execução) -- isso e responsabilidade da orquestração do cliente HTTP,
+fora do escopo deste módulo. As fontes de assinatura são mutuamente
+exclusivas: uma SigningStrategy própria (HSM, cofre de segredos) ou uma
+chave privada em arquivo PEM, da qual a estratégia e derivada conforme o
 algoritmo JWT configurado.
 
-Ponto de entrada consumido pelo cliente HTTP/orquestracao, junto
+Ponto de entrada consumido pelo cliente HTTP/orquestração, junto
 com TlsSettings.
 """
 
@@ -26,12 +26,12 @@ from hubsaude_client.ports import SigningStrategy
 
 @dataclass(frozen=True)
 class ResolvedSigning:
-    """Resultado da resolucao da configuracao de assinatura.
+    """Resultado da resolução da configuração de assinatura.
 
     Attributes:
-        strategy: estrategia de assinatura efetiva do client_assertion.
-        client_key: chave privada carregada do PEM, disponivel para uso em
-            mTLS; ``None`` quando a estrategia foi fornecida diretamente
+        strategy: estratégia de assinatura efetiva do client_assertion.
+        client_key: chave privada carregada do PEM, disponível para uso em
+            mTLS; ``None`` quando a estratégia foi fornecida diretamente
             (HSM, cofre de segredos).
     """
 
@@ -41,26 +41,26 @@ class ResolvedSigning:
 
 @dataclass
 class SigningSettings:
-    """Configuracao de assinatura do client_assertion JWT.
+    """Configuração de assinatura do client_assertion JWT.
 
     Attributes:
         private_key_pem: caminho da chave privada PEM; exclusivo com
             ``signing_strategy``.
-        private_key_password: senha da chave privada PEM (``None`` se nao
+        private_key_password: senha da chave privada PEM (``None`` se não
             criptografada). E consumida: repassada a ``pem_loader``, que
             zera o array ao final de ``resolve()``, em sucesso ou erro. O
-            chamador nao deve reutiliza-la.
-        signing_strategy: estrategia de assinatura propria (HSM, cofre de
+            chamador não deve reutiliza-la.
+        signing_strategy: estratégia de assinatura própria (HSM, cofre de
             segredos); exclusiva com ``private_key_pem``.
         jwt_algorithm: algoritmo JWT do client_assertion.
 
-    Nota: esta classe NAO tem um campo ``key_id``. O identificador de chave
+    Nota: esta classe NÃO tem um campo ``key_id``. O identificador de chave
     (``kid``) do header do JWT e configurado exclusivamente via
-    ``SmartTokenClientBuilder.key_id()`` -- e' o builder quem mantem esse
-    valor vivo ate a construcao do ``SmartTokenClient``. Uma versao anterior
+    ``SmartTokenClientBuilder.key_id()`` -- é o builder quem mantém esse
+    valor vivo até a construção do ``SmartTokenClient``. Uma versão anterior
     desta classe expunha um campo ``key_id`` que nunca produzia efeito
     algum (``resolve()`` nunca o lia, e o builder nunca o repassava para
-    ca'); foi removido para nao sugerir, de forma enganosa, que configurar
+    cá); foi removido para não sugerir, de forma enganosa, que configurar
     ``SigningSettings(key_id=...)`` diretamente teria algum efeito.
     """
 
@@ -70,27 +70,27 @@ class SigningSettings:
     jwt_algorithm: str = DEFAULT_JWT_ALGORITHM
 
     def resolve(self) -> ResolvedSigning:
-        """Resolve a estrategia de assinatura efetiva.
+        """Resolve a estratégia de assinatura efetiva.
 
-        Quando a chave vem de arquivo PEM, a estrategia e criada a partir do
-        algoritmo JWT configurado e a chave carregada fica disponivel para
+        Quando a chave vem de arquivo PEM, a estratégia e criada a partir do
+        algoritmo JWT configurado e a chave carregada fica disponível para
         uso em mTLS.
 
         Returns:
-            A estrategia efetiva e, quando aplicavel, a chave privada
+            A estratégia efetiva e, quando aplicável, a chave privada
             carregada do PEM.
 
         Raises:
             ValueError: se ambas ou nenhuma das fontes de assinatura forem
                 definidas.
-            SmartTokenError: se o arquivo PEM nao puder ser carregado.
+            SmartTokenError: se o arquivo PEM não puder ser carregado.
         """
         if self.signing_strategy is not None:
             if self.private_key_pem is not None:
-                raise ValueError("Defina signing_strategy OU private_key_pem, nao ambos")
+                raise ValueError("Defina signing_strategy OU private_key_pem, não ambos")
             return ResolvedSigning(self.signing_strategy, None)
         if self.private_key_pem is None:
-            raise ValueError("E obrigatorio definir signing_strategy ou private_key_pem")
+            raise ValueError("E obrigatório definir signing_strategy ou private_key_pem")
         client_key = pem_loader.load_private_key(self.private_key_pem, self.private_key_password)
         strategy = strategy_factory.from_private_key(client_key, self.jwt_algorithm)
         return ResolvedSigning(strategy, client_key)
