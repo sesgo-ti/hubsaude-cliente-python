@@ -509,9 +509,11 @@ class SmartTokenClient:
                     raise self._error_classifier.http_failure(response, trace, body_text)
             except httpx.RequestError as exc:
                 # Relanca diretamente se nao-retriavel (ou levanta
-                # SmartTokenError na heuristica de rejeicao do
-                # certificado de cliente); devolve a excecao quando
-                # retriavel, para a logica de retry abaixo.
+                # SmartTokenError quando a rejeicao do certificado de
+                # cliente e' CONFIRMADA); devolve a excecao quando
+                # retriavel -- inclusive no sinal AMBIGUO de rejeicao do
+                # certificado (ver ErrorClassifier.retriable_or_reraise) --
+                # para a logica de retry abaixo.
                 last_exc = self._error_classifier.retriable_or_reraise(exc, trace)
                 if attempt < max_retries:
                     _LOG.warning(
@@ -524,9 +526,13 @@ class SmartTokenClient:
                     )
                     time.sleep(compute_retry_delay_seconds(attempt))
                     continue
+                # exhaustion_hint() acrescenta um alerta sobre possivel
+                # rejeicao de certificado quando a ultima falha carrega
+                # esse sinal ambiguo (string vazia nos demais casos).
                 raise SmartTokenError(
                     f"Falha ao obter token para clientId={self._client_id} apos {attempt}"
-                    f" tentativa(s) (traceId={trace.trace_id}): {last_exc}",
+                    f" tentativa(s) (traceId={trace.trace_id}): {last_exc}."
+                    f"{self._error_classifier.exhaustion_hint(last_exc)}",
                     last_exc,
                 ) from last_exc
 
