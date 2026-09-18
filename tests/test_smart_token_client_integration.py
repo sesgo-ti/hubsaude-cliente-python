@@ -65,9 +65,9 @@ pytestmark = [
     pytest.mark.skipif(
         not simulator_available(),
         reason=(
-            "Simulador indisponivel neste ambiente: defina a variavel de ambiente "
+            "Simulador indisponível neste ambiente: defina a variável de ambiente "
             "HUBSAUDE_SIMULADOR_JAR (ou copie o JAR para .simulator/hubsaude-simulador.jar "
-            "na raiz do repositorio) e garanta 'java' (21+) no PATH."
+            "na raiz do repositório) e garanta 'java' (21+) no PATH."
         ),
     ),
 ]
@@ -324,7 +324,7 @@ def test_obtem_token_via_discovery(simulator: SimulatorInfo, client_credentials:
     )
 
     # O client deve ter resolvido o token_endpoint via descoberta no
-    # build() e conseguido obter token contra a propria instancia do
+    # build() e conseguido obter token contra a própria instância do
     # simulador.
     with builder.build() as client:
         access_token = client.obtain_token("system/Patient.rs")
@@ -400,7 +400,7 @@ def test_sa_aceita_client_assertion_sem_kid(simulator: SimulatorInfo, client_cre
         ssl_context=mtls_context,
     )
 
-    assert response.status_code == 200, "Com uma unica chave registrada, kid e dispensavel (concern Sec5.1)"
+    assert response.status_code == 200, "Com uma única chave registrada, kid e dispensável (concern Sec5.1)"
     assert "access_token" in response.text
 
 
