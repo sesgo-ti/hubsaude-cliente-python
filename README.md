@@ -329,7 +329,7 @@ client = (
 Confira que o par extraído é consistente antes de usar em produção —
 o builder já faz essa checagem automaticamente (RF-15,
 `key_certificate_consistency.verify_strategy`) e falha rápido
-(`SmartTokenError: Chave privada nao corresponde ao certificado`) se
+(`SmartTokenError: Chave privada não corresponde ao certificado`) se
 os arquivos não corresponderem. Para conferir manualmente antes,
 compare o *modulus* (RSA):
 
@@ -455,14 +455,14 @@ a causa e, quando aplicável, a causa original preservada em
 |---|---|---|
 | `Chave criptografada requer senha` | PEM da chave privada tem senha, mas `.private_key_pem(path)` foi chamado sem o parâmetro `password` | Informe a senha: `.private_key_pem(path, password=bytearray(b"..."))` |
 | `Falha ao decriptar chave, verifique a senha fornecida` | Senha incorreta para uma chave PEM criptografada | Confirme a senha com quem gerou a chave; teste com `openssl rsa -check -in key.pem` |
-| `formato de chave PEM invalido` | Arquivo não é uma chave privada PEM válida (ex.: é um certificado, ou está corrompido) | Confirme o conteúdo: `openssl pkey -in key.pem -noout -text`. PKCS#1 (`BEGIN RSA PRIVATE KEY`) e PKCS#8 (`BEGIN PRIVATE KEY`) são aceitos automaticamente, sem necessidade de conversão manual |
+| `formato de chave PEM inválido` | Arquivo não é uma chave privada PEM válida (ex.: é um certificado, ou está corrompido) | Confirme o conteúdo: `openssl pkey -in key.pem -noout -text`. PKCS#1 (`BEGIN RSA PRIVATE KEY`) e PKCS#8 (`BEGIN PRIVATE KEY`) são aceitos automaticamente, sem necessidade de conversão manual |
 | `Chave RSA de N bits rejeitada` / `Chave EC com campo de N bits rejeitada` | Chave abaixo do tamanho mínimo aceito (RSA < 2048 bits, EC < P-256) | Gere uma chave maior: `openssl genrsa -out key.pem 2048` ou `openssl ecparam -name prime256v1 -genkey -noout -out key.pem` |
-| `Certificado ainda nao e valido` / `Certificado expirado` | Certificado (cliente ou `server_trust_anchor`) fora do período de validade (`notBefore`/`notAfter`) | Verifique as datas: `openssl x509 -noout -dates -in cert.pem`; emita/renove o certificado |
-| `Chave privada nao corresponde ao certificado: assinatura invalida` | `.private_key_pem()` + `.certificate_pem()` apontam para um par chave/certificado que não combina | Compare o *modulus* (RSA): `openssl x509 -noout -modulus -in cert.pem \| openssl md5` vs `openssl rsa -noout -modulus -in key.pem \| openssl md5`; para EC, compare a chave pública derivada |
-| `Falha ao carregar PKCS#12 (senha incorreta ou arquivo invalido?)` | Senha errada para o bundle `.client_key_store()`/`from_pkcs12`, ou arquivo não é um PKCS#12 válido | Teste a senha isoladamente: `openssl pkcs12 -info -in bundle.p12 -noout -passin pass:SENHA` |
-| `Falha ao abrir sessao PKCS#11 (PIN incorreto?)` | PIN incorreto para `strategy_factory.from_pkcs11`, ou o slot/token não está acessível | Confirme o PIN e o `token_label` com `pkcs11-tool --list-slots` (pacote `opensc`) |
-| `Chave nao encontrada no token PKCS#11` | `key_label` não corresponde a nenhum objeto de chave no token | Liste os objetos: `pkcs11-tool --list-objects --login --pin SEU_PIN` e confira o `key_label` exato |
-| `Protocolo TLS nao suportado` | `.tls_protocol(...)` recebeu um valor diferente de `TLSv1.2`/`TLSv1.3` | Use um dos dois valores suportados (`defaults.DEFAULT_TLS_PROTOCOL` é `TLSv1.3`) |
+| `Certificado ainda não é válido` / `Certificado expirado` | Certificado (cliente ou `server_trust_anchor`) fora do período de validade (`notBefore`/`notAfter`) | Verifique as datas: `openssl x509 -noout -dates -in cert.pem`; emita/renove o certificado |
+| `Chave privada não corresponde ao certificado: assinatura inválida` | `.private_key_pem()` + `.certificate_pem()` apontam para um par chave/certificado que não combina | Compare o *modulus* (RSA): `openssl x509 -noout -modulus -in cert.pem \| openssl md5` vs `openssl rsa -noout -modulus -in key.pem \| openssl md5`; para EC, compare a chave pública derivada |
+| `Falha ao carregar PKCS#12 (senha incorreta ou arquivo inválido?)` | Senha errada para o bundle `.client_key_store()`/`from_pkcs12`, ou arquivo não é um PKCS#12 válido | Teste a senha isoladamente: `openssl pkcs12 -info -in bundle.p12 -noout -passin pass:SENHA` |
+| `Falha ao abrir sessão PKCS#11 (PIN incorreto?)` | PIN incorreto para `strategy_factory.from_pkcs11`, ou o slot/token não está acessível | Confirme o PIN e o `token_label` com `pkcs11-tool --list-slots` (pacote `opensc`) |
+| `Chave não encontrada no token PKCS#11` | `key_label` não corresponde a nenhum objeto de chave no token | Liste os objetos: `pkcs11-tool --list-objects --login --pin SEU_PIN` e confira o `key_label` exato |
+| `Protocolo TLS não suportado` | `.tls_protocol(...)` recebeu um valor diferente de `TLSv1.2`/`TLSv1.3` | Use um dos dois valores suportados (`defaults.DEFAULT_TLS_PROTOCOL` é `TLSv1.3`) |
 | `ssl.SSLCertVerificationError` (fora de `SmartTokenError`, direto do `ssl`) — ex. `unable to get local issuer certificate` | CA do servidor não confiável pelo trust store em uso | Use `.server_trust_anchor(caminho)` (homologação/simulador) ou consulte o [guia de troubleshooting TLS](docs/troubleshooting.md) para importar a CA no ambiente |
 | `httpx.ConnectTimeout` / `httpx.ConnectError` (após esgotar `max_retries`) | Firewall, endpoint incorreto, ou serviço indisponível | Verifique conectividade e a URL de `.token_endpoint()`/`.fhir_base()`; esses casos já são retriáveis automaticamente até `max_retries` |
 

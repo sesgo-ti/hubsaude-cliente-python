@@ -213,9 +213,9 @@ diagnosticá-los:
 | Sintoma | Causa provável | Onde investigar |
 | --- | --- | --- |
 | `SmartTokenError` ao carregar o módulo (`pkcs11_module_path`) | Caminho incorreto para a biblioteca `.so`/`.dll` do fabricante, ou biblioteca não instalada no ambiente de execução | Confirme o caminho com o fabricante do HSM/smart card; em containers, confirme que a biblioteca nativa foi copiada para a imagem |
-| `SmartTokenError` "Token nao encontrado" | `token_label` não corresponde a nenhum token inicializado no dispositivo | Liste os tokens disponíveis com a ferramenta do fabricante (ex.: `pkcs11-tool --list-slots` para a maioria dos dispositivos compatíveis com OpenSC) |
-| `SmartTokenError` "Falha ao abrir sessao" | PIN incorreto, ou token bloqueado após tentativas malsucedidas anteriores | Verifique o PIN com o responsável pelo dispositivo; nunca tente PINs repetidamente sem confirmar o contador de tentativas restantes |
-| `SmartTokenError` "Chave nao encontrada" | `key_label` não corresponde a nenhuma chave privada no token, ou a chave existe mas não é do tipo `PRIVATE_KEY` | Liste os objetos do token com a ferramenta do fabricante e confirme o rótulo exato (sensível a maiúsculas/minúsculas) |
+| `SmartTokenError` "Token não encontrado" | `token_label` não corresponde a nenhum token inicializado no dispositivo | Liste os tokens disponíveis com a ferramenta do fabricante (ex.: `pkcs11-tool --list-slots` para a maioria dos dispositivos compatíveis com OpenSC) |
+| `SmartTokenError` "Falha ao abrir sessão" | PIN incorreto, ou token bloqueado após tentativas malsucedidas anteriores | Verifique o PIN com o responsável pelo dispositivo; nunca tente PINs repetidamente sem confirmar o contador de tentativas restantes |
+| `SmartTokenError` "Chave não encontrada" | `key_label` não corresponde a nenhuma chave privada no token, ou a chave existe mas não é do tipo `PRIVATE_KEY` | Liste os objetos do token com a ferramenta do fabricante e confirme o rótulo exato (sensível a maiúsculas/minúsculas) |
 | Assinatura falha em produção com `ES256`/`ES384`/`ES512` contra um HSM/token específico | Firmware/driver do dispositivo sem suporte ao mecanismo PKCS#11 combinado — mitigado nesta biblioteca desde a correção que passou a usar sempre o mecanismo puro `CKM_ECDSA` com o resumo calculado no cliente | Confirme a versão desta biblioteca em uso; se o problema persistir mesmo na versão corrigida, verifique com o fabricante quais mecanismos ECDSA o dispositivo expõe |
 
 Ferramentas de linha de comando genéricas (não específicas desta

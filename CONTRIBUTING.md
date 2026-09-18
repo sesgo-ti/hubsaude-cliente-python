@@ -187,7 +187,7 @@ de implementação.
   `pem_loader.py`, `strategy_factory.py`, `ssl_context_factory.py` etc.
   ficam soltos direto em `hubsaude_client/`, sem subpacote `signing/`
   dedicado — decisão definitiva, não provisória. Consequência prática:
-  o contrato "Modulos de assinatura nao dependem de HTTP" em
+  o contrato "Módulos de assinatura não dependem de HTTP" em
   `[tool.importlinter]` (`pyproject.toml`) lista os módulos um a um em
   `source_modules`, em vez de apontar para um pacote só. **Todo PR que
   adicionar um novo módulo de assinatura/TLS DEVE incluí-lo nessa
