@@ -8,14 +8,19 @@ erros que, no cliente HTTP (``client.py``), inflaria a complexidade da
 orquestracao principal. Nao faz parte da API publica da biblioteca (nao
 exportado em ``__init__.py``).
 
-Falhas de transporte tratadas como transitorias, elegiveis a retry, sao
-listadas em ``_TRANSIENT_NETWORK_EXCEPTION_TYPES``: timeout de conexao ou
-de requisicao (``httpx.TimeoutException`` e subclasses) e recusa/queda de
+Falhas de transporte tratadas como transitorias por
+:func:`is_transient_network_failure`, elegiveis a retry, sao listadas em
+``_TRANSIENT_NETWORK_EXCEPTION_TYPES``: timeout de conexao ou de
+requisicao (``httpx.TimeoutException`` e subclasses) e recusa/queda de
 conexao TCP durante leitura ou escrita (``httpx.ConnectError``,
 ``httpx.ReadError``, ``httpx.WriteError``). Falhas de TLS
-(``ssl.SSLError``) nunca sao tratadas como transitorias -- ver
-:func:`is_transient_network_failure` e
-:func:`is_likely_client_certificate_rejection`.
+(``ssl.SSLError``) nunca sao consideradas transitorias por essa funcao.
+Isso nao significa, porem, que toda falha de TLS interrompe o retry: ver
+:func:`is_likely_client_certificate_rejection` e
+:class:`CertRejectionConfidence` -- o sinal CONFIRMED interrompe
+imediatamente, mas o sinal PROBABLE (ambiguo) e' tratado como retriavel
+por :meth:`ErrorClassifier.retriable_or_reraise`, por caminho separado
+de :func:`is_transient_network_failure`.
 
 A stdlib ``ssl`` nao expoe um tipo proprio para "falha durante o
 handshake": alertas TLS recebidos do servidor (ex.:
@@ -43,10 +48,16 @@ passou a ser reconhecida por
 :func:`is_likely_client_certificate_rejection` (fragmento
 ``_TLS13_EOF_AFTER_HANDSHAKE_MESSAGE_FRAGMENT``, restrito ao tipo
 exato ``ssl.SSLEOFError`` e a essa mensagem, para nao capturar EOFs
-genuinamente transitorios). Em qualquer uma das duas variantes a
-conexao e' relancada corretamente e nunca e' tratada como retriavel
-(``is_transient_network_failure`` ja exclui todo ``ssl.SSLError``,
-incluindo ``ssl.SSLEOFError``).
+genuinamente transitorios) -- mas como sinal ``PROBABLE``, nao
+``CONFIRMED`` (ver :class:`CertRejectionConfidence`): o mesmo texto
+tambem pode surgir de uma instabilidade de rede comum sem relacao com o
+certificado, entao essa variante nao interrompe o retry por si so',
+diferente do alerta limpo (``CONFIRMED``). Em nenhuma das duas variantes
+a excecao e' tratada como transitoria por
+``is_transient_network_failure`` (que ja exclui todo ``ssl.SSLError``,
+incluindo ``ssl.SSLEOFError``) -- a retriabilidade do sinal ``PROBABLE``
+vem de um caminho separado, em
+:meth:`ErrorClassifier.retriable_or_reraise`.
 
 A cadeia de causas e' percorrida (``__cause__``, com fallback para
 ``__context__`` quando a excecao nao foi relancada explicitamente com
@@ -58,6 +69,7 @@ falha original numa excecao de nivel mais alto (ex.:
 
 from __future__ import annotations
 
+import enum
 import re
 import ssl
 from typing import Final
@@ -148,6 +160,30 @@ _CLIENT_CERT_REJECTION_ALERT_FRAGMENTS: Final[tuple[str, ...]] = (
 _TLS13_EOF_AFTER_HANDSHAKE_MESSAGE_FRAGMENT: Final[str] = "eof occurred in violation of protocol"
 
 
+class CertRejectionConfidence(enum.Enum):
+    """Nivel de confianca de que uma falha de TLS representa rejeicao do
+    certificado de cliente pelo servidor, devolvido por
+    :func:`is_likely_client_certificate_rejection`.
+
+    Os dois niveis existem porque nem todo sinal reconhecido tem a mesma
+    forca: um alerta TLS explicito do servidor e' inequivoco, mas um
+    ``ssl.SSLEOFError`` sem alerta textual (variante observada sob TLS
+    1.3, ver nota no topo do modulo) tambem pode ser apenas uma
+    instabilidade de rede comum, sem relacao com o certificado.
+    """
+
+    #: Nenhum sinal reconhecido de rejeicao do certificado de cliente.
+    NONE = "none"
+    #: Sinal ambiguo (``ssl.SSLEOFError`` sem alerta textual explicito) --
+    #: nao deve interromper o retry por si so, apenas enriquecer a
+    #: mensagem de erro final caso as tentativas se esgotem por outro
+    #: motivo.
+    PROBABLE = "probable"
+    #: Alerta TLS explicito e inequivoco recebido do servidor --
+    #: interrompe o retry imediatamente.
+    CONFIRMED = "confirmed"
+
+
 class ErrorClassifier:
     """Classificador de falhas na obtencao de token, ligado a um
     cliente/endpoint especificos.
@@ -171,8 +207,21 @@ class ErrorClassifier:
     def retriable_or_reraise(self, exc: httpx.RequestError, trace: TraceContext) -> httpx.RequestError:
         """Classifica a excecao de transporte: devolve-a quando representa
         falha transitoria de rede (timeout de conexao ou de requisicao,
-        recusa ou queda de conexao TCP) para que o chamador realize retry;
-        caso contrario, relanca.
+        recusa ou queda de conexao TCP) ou sinal AMBIGUO de rejeicao do
+        certificado de cliente (``CertRejectionConfidence.PROBABLE``) para
+        que o chamador realize retry; caso contrario, relanca.
+
+        So' o sinal CONFIRMADO (``CertRejectionConfidence.CONFIRMED`` --
+        alerta TLS explicito e inequivoco) interrompe o retry
+        imediatamente. O sinal PROVAVEL (``ssl.SSLEOFError`` sem alerta
+        textual, ver :class:`CertRejectionConfidence`) e' tratado como
+        retriavel: pode ser rejeicao de certificado, mas tambem pode ser
+        apenas instabilidade de rede comum, e nao ha' como distinguir os
+        dois casos so' com essa excecao -- interromper o retry por um sinal
+        ambiguo negaria ao mecanismo de recuperacao a chance de atuar.
+        Quando o retry se esgota com esse sinal na ultima tentativa, o
+        chamador deve enriquecer a mensagem final com
+        :meth:`exhaustion_hint`.
 
         Args:
             exc: excecao capturada na tentativa.
@@ -183,10 +232,11 @@ class ErrorClassifier:
 
         Raises:
             httpx.RequestError: quando a excecao nao e' retriavel.
-            SmartTokenError: quando a falha aparenta ser rejeicao do
+            SmartTokenError: quando a falha e' confirmada como rejeicao do
                 certificado de cliente no mTLS.
         """
-        if is_likely_client_certificate_rejection(exc):
+        confidence = is_likely_client_certificate_rejection(exc)
+        if confidence is CertRejectionConfidence.CONFIRMED:
             _LOG.error(
                 "Falha de TLS apos handshake mTLS para clientId=%s endpoint=%s "
                 "traceId=%s: %s. Causa provavel: certificado de cliente rejeitado "
@@ -208,9 +258,39 @@ class ErrorClassifier:
                 "o encerramento abrupto da conexao.",
                 exc,
             )
-        if is_transient_network_failure(exc):
+        if confidence is CertRejectionConfidence.PROBABLE or is_transient_network_failure(exc):
             return exc
         raise exc
+
+    def exhaustion_hint(self, last_exc: BaseException) -> str:
+        """Complemento textual para a mensagem final de erro quando o
+        retry se esgota, usado apenas quando a ultima falha carrega um
+        sinal AMBIGUO (``CertRejectionConfidence.PROBABLE``) de rejeicao
+        do certificado de cliente -- ver :meth:`retriable_or_reraise` e
+        :class:`CertRejectionConfidence`. Retorna string vazia nos demais
+        casos.
+
+        Diferente do sinal CONFIRMADO (que interrompe o retry
+        imediatamente com uma mensagem dedicada), o sinal PROVAVEL deixa o
+        retry seguir seu curso normal; esta dica evita descartar essa
+        pista caso, mesmo assim, todas as tentativas se esgotem.
+
+        Args:
+            last_exc: ultima excecao capturada antes do retry se esgotar.
+
+        Returns:
+            Trecho adicional pronto para concatenar na mensagem final
+            (comeca com espaco), ou string vazia.
+        """
+        if is_likely_client_certificate_rejection(last_exc) is CertRejectionConfidence.PROBABLE:
+            return (
+                " Um sinal ambiguo de possivel rejeicao do certificado de "
+                "cliente pelo servidor tambem foi observado na ultima "
+                "tentativa (EOF apos o handshake mTLS, sem alerta TLS "
+                "explicito) — considere verificar a validade do "
+                "certificado em uso."
+            )
+        return ""
 
     def http_failure(
         self,
@@ -293,55 +373,62 @@ def is_transient_network_failure(exc: BaseException) -> bool:
     return False
 
 
-def is_likely_client_certificate_rejection(exc: BaseException | None) -> bool:
+def is_likely_client_certificate_rejection(exc: BaseException | None) -> CertRejectionConfidence:
     """Heuristica para identificar falhas de TLS que tipicamente indicam
     que o servidor rejeitou o certificado de cliente (revogado, expirado
     ou nao confiavel) sem produzir uma resposta HTTP de erro adequada.
+    Distingue dois niveis de confianca (ver :class:`CertRejectionConfidence`):
 
-    Sao tratadas como suspeitas: qualquer ``ssl.SSLError`` (exceto
+    CONFIRMED: qualquer ``ssl.SSLError`` (exceto
     ``ssl.SSLCertVerificationError``, ver abaixo) cuja mensagem contenha um
-    alerta TLS tipico desse cenario (``handshake_failure``,
+    alerta TLS tipico e inequivoco desse cenario (``handshake_failure``,
     ``certificate_revoked``, ``certificate_expired``, ``certificate_unknown``,
     ``unknown_ca``, ``bad_record_mac``, ``decrypt_error``, ``access_denied``
-    — ver nota no topo do modulo); e qualquer
-    ``ssl.SSLEOFError`` (tipo exato, nao ``ssl.SSLError`` generico) cuja
-    mensagem seja a variante sem alerta textual que builds de OpenSSL sob
-    TLS 1.3 produzem para o mesmo cenario. Validado com handshake mTLS
-    real sob TLS 1.2 (alerta ``unknown ca``) e sob TLS 1.3 (ambas as
-    superficies observadas: alerta limpo e ``ssl.SSLEOFError``) — ver
+    — ver nota no topo do modulo).
+
+    PROBABLE: qualquer ``ssl.SSLEOFError`` (tipo exato, nao
+    ``ssl.SSLError`` generico) cuja mensagem seja a variante sem alerta
+    textual que builds de OpenSSL sob TLS 1.3 produzem para o mesmo
+    cenario -- sinal ambiguo, ja que o mesmo texto tambem pode surgir de
+    uma instabilidade de rede comum sem relacao com o certificado.
+
+    Validado com handshake mTLS real sob TLS 1.2 (alerta ``unknown ca``,
+    CONFIRMED) e sob TLS 1.3 (ambas as superficies observadas: alerta
+    limpo CONFIRMED e ``ssl.SSLEOFError`` PROBABLE) — ver
     ``tests/test_error_classifier_real_mtls.py``.
 
     Falhas cuja cadeia de causas contenha ``ssl.SSLCertVerificationError``
-    sao excluidas: indicam que foi ESTE cliente que rejeitou o certificado
-    do servidor (ex.: "certificate verify failed" por trust anchor ausente
-    ou incorreto), e nao o contrario.
+    sao excluidas (``NONE``): indicam que foi ESTE cliente que rejeitou o
+    certificado do servidor (ex.: "certificate verify failed" por trust
+    anchor ausente ou incorreto), e nao o contrario.
 
-    Esta verificacao e' heuristica e deve ser usada apenas para enriquecer
-    mensagens de erro; nao substitui o diagnostico do servidor.
+    Esta verificacao e' heuristica e deve ser usada apenas para decidir
+    interromper o retry (CONFIRMED) ou enriquecer a mensagem de erro final
+    (PROBABLE); nao substitui o diagnostico do servidor.
 
     Args:
         exc: excecao a inspecionar (aceita ``None``).
 
     Returns:
-        ``True`` quando o padrao sugere rejeicao do certificado de cliente
-        pelo servidor.
+        O nivel de confianca de que o padrao observado indica rejeicao do
+        certificado de cliente pelo servidor.
     """
     chain = _cause_chain(exc)
     if any(isinstance(cause, ssl.SSLCertVerificationError) for cause in chain):
         # Cliente rejeitou o certificado do SERVIDOR (validacao local do
         # trust anchor) — nao e' rejeicao mTLS pelo servidor.
-        return False
+        return CertRejectionConfidence.NONE
     for cause in chain:
         if isinstance(cause, ssl.SSLEOFError):
             message = str(cause).lower()
             if _TLS13_EOF_AFTER_HANDSHAKE_MESSAGE_FRAGMENT in message:
-                return True
+                return CertRejectionConfidence.PROBABLE
             continue
         if isinstance(cause, ssl.SSLError):
             message = str(cause).lower()
             if any(fragment in message for fragment in _CLIENT_CERT_REJECTION_ALERT_FRAGMENTS):
-                return True
-    return False
+                return CertRejectionConfidence.CONFIRMED
+    return CertRejectionConfidence.NONE
 
 
 def sanitize_error_response(response_body: str | None) -> str:
