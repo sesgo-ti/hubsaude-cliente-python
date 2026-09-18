@@ -101,8 +101,8 @@ def test_stops_reading_before_consuming_the_whole_oversized_body(trace: TraceCon
     with pytest.raises(SmartTokenError):
         guard.read_body(response, trace)
 
-    # A resposta e' fechada ao final (sucesso ou falha) -- verificado
-    # indiretamente por nao haver excecao adicional ao chamar close()
+    # A resposta é fechada ao final (sucesso ou falha) -- verificado
+    # indiretamente por não haver exceção adicional ao chamar close()
     # de novo, o que confirma que o fluxo passou pelo `finally`.
     response.close()
 
@@ -136,7 +136,7 @@ def test_logs_warning_when_body_is_truncated(trace: TraceContext, caplog: pytest
 
 
 # ---------------------------------------------------------------------------
-# sanitize_expires_in -- ausente/invalido/valido
+# sanitize_expires_in -- ausente/inválido/válido
 # ---------------------------------------------------------------------------
 
 
@@ -156,8 +156,8 @@ def test_sanitize_expires_in_absent_uses_default() -> None:
     ],
 )
 def test_sanitize_expires_in_wrong_type_raises(raw: object) -> None:
-    # Alinhado ao Java: presente mas invalido e'
-    # rejeitado, nao absorvido com o padrao.
+    # Alinhado ao Java: presente mas inválido é
+    # rejeitado, não absorvido com o padrão.
     with pytest.raises(SmartTokenError, match="expires_in"):
         sanitize_expires_in(raw)
 
@@ -182,7 +182,7 @@ def test_sanitize_expires_in_valid_numeric_string_is_coerced() -> None:
 
 def test_sanitize_expires_in_above_ceiling_is_capped() -> None:
     # Teto de sanidade de 24h:
-    # valor valido mas acima do teto e' normalizado, nao rejeitado.
+    # valor válido mas acima do teto é normalizado, não rejeitado.
     assert sanitize_expires_in(200_000) == MAX_EXPIRES_IN_SECONDS
 
 
