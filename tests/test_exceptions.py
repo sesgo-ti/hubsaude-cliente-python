@@ -12,7 +12,7 @@ def test_smart_token_error_message_only() -> None:
 
 
 def test_smart_token_error_message_with_cause_sets_cause_and_suppresses_context() -> None:
-    original = ValueError("bytes invalidos")
+    original = ValueError("bytes inválidos")
     exc = SmartTokenError("falha ao assinar", original)
     assert exc.__cause__ is original
     assert exc.__suppress_context__ is True
@@ -25,7 +25,7 @@ def test_smart_token_error_is_runtime_error() -> None:
 def test_smart_token_error_raised_and_caught_preserves_cause() -> None:
     original = KeyError("token_endpoint")
     with pytest.raises(SmartTokenError) as excinfo:
-        raise SmartTokenError("resposta invalida", original)
+        raise SmartTokenError("resposta inválida", original)
     assert excinfo.value.__cause__ is original
 
 
@@ -36,8 +36,8 @@ def test_signing_error_message_only() -> None:
 
 
 def test_signing_error_message_with_cause() -> None:
-    original = ValueError("chave invalida")
-    exc = SigningError("falha criptografica", original)
+    original = ValueError("chave inválida")
+    exc = SigningError("falha criptográfica", original)
     assert exc.__cause__ is original
 
 
