@@ -58,10 +58,10 @@ def test_sign_ecdsa_p521_pads_to_fixed_length() -> None:
 
 
 def test_construction_rejects_key_type_mismatch() -> None:
-    """Incompatibilidade entre tipo de chave e algoritmo agora e' detectada
-    na construcao (fail-fast), nao apenas na primeira chamada a sign() --
-    ver SmartTokenError, nao SigningError (e' uma falha de configuracao,
-    nao uma falha de operacao criptografica).
+    """Incompatibilidade entre tipo de chave e algoritmo agora é detectada
+    na construção (fail-fast), não apenas na primeira chamada a sign() --
+    ver SmartTokenError, não SigningError (é uma falha de configuração,
+    não uma falha de operação criptográfica).
     """
     ec_key = ec.generate_private_key(ec.SECP256R1())
     with pytest.raises(SmartTokenError, match="RSA"):
@@ -91,7 +91,7 @@ def test_sign_wraps_unexpected_error_in_signing_error(monkeypatch: pytest.Monkey
     strategy = PrivateKeySigningStrategy(key, "ES256")
 
     def _boom(*_args: object, **_kwargs: object) -> bytes:
-        raise ValueError("erro inesperado na conversao da assinatura")
+        raise ValueError("erro inesperado na conversão da assinatura")
 
     monkeypatch.setattr("hubsaude_client.private_key_signing_strategy.algorithms.encode_p1363", _boom)
     with pytest.raises(SigningError, match="Falha ao assinar dados"):
@@ -102,7 +102,7 @@ def test_sign_raises_for_unsupported_algorithm_params(monkeypatch: pytest.Monkey
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     strategy = PrivateKeySigningStrategy(key, "RS256")
     monkeypatch.setattr(strategy, "_params", object())
-    with pytest.raises(SigningError, match="nao suportado"):
+    with pytest.raises(SigningError, match="não suportado"):
         strategy.sign(b"data")
 
 

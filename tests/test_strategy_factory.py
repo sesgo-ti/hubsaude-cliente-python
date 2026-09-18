@@ -64,7 +64,7 @@ def test_from_pkcs12_password_is_zeroed_after_use(fake_pkcs12_bundle) -> None:
 
 
 def test_from_pkcs12_without_private_key_raises(fake_pkcs12_bundle_without_key) -> None:
-    with pytest.raises(SmartTokenError, match="nao contem chave privada"):
+    with pytest.raises(SmartTokenError, match="não contém chave privada"):
         strategy_factory.from_pkcs12(fake_pkcs12_bundle_without_key["path"], fake_pkcs12_bundle_without_key["password"])
 
 
@@ -88,14 +88,14 @@ def test_load_pkcs12_key_and_certificate_password_is_zeroed_after_use(fake_pkcs1
 
 
 def test_load_pkcs12_key_and_certificate_without_private_key_raises(fake_pkcs12_bundle_without_key) -> None:
-    with pytest.raises(SmartTokenError, match="nao contem chave privada"):
+    with pytest.raises(SmartTokenError, match="não contém chave privada"):
         strategy_factory.load_pkcs12_key_and_certificate(
             fake_pkcs12_bundle_without_key["path"], fake_pkcs12_bundle_without_key["password"]
         )
 
 
 def test_load_pkcs12_key_and_certificate_without_certificate_raises(fake_pkcs12_bundle_without_certificate) -> None:
-    with pytest.raises(SmartTokenError, match="nao contem certificado"):
+    with pytest.raises(SmartTokenError, match="não contém certificado"):
         strategy_factory.load_pkcs12_key_and_certificate(
             fake_pkcs12_bundle_without_certificate["path"], fake_pkcs12_bundle_without_certificate["password"]
         )

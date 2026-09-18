@@ -36,20 +36,20 @@ def test_resolve_with_both_sources_raises_value_error(fake_pem_pair) -> None:
             return b"fake"
 
     settings = SigningSettings(signing_strategy=_CustomStrategy(), private_key_pem=fake_pem_pair["key"])
-    with pytest.raises(ValueError, match="nao ambos"):
+    with pytest.raises(ValueError, match="não ambos"):
         settings.resolve()
 
 
 def test_resolve_with_no_source_raises_value_error() -> None:
     settings = SigningSettings()
-    with pytest.raises(ValueError, match="obrigatorio"):
+    with pytest.raises(ValueError, match="obrigatório"):
         settings.resolve()
 
 
 def test_signing_settings_has_no_key_id_field(fake_pem_pair) -> None:
-    """SigningSettings nao expoe (e nunca expos efetivamente) um campo
+    """SigningSettings não expõe (e nunca expôs efetivamente) um campo
     key_id -- o kid do JWT e configurado via SmartTokenClientBuilder.key_id(),
-    unico lugar onde esse valor efetivamente chega ao cliente construido.
+    único lugar onde esse valor efetivamente chega ao cliente construído.
     """
     settings = SigningSettings(private_key_pem=fake_pem_pair["key"])
     assert not hasattr(settings, "key_id")
@@ -59,12 +59,12 @@ def test_signing_settings_has_no_key_id_field(fake_pem_pair) -> None:
 
 def test_private_key_password_is_bytearray_and_zeroed_after_resolve(fake_encrypted_pem_key) -> None:
     """Prova que SigningSettings propaga a garantia de zeroizacao de senha
-    (Task 3/6) ate a ponta -- password precisa ser bytearray, nao bytes,
-    para o pem_loader poder zera-lo apos o uso.
+    (Task 3/6) até a ponta -- password precisa ser bytearray, não bytes,
+    para o pem_loader poder zera-lo após o uso.
 
     fake_encrypted_pem_key ja retorna {"key": <Path>, "password": <bytearray>}
     (ver tests/conftest.py) -- copiamos a senha para um bytearray novo aqui
-    para nao zerar o bytearray compartilhado da propria fixture."""
+    para não zerar o bytearray compartilhado da própria fixture."""
     password = bytearray(fake_encrypted_pem_key["password"])
     settings = SigningSettings(private_key_pem=fake_encrypted_pem_key["key"], private_key_password=password)
     settings.resolve()
@@ -72,8 +72,8 @@ def test_private_key_password_is_bytearray_and_zeroed_after_resolve(fake_encrypt
 
 
 def test_re_exported_from_init() -> None:
-    """SigningSettings/ResolvedSigning/TlsSettings devem ser acessiveis
-    direto de hubsaude_client, nao so do submodulo -- Step 4."""
+    """SigningSettings/ResolvedSigning/TlsSettings devem ser acessíveis
+    direto de hubsaude_client, não só do submódulo -- Step 4."""
     import hubsaude_client
 
     assert hubsaude_client.SigningSettings is SigningSettings
