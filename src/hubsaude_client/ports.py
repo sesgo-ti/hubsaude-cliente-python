@@ -1,9 +1,9 @@
-"""Fronteira (typing.Protocol) entre o cliente HTTP/orquestracao de token
-e a assinatura (carga de PEM, certificados, HSM/PKCS#11, servicos remotos).
+"""Fronteira (typing.Protocol) entre o cliente HTTP/orquestração de token
+e a assinatura (carga de PEM, certificados, HSM/PKCS#11, serviços remotos).
 
 Define ``SigningStrategy`` e ``TlsContextProvider``. O restante do
-cliente programa contra esses Protocols; implementacoes concretas de
-assinatura e de contexto TLS/mTLS so precisam satisfazer as respectivas
+cliente programa contra esses Protocols; implementações concretas de
+assinatura e de contexto TLS/mTLS só precisam satisfazer as respectivas
 assinaturas.
 """
 
@@ -15,19 +15,19 @@ from typing import Protocol, runtime_checkable
 
 @runtime_checkable
 class SigningStrategy(Protocol):
-    """Estrategia de assinatura digital que abstrai o mecanismo criptografico.
+    """Estratégia de assinatura digital que abstrai o mecanismo criptográfico.
 
-    Interface com um unico metodo obrigatorio, permitindo que chaves em
-    memoria, HSM/PKCS#11 ou servicos remotos de assinatura sejam
-    intercambiaveis sem alterar o cliente (padrao Strategy).
+    Interface com um único método obrigatório, permitindo que chaves em
+    memória, HSM/PKCS#11 ou serviços remotos de assinatura sejam
+    intercambiáveis sem alterar o cliente (padrão Strategy).
 
-    Metodo opcional ``close() -> None``: implementacoes que retenham um
-    recurso que precise ser liberado explicitamente (ex.: uma sessao
-    PKCS#11 aberta em hardware com limite de sessoes simultaneas) podem
-    definir ``close()``. Deliberadamente NAO faz parte da assinatura
+    Método opcional ``close() -> None``: implementações que retenham um
+    recurso que precise ser liberado explicitamente (ex.: uma sessão
+    PKCS#11 aberta em hardware com limite de sessões simultâneas) podem
+    definir ``close()``. Deliberadamente NÃO faz parte da assinatura
     formal deste ``Protocol`` (checagem via ``isinstance`` continua
-    exigindo apenas ``sign()``) para nao quebrar, de forma retroativa,
-    implementacoes de terceiros existentes que so implementam ``sign()``.
+    exigindo apenas ``sign()``) para não quebrar, de forma retroativa,
+    implementações de terceiros existentes que só implementam ``sign()``.
     Quando presente, ``SmartTokenClient.close()`` a invoca via duck typing
     (``getattr(strategy, "close", None)``), em modo best-effort.
     """
@@ -40,11 +40,11 @@ class SigningStrategy(Protocol):
                 ``header.payload`` do JWT).
 
         Returns:
-            A assinatura digital em formato raw (nao Base64).
+            A assinatura digital em formato raw (não Base64).
 
         Raises:
             SigningError: se ocorrer erro durante a assinatura
-                (implementacao concreta; nao definida neste modulo).
+                (implementação concreta; não definida neste módulo).
         """
         ...
 
@@ -54,12 +54,12 @@ class TlsContextProvider(Protocol):
     """Fornecedor de contexto TLS/mTLS pronto para uso pelo cliente HTTP.
 
     Abstrai de onde vem o ``ssl.SSLContext`` (certificado/chave em disco,
-    KeyStore, HSM, cofre de segredos) — o cliente HTTP so consome o
+    KeyStore, HSM, cofre de segredos) — o cliente HTTP só consome o
     contexto pronto, sem saber como foi montado.
     """
 
     def ssl_context(self) -> ssl.SSLContext:
-        """Monta/retorna o contexto TLS/mTLS pronto para a requisicao.
+        """Monta/retorna o contexto TLS/mTLS pronto para a requisição.
 
         Returns:
             ``ssl.SSLContext`` configurado (certificado de cliente,

@@ -1,9 +1,9 @@
-"""Tabela alg JWT (JWA) -> parametros criptograficos, e conversao de
+"""Tabela alg JWT (JWA) -> parâmetros criptográficos, e conversão de
 assinaturas ECDSA entre DER e o formato bruto R||S exigido pela RFC 7518 §3.4.
 
-Modulo compartilhado: tanto a estrategia de assinatura quanto a validacao de
-consistencia chave/certificado precisam do mesmo mapeamento algoritmo ->
-parametros criptograficos, entao ele vive aqui para evitar duplicacao.
+Módulo compartilhado: tanto a estratégia de assinatura quanto a validação de
+consistência chave/certificado precisam do mesmo mapeamento algoritmo ->
+parâmetros criptográficos, então ele vive aqui para evitar duplicação.
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ VALID_JWT_ALGORITHMS: tuple[str, ...] = (
 
 @dataclass(frozen=True)
 class RsaPkcs1Params:
-    """Parametros para RSA PKCS#1 v1.5 (RS256/RS384/RS512)."""
+    """Parâmetros para RSA PKCS#1 v1.5 (RS256/RS384/RS512)."""
 
     jwt_algorithm: str
     hash_algorithm: hashes.HashAlgorithm
@@ -39,7 +39,7 @@ class RsaPkcs1Params:
 
 @dataclass(frozen=True)
 class RsaPssParams:
-    """Parametros para RSA-PSS (PS256/PS384/PS512), RFC 7518 §3.5."""
+    """Parâmetros para RSA-PSS (PS256/PS384/PS512), RFC 7518 §3.5."""
 
     jwt_algorithm: str
     hash_algorithm: hashes.HashAlgorithm
@@ -48,7 +48,7 @@ class RsaPssParams:
 
 @dataclass(frozen=True)
 class EcdsaParams:
-    """Parametros para ECDSA (ES256/ES384/ES512), RFC 7518 §3.4.
+    """Parâmetros para ECDSA (ES256/ES384/ES512), RFC 7518 §3.4.
 
     signature_length e o comprimento total, em bytes, da assinatura R||S
     (2x o comprimento de cada coordenada, arredondado para cima).
@@ -82,16 +82,16 @@ _ECDSA: dict[str, tuple[hashes.HashAlgorithm, ec.EllipticCurve, int]] = {
 
 
 def resolve(jwt_algorithm: str) -> AlgorithmParams:
-    """Resolve os parametros criptograficos para um algoritmo JWT (JWA).
+    """Resolve os parâmetros criptográficos para um algoritmo JWT (JWA).
 
     Args:
         jwt_algorithm: nome do algoritmo, case-insensitive (ex: RS256, rs256).
 
     Returns:
-        Os parametros criptograficos correspondentes.
+        Os parâmetros criptográficos correspondentes.
 
     Raises:
-        SmartTokenError: se o algoritmo nao for reconhecido.
+        SmartTokenError: se o algoritmo não for reconhecido.
     """
     normalized = jwt_algorithm.upper()
     if normalized in _PKCS1:
@@ -108,7 +108,7 @@ def resolve(jwt_algorithm: str) -> AlgorithmParams:
             signature_length=signature_length,
         )
     raise SmartTokenError(
-        f"Algoritmo JWT nao suportado: {jwt_algorithm}. " f"Algoritmos validos: {', '.join(VALID_JWT_ALGORITHMS)}"
+        f"Algoritmo JWT não suportado: {jwt_algorithm}. " f"Algoritmos válidos: {', '.join(VALID_JWT_ALGORITHMS)}"
     )
 
 
@@ -118,7 +118,7 @@ def encode_p1363(der_signature: bytes, signature_length: int) -> bytes:
     Args:
         der_signature: assinatura no formato DER, produzida por
             ``PrivateKey.sign(data, ec.ECDSA(hash))``.
-        signature_length: comprimento total esperado da saida (2x o
+        signature_length: comprimento total esperado da saída (2x o
             comprimento de cada coordenada, ver EcdsaParams.signature_length).
 
     Returns:
@@ -133,7 +133,7 @@ def encode_p1363(der_signature: bytes, signature_length: int) -> bytes:
 def decode_p1363(p1363_signature: bytes) -> bytes:
     """Converte uma assinatura ECDSA do formato bruto R||S para DER.
 
-    Necessario porque ``PublicKey.verify(..., ec.ECDSA(hash))`` da biblioteca
+    Necessário porque ``PublicKey.verify(..., ec.ECDSA(hash))`` da biblioteca
     ``cryptography`` exige o formato DER.
 
     Args:
