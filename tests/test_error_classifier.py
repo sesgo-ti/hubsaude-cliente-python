@@ -8,6 +8,7 @@ import pytest
 
 from hubsaude_client.error_classifier import (
     HTTP_TOO_MANY_REQUESTS,
+    CertRejectionConfidence,
     ErrorClassifier,
     is_likely_client_certificate_rejection,
     is_transient_network_failure,
@@ -100,14 +101,14 @@ def test_bare_ssl_error_is_not_retriable() -> None:
     ],
 )
 def test_recognizes_client_certificate_rejection_alerts(message: str) -> None:
-    assert is_likely_client_certificate_rejection(ssl.SSLError(message)) is True
+    assert is_likely_client_certificate_rejection(ssl.SSLError(message)) is CertRejectionConfidence.CONFIRMED
 
 
 def test_recognizes_alert_wrapped_in_httpx_connect_error() -> None:
     tls_failure = ssl.SSLError("[SSL: TLSV1_ALERT_CERTIFICATE_REVOKED] certificate revoked")
     wrapped = httpx.ConnectError("connection failed")
     wrapped.__cause__ = tls_failure
-    assert is_likely_client_certificate_rejection(wrapped) is True
+    assert is_likely_client_certificate_rejection(wrapped) is CertRejectionConfidence.CONFIRMED
 
 
 def test_does_not_confuse_with_server_certificate_verification_failure() -> None:
@@ -117,7 +118,7 @@ def test_does_not_confuse_with_server_certificate_verification_failure() -> None
     cert_verification_failure = ssl.SSLCertVerificationError(
         1, "certificate verify failed: unable to get local issuer certificate"
     )
-    assert is_likely_client_certificate_rejection(cert_verification_failure) is False
+    assert is_likely_client_certificate_rejection(cert_verification_failure) is CertRejectionConfidence.NONE
 
 
 def test_server_cert_verification_failure_excludes_even_with_alert_text_elsewhere() -> None:
@@ -127,23 +128,24 @@ def test_server_cert_verification_failure_excludes_even_with_alert_text_elsewher
     cert_verification_failure = ssl.SSLCertVerificationError(1, "certificate verify failed")
     outer = ssl.SSLError("[SSL: SSLV3_ALERT_HANDSHAKE_FAILURE] handshake failure")
     outer.__cause__ = cert_verification_failure
-    assert is_likely_client_certificate_rejection(outer) is False
+    assert is_likely_client_certificate_rejection(outer) is CertRejectionConfidence.NONE
 
 
-def test_recognizes_tls13_eof_after_handshake_variant() -> None:
+def test_recognizes_tls13_eof_after_handshake_variant_as_probable() -> None:
     """Sob TLS 1.3, alguns builds de OpenSSL encerram a conexao sem alerta
     textual reconhecivel quando o servidor rejeita o certificado de
     cliente apos o ``Finished`` (ver nota no topo de
-    ``error_classifier.py``)."""
+    ``error_classifier.py``). Sinal AMBIGUO (PROBABLE, nao CONFIRMED):
+    tambem pode ser apenas instabilidade de rede comum."""
     exc = ssl.SSLEOFError("EOF occurred in violation of protocol (_ssl.c:1006)")
-    assert is_likely_client_certificate_rejection(exc) is True
+    assert is_likely_client_certificate_rejection(exc) is CertRejectionConfidence.PROBABLE
 
 
-def test_recognizes_tls13_eof_variant_wrapped_in_httpx_connect_error() -> None:
+def test_recognizes_tls13_eof_variant_wrapped_in_httpx_connect_error_as_probable() -> None:
     eof_failure = ssl.SSLEOFError("EOF occurred in violation of protocol (_ssl.c:1006)")
     wrapped = httpx.ConnectError("connection failed")
     wrapped.__cause__ = eof_failure
-    assert is_likely_client_certificate_rejection(wrapped) is True
+    assert is_likely_client_certificate_rejection(wrapped) is CertRejectionConfidence.PROBABLE
 
 
 def test_ssl_eof_error_with_generic_message_is_not_a_client_certificate_rejection() -> None:
@@ -151,7 +153,7 @@ def test_ssl_eof_error_with_generic_message_is_not_a_client_certificate_rejectio
     ``ssl.SSLEOFError`` generico (ex.: queda de conexao TCP antes do
     handshake completar) nao deve virar falso positivo."""
     exc = ssl.SSLEOFError("some other EOF condition")
-    assert is_likely_client_certificate_rejection(exc) is False
+    assert is_likely_client_certificate_rejection(exc) is CertRejectionConfidence.NONE
 
 
 def test_ssl_error_with_eof_message_but_wrong_type_is_not_recognized() -> None:
@@ -159,21 +161,21 @@ def test_ssl_error_with_eof_message_but_wrong_type_is_not_recognized() -> None:
     generico com o mesmo texto (cenario que nao deveria ocorrer na pratica,
     mas nao pode ser tratado como a variante especifica) nao e' reconhecido
     por esse fragmento -- e nenhum dos fragmentos de alerta bate com esse
-    texto, entao o resultado e' ``False``."""
+    texto, entao o resultado e' ``NONE``."""
     exc = ssl.SSLError("EOF occurred in violation of protocol (_ssl.c:1006)")
-    assert is_likely_client_certificate_rejection(exc) is False
+    assert is_likely_client_certificate_rejection(exc) is CertRejectionConfidence.NONE
 
 
 def test_unrelated_ssl_error_is_not_a_client_certificate_rejection() -> None:
-    assert is_likely_client_certificate_rejection(ssl.SSLError("unrecognized_name")) is False
+    assert is_likely_client_certificate_rejection(ssl.SSLError("unrecognized_name")) is CertRejectionConfidence.NONE
 
 
 def test_non_ssl_failure_is_not_a_client_certificate_rejection() -> None:
-    assert is_likely_client_certificate_rejection(httpx.ConnectTimeout("timed out")) is False
+    assert is_likely_client_certificate_rejection(httpx.ConnectTimeout("timed out")) is CertRejectionConfidence.NONE
 
 
 def test_none_is_not_a_client_certificate_rejection() -> None:
-    assert is_likely_client_certificate_rejection(None) is False
+    assert is_likely_client_certificate_rejection(None) is CertRejectionConfidence.NONE
 
 
 # ---------------------------------------------------------------------------
@@ -262,6 +264,46 @@ def test_logs_error_on_mtls_rejection(
 
     assert any(record.levelno == logging.ERROR for record in caplog.records)
     assert any(CLIENT_ID in record.getMessage() for record in caplog.records)
+
+
+def test_probable_cert_rejection_is_retriable_unlike_confirmed(
+    classifier: ErrorClassifier, trace: TraceContext
+) -> None:
+    """Sinal AMBIGUO (PROBABLE, ssl.SSLEOFError sem alerta textual) nao
+    deve interromper o retry -- diferente do sinal CONFIRMED, que
+    interrompe imediatamente (ver test_converts_mtls_rejection_into_smart_token_error_with_guidance).
+    Pode ser rejeicao de certificado, mas tambem pode ser so'
+    instabilidade de rede; a excecao deve ser devolvida para o chamador
+    tentar de novo."""
+    probable_failure = ssl.SSLEOFError("EOF occurred in violation of protocol (_ssl.c:1006)")
+    wrapped = httpx.ConnectError("connection failed")
+    wrapped.__cause__ = probable_failure
+
+    assert classifier.retriable_or_reraise(wrapped, trace) is wrapped
+
+
+# ---------------------------------------------------------------------------
+# ErrorClassifier.exhaustion_hint
+# ---------------------------------------------------------------------------
+
+
+def test_exhaustion_hint_empty_for_confirmed_rejection(classifier: ErrorClassifier) -> None:
+    """CONFIRMED nunca chega a esgotar o retry (interrompe antes, ver
+    retriable_or_reraise) -- mas o metodo em si deve devolver string vazia
+    pra esse sinal, por clareza de contrato."""
+    tls_failure = ssl.SSLError("[SSL: TLSV1_ALERT_CERTIFICATE_REVOKED] certificate revoked")
+    assert classifier.exhaustion_hint(tls_failure) == ""
+
+
+def test_exhaustion_hint_empty_for_no_signal(classifier: ErrorClassifier) -> None:
+    assert classifier.exhaustion_hint(httpx.ConnectTimeout("timed out")) == ""
+
+
+def test_exhaustion_hint_non_empty_for_probable_rejection(classifier: ErrorClassifier) -> None:
+    probable_failure = ssl.SSLEOFError("EOF occurred in violation of protocol (_ssl.c:1006)")
+    hint = classifier.exhaustion_hint(probable_failure)
+    assert hint != ""
+    assert "certificado" in hint
 
 
 # ---------------------------------------------------------------------------
