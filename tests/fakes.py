@@ -1,6 +1,6 @@
 """
-Implementacoes fake dos ports, para testar o cliente HTTP/orquestracao
-de token sem depender de uma implementacao real de assinatura ou de
+Implementações fake dos ports, para testar o cliente HTTP/orquestração
+de token sem depender de uma implementação real de assinatura ou de
 contexto TLS/mTLS.
 """
 

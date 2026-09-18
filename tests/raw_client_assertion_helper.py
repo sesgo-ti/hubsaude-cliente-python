@@ -141,7 +141,7 @@ def extract_kid_from_jwks(certs_endpoint: str, ssl_context: ssl.SSLContext, time
     with httpx.Client(verify=ssl_context, timeout=timeout) as client:
         response = client.get(certs_endpoint)
     if response.status_code != 200:
-        raise RuntimeError(f"JWKS deveria estar disponivel em {certs_endpoint}: HTTP {response.status_code}")
+        raise RuntimeError(f"JWKS deveria estar disponível em {certs_endpoint}: HTTP {response.status_code}")
 
     keys = response.json().get("keys")
     if not keys:
