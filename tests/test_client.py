@@ -860,6 +860,31 @@ def test_close_invalidates_the_cache(install_mock_transport) -> None:
     assert token_cache.size() == 0
 
 
+def test_close_logs_warning_when_signing_strategy_close_fails(
+    install_mock_transport, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Cobre o branch ``except Exception`` de
+    ``_close_signing_strategy_if_supported``: uma falha ao fechar a
+    ``signing_strategy`` e apenas logada (best-effort), nunca propagada --
+    ``close()`` do cliente ja liberou cache/http client nesta chamada e nao
+    deve falhar por causa de um colaborador best-effort."""
+    install_mock_transport(_token_success_handler())
+    signing_strategy = FakeSigningStrategy()
+
+    def _raise_on_close() -> None:
+        raise RuntimeError("falha simulada ao fechar signing_strategy")
+
+    monkeypatch.setattr(signing_strategy, "close", _raise_on_close, raising=False)
+    client = SmartTokenClient(**_base_kwargs(signing_strategy=signing_strategy))
+
+    with caplog.at_level(logging.WARNING, logger="hubsaude_client.SmartTokenClient"):
+        client.close()  # nao deve levantar excecao
+
+    assert any(
+        record.levelno == logging.WARNING and "signing_strategy" in record.getMessage() for record in caplog.records
+    )
+
+
 def test_context_manager_closes_on_exit(install_mock_transport) -> None:
     install_mock_transport(_token_success_handler())
 
