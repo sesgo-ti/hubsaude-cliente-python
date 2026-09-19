@@ -23,7 +23,11 @@ import ssl
 
 import pytest
 
-from hubsaude_client.error_classifier import is_likely_client_certificate_rejection, is_transient_network_failure
+from hubsaude_client.error_classifier import (
+    CertRejectionConfidence,
+    is_likely_client_certificate_rejection,
+    is_transient_network_failure,
+)
 
 
 def test_real_unknown_ca_rejection_tls12_is_classified(real_mtls_client_cert_rejection) -> None:
@@ -38,7 +42,7 @@ def test_real_unknown_ca_rejection_tls12_is_classified(real_mtls_client_cert_rej
 
     assert captured is not None, "esperava ssl.SSLError do lado do cliente; handshake teve sucesso inesperadamente"
     assert "unknown ca" in str(captured).lower()
-    assert is_likely_client_certificate_rejection(captured) is True
+    assert is_likely_client_certificate_rejection(captured) is CertRejectionConfidence.CONFIRMED
 
 
 def test_real_unknown_ca_rejection_tls13_is_never_treated_as_retriable(real_mtls_client_cert_rejection) -> None:
@@ -51,10 +55,13 @@ def test_real_unknown_ca_rejection_tls13_is_never_treated_as_retriable(real_mtls
     por plataforma/versao do OpenSSL*: em ``OpenSSL 3.0.13`` observa-se
     ``ssl.SSLEOFError`` ("EOF occurred in violation of protocol"), sem
     nenhum fragmento de alerta reconhecivel -- nesse caso,
-    ``is_likely_client_certificate_rejection`` devolve ``False``. Em
+    ``is_likely_client_certificate_rejection`` devolve
+    ``CertRejectionConfidence.PROBABLE`` (sinal ambiguo). Em
     outras combinacoes de plataforma/OpenSSL, o mesmo cenario produz um
     alerta ``unknown ca`` limpo, caso em que
-    ``is_likely_client_certificate_rejection`` devolve ``True``. Por isso este teste nao afirma um valor especifico
+    ``is_likely_client_certificate_rejection`` devolve
+    ``CertRejectionConfidence.CONFIRMED``. Por isso este teste nao afirma
+    um valor especifico
     de :func:`is_likely_client_certificate_rejection` (faria o teste
     depender de qual OpenSSL roda a maquina) -- ver
     ``test_real_unknown_ca_rejection_tls13_is_classified_when_surface_is_recognized``,
@@ -109,4 +116,10 @@ def test_real_unknown_ca_rejection_tls13_is_classified_when_surface_is_recognize
             "que ainda nao foi documentada no modulo error_classifier.py."
         )
 
-    assert is_likely_client_certificate_rejection(captured) is True
+    # As duas superficies do mesmo evento de servidor tem niveis de
+    # confianca diferentes: o alerta limpo e' inequivoco (CONFIRMED); o
+    # ssl.SSLEOFError sem alerta textual e' ambiguo (PROBABLE), porque o
+    # mesmo texto tambem pode surgir de uma instabilidade de rede comum
+    # sem relacao com o certificado.
+    expected = CertRejectionConfidence.CONFIRMED if is_known_alert_surface else CertRejectionConfidence.PROBABLE
+    assert is_likely_client_certificate_rejection(captured) is expected
