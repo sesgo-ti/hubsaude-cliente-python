@@ -99,3 +99,21 @@ def test_load_pkcs12_key_and_certificate_without_certificate_raises(fake_pkcs12_
         strategy_factory.load_pkcs12_key_and_certificate(
             fake_pkcs12_bundle_without_certificate["path"], fake_pkcs12_bundle_without_certificate["password"]
         )
+
+
+def test_from_pkcs11_invalid_module_path_raises() -> None:
+    """Cobre o branch ``except Exception`` de ``pkcs11_lib.lib(...)`` em
+    ``from_pkcs11``: um caminho de modulo PKCS#11 inexistente/invalido falha
+    ao carregar. Fica fora de ``test_pkcs11_strategy_factory.py`` (que e'
+    pulado inteiro quando SoftHSM2 nao esta disponivel, ver
+    ``pkcs11_softhsm_helper.softhsm2_available``) porque este caso depende
+    apenas do binding ``python-pkcs11`` (extra "hsm"), nao de um token
+    SoftHSM2 real -- e por isso roda mesmo no CI padrao, que instala o
+    extra "hsm" mas nao o SoftHSM2."""
+    with pytest.raises(SmartTokenError, match="Falha ao carregar modulo PKCS#11"):
+        strategy_factory.from_pkcs11(
+            pkcs11_module_path="/caminho/que/nao/existe/libfake.so",
+            token_label="qualquer",
+            key_label="qualquer",
+            user_pin="0000",
+        )
