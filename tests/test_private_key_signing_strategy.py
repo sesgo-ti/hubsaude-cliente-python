@@ -106,6 +106,30 @@ def test_sign_raises_for_unsupported_algorithm_params(monkeypatch: pytest.Monkey
         strategy.sign(b"data")
 
 
+def test_sign_raises_when_key_type_no_longer_matches_rsa_algorithm(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Cobre o branch defensivo ``if not isinstance(key, rsa.RSAPrivateKey)``
+    dentro de ``_sign()``: inalcancavel via construtor (``_require_compatible_key_type``
+    ja valida isso na construcao), exercitado aqui trocando ``_private_key``
+    apos a construcao para simular o tipo incompativel chegando em ``_sign``."""
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    strategy = PrivateKeySigningStrategy(key, "RS256")
+    ec_key = ec.generate_private_key(ec.SECP256R1())
+    monkeypatch.setattr(strategy, "_private_key", ec_key)
+    with pytest.raises(SigningError, match="requer chave RSA"):
+        strategy.sign(b"data")
+
+
+def test_sign_raises_when_key_type_no_longer_matches_ec_algorithm(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Cobre o branch defensivo ``if not isinstance(key, ec.EllipticCurvePrivateKey)``
+    dentro de ``_sign()``, simetrico ao teste RSA acima."""
+    key = ec.generate_private_key(ec.SECP256R1())
+    strategy = PrivateKeySigningStrategy(key, "ES256")
+    rsa_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    monkeypatch.setattr(strategy, "_private_key", rsa_key)
+    with pytest.raises(SigningError, match="requer chave EC"):
+        strategy.sign(b"data")
+
+
 def _sha256():
     from cryptography.hazmat.primitives import hashes
 
