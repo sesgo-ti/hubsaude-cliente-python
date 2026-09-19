@@ -2,14 +2,19 @@
 
 ## Versões suportadas
 
-Apenas a versão **MAJOR mais recente** publicada recebe
-correções de segurança. Versões anteriores são consideradas fim-de-vida
-(EOL) a partir do lançamento de uma nova MAJOR.
+Segue [Semantic Versioning 2.0.0](https://semver.org/lang/pt-BR/) em
+duas eras: durante a série `0.x`, é a versão **MINOR** que marca mudança
+incompatível (**PATCH** preserva compatibilidade); a partir de `1.0.0`,
+é a versão **MAJOR**. Só a versão mais recente da era vigente recebe
+correções de segurança — as anteriores são consideradas fim-de-vida
+(EOL) a partir do lançamento da próxima.
 
-| Versão        | Suportada |
-| ------------- | --------- |
-| MAJOR atual   | ✅        |
-| MAJOR anterior| ❌        |
+| Versão / série                 | Suportada |
+| ------------------------------- | --------- |
+| Série `0.x` (MINOR mais recente) | ✅        |
+| Série `0.x` (MINORs anteriores)  | ❌        |
+| `1.x+` (MAJOR mais recente)      | ✅        |
+| `1.x+` (MAJORs anteriores)       | ❌        |
 
 ## Como reportar uma vulnerabilidade
 
