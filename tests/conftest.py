@@ -212,7 +212,7 @@ def fake_encrypted_pem_key(tmp_path):
 
 @pytest.fixture
 def fake_expired_cert_pem(tmp_path):
-    """Certificado X.509 autoassinado ja expirado, em disco."""
+    """Certificado X.509 autoassinado já expirado, em disco."""
     import datetime
 
     from cryptography import x509

@@ -39,7 +39,7 @@ def _pkcs11_lib(tmp_path_factory: pytest.TempPathFactory) -> Iterator[object]:
     """Objeto ``pkcs11.lib(...)`` único, compartilhado por toda a sessão de
     testes.
 
-    A biblioteca PKCS#11 subjacente (``libsofthsm2.só``) só le
+    A biblioteca PKCS#11 subjacente (``libsofthsm2.so``) só lê
     ``SOFTHSM2_CONF`` e enumera tokens na primeira chamada de
     ``C_Initialize`` dentro do processo -- esse estado é global ao
     *processo*, não a instância Python de ``pkcs11.lib``. Criar um novo
@@ -55,7 +55,7 @@ def _pkcs11_lib(tmp_path_factory: pytest.TempPathFactory) -> Iterator[object]:
     ``Pkcs11SigningStrategy``).
 
     A *primeira* ``C_Initialize`` -- a que acontece aqui, antes de
-    qualquer teste rodar -- le qualquer ``SOFTHSM2_CONF`` que ja estiver
+    qualquer teste rodar -- lê qualquer ``SOFTHSM2_CONF`` que já estiver
     no ambiente do processo pytest ou, na ausência dele, a config padrão
     do sistema instalada pelo pacote (``/etc/softhsm2.conf``), cujo
     ``directories.tokendir`` (geralmente ``/var/lib/softhsm2/tokens/``)
@@ -117,7 +117,7 @@ def softhsm2_token(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, _pkcs11_lib:
     env = os.environ.copy()
     env["SOFTHSM2_CONF"] = str(config_path)
     # A biblioteca pkcs11 (usada logo abaixo, dentro deste mesmo processo
-    # Python) le SOFTHSM2_CONF do os.environ do processo atual, não do env
+    # Python) lê SOFTHSM2_CONF do os.environ do processo atual, não do env
     # passado ao subprocess do softhsm2-útil -- por isso também precisa ser
     # setada aqui via monkeypatch (confirmado rodando os testes nesta
     # máquina: sem isso, lib.get_token() não encontra o token recém-criado).
