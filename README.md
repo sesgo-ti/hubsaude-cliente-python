@@ -37,6 +37,12 @@ cd hubsaude-cliente-python
 pip install -e .
 ```
 
+Cada versão tagueada tem o sdist e a wheel anexados à
+[GitHub Release](https://github.com/sesgo-ti/hubsaude-cliente-python/releases)
+correspondente (ver
+[Publicação de nova versão](#publicação-de-nova-versão-release)), que
+podem ser instalados direto pela URL do artefato.
+
 O extra opcional `hsm` (`pip install "hubsaude-client[hsm]"`) traz a
 dependência `python-pkcs11`, necessária apenas para quem usa
 `strategy_factory.from_pkcs11` (assinatura via HSM/smart token). Quem
@@ -492,7 +498,10 @@ automaticamente quando o SoftHSM2 não está disponível no ambiente
 (`tests/pkcs11_softhsm_helper.py` detecta e configura um token de
 teste quando presente). Para exercitá-los, instale o SoftHSM2 do seu
 sistema (ex.: pacote `softhsm2` no Debian/Ubuntu) antes de rodar a
-suíte.
+suíte. O módulo `libsofthsm2.so` é procurado em caminhos usuais por
+distribuição; se estiver em outro lugar, aponte-o com a variável
+`SOFTHSM_LIB` (é o que o CI faz, descobrindo o caminho via
+`dpkg -L libsofthsm2`).
 
 ### Testes de integração (simulador real)
 
@@ -503,7 +512,7 @@ Services simulado) como processo filho, fala mTLS real com ele e
 exercita o `SmartTokenClient` ponta a ponta. Fica de
 fora da execução padrão (`pytest`/`tox` sem seletor de marker roda com
 `-m "not integration"`) — só é executada explicitamente com o marker
-`integration` (ver comandos abaixo).
+`integration` (ver comandos abaixo), e no workflow de release.
 
 Pré-requisitos (ausentes, os testes ficam `SKIPPED`, não falham):
 
@@ -525,6 +534,16 @@ pytest -m integration -v
 
 # ou, com tox (usa a mesma resolução de caminho acima):
 tox -e integration
+```
+
+O JAR é distribuído pela CLI `hubsaude` (mesma origem usada pelo
+workflow de release), que resolve a versão por um manifesto assinado e
+verifica o SHA-256 do download:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kyriosdata/runner/main/install.sh | bash
+hubsaude update --component simulador   # baixa só o JAR, não sobe o serviço
+# → ~/.local/share/hubsaude/simulador/server/hubsaude-simulador-<versão>.jar
 ```
 
 ### Verificações de qualidade (ambientes `tox`)
@@ -553,10 +572,42 @@ comprovadamente aceitáveis. Supressões do pip-audit ficam em
 
 ## Publicação de nova versão (release)
 
-*Pendente.* Ainda não há workflow de release (`.github/workflows/`)
-neste repositório; a lib está na versão `0.1.0` (`pyproject.toml`), em
-desenvolvimento iterativo. Esta seção será preenchida quando o
-processo de publicação for definido.
+A release é disparada por uma tag `vMAJOR.MINOR.PATCH`
+(`.github/workflows/release.yml`).
+
+O empacotamento Python não injeta a versão a partir da tag: a versão
+publicada é sempre a que está commitada em `pyproject.toml`
+(`[project].version`). A tag apenas dispara o workflow, que a valida
+contra o `pyproject.toml` e falha se as duas divergirem. Logo, primeiro
+o bump da versão (commitado/mergeado), depois a tag:
+
+```bash
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+Só versão final: tags com sufixo de pré-release, dev ou local do
+PEP 440 (`v1.2.0rc1`, `v1.2.0.dev1`, `v1.2.0+local`) são rejeitadas.
+
+O workflow roda os mesmos portões do CI (`py312`, `lint`, `security`,
+`archrules`) e, além deles, a **suíte de integração** (`integration`),
+provisionando o JAR do `hubsaude-simulador` pela CLI `hubsaude` em
+versão pinada. Tanto CI quanto release instalam o SoftHSM2; na release,
+qualquer falha em obter SoftHSM2, CLI ou JAR aborta o processo com erro
+explícito, em vez de deixar a suíte correspondente ser pulada
+silenciosamente. Em seguida gera e publica os artefatos na GitHub
+Release:
+
+| Ambiente `tox` | Saída | Conteúdo |
+|---|---|---|
+| `build` | `dist/` | sdist (`.tar.gz`) e wheel (`.whl`) |
+| `sbom` | `sbom.json` | SBOM CycloneDX das dependências de runtime (inclui o extra `hsm`) |
+
+Ambos são executáveis localmente (`tox -e build`, `tox -e sbom`).
+
+A lib **ainda não é publicada no PyPI**: por ora os artefatos ficam
+apenas anexados à GitHub Release (ver o `TODO` no fim do
+`release.yml`).
 
 ## Referências
 

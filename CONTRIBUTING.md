@@ -100,6 +100,21 @@ necessário nenhum passo manual de inicialização de token — cada teste cria
 e destrói o próprio token SoftHSM2 isolado em um diretório temporário
 (`tests/pkcs11_softhsm_helper.py::softhsm2_token`).
 
+O módulo PKCS#11 (`libsofthsm2.so`) é procurado em caminhos usuais por
+distribuição (`SOFTHSM2_LIB_CANDIDATES`). Quando o caminho for outro —
+ou para não depender dessa lista, como faz o CI, que o descobre com
+`dpkg -L libsofthsm2` — aponte-o explicitamente:
+
+```bash
+export SOFTHSM_LIB=/usr/lib/x86_64-linux-gnu/softhsm/libsofthsm2.so
+```
+
+A variável tem precedência sobre os candidatos e, se apontar para um
+arquivo inexistente, a suíte é pulada em vez de cair silenciosamente
+para outro caminho (erro de configuração fica visível). A resolução tem
+teste unitário dedicado, sem depender de SoftHSM2 instalado, em
+`tests/test_pkcs11_softhsm_helper.py`.
+
 ## Testes de integração (simulador real)
 
 Os 14 casos de `tests/test_smart_token_client_integration.py` (marcados
@@ -117,8 +132,21 @@ Pré-requisitos: Java 21+ no `PATH`, mais o JAR do `hubsaude-simulador`
 localizado via `HUBSAUDE_SIMULADOR_JAR` (variável de ambiente) ou, como
 alternativa de conveniência, copiado para `.simulator/hubsaude-simulador.jar`
 na raiz do repositório (diretório já coberto pelo `.gitignore`). O JAR
-em si não é distribuído neste repositório — obtenha-o com quem mantém o
-`hubsaude-simulador`.
+em si não é distribuído neste repositório: ele é publicado junto com o
+`hubsaude-simulador` e obtido pela CLI `hubsaude`, que resolve a versão
+por um manifesto assinado e verifica o SHA-256 do download — é a mesma
+origem usada pelo `release.yml` e pelo cliente TypeScript:
+
+```bash
+# instala a CLI em ~/.local/bin (sem sudo)
+curl -fsSL https://raw.githubusercontent.com/kyriosdata/runner/main/install.sh | bash
+
+# baixa/atualiza só o JAR do simulador, sem subir o serviço
+hubsaude update --component simulador
+```
+
+O JAR fica em `~/.local/share/hubsaude/simulador/server/hubsaude-simulador-<versão>.jar`
+(convenção da CLI por SO; não há comando que imprima esse caminho).
 
 ```bash
 export HUBSAUDE_SIMULADOR_JAR=/caminho/para/hubsaude-simulador.jar
@@ -206,6 +234,51 @@ de implementação.
 Durante a série `0.x`, apenas a MINOR mais recente recebe correções de
 segurança; a partir de `1.0.0`, apenas a MAJOR mais recente
 (ver [SECURITY.md](SECURITY.md)).
+
+## Release
+
+A release é disparada por uma tag `vMAJOR.MINOR.PATCH`
+(`.github/workflows/release.yml`).
+
+O empacotamento Python não injeta a versão a partir da tag: a versão
+publicada é sempre a que está commitada em `pyproject.toml`
+(`[project].version`). A tag só dispara o workflow — por isso ela é
+validada contra o `pyproject.toml` e a release falha se as duas
+divergirem. A ordem, portanto, é:
+
+```bash
+# 1. bump da versão em pyproject.toml ([project].version), commitado e
+#    mergeado normalmente (via PR)
+# 2. na branch já com o bump:
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+Só versão final: tags com sufixo de pré-release, dev ou local do
+PEP 440 (`v1.2.0rc1`, `v1.2.0.dev1`, `v1.2.0+local`) são rejeitadas —
+mesma política do gate anti-`SNAPSHOT` do cliente Java.
+
+O workflow roda os mesmos portões do CI (`py312`, `lint`, `security`,
+`archrules`), gera os artefatos (`tox -e build` → `dist/`) e o SBOM
+CycloneDX (`tox -e sbom` → `sbom.json`), e publica tudo na GitHub
+Release. Duas diferenças em relação ao CI:
+
+- **A suíte de integração roda** (`tox -e integration`), o que o CI não
+  faz. O JAR do `hubsaude-simulador` é provisionado pela CLI `hubsaude`
+  (versão pinada no workflow, ver
+  [Testes de integração](#testes-de-integração-simulador-real)) e o
+  caminho é exportado em `HUBSAUDE_SIMULADOR_JAR`. Se a CLI ou o JAR não
+  puderem ser obtidos, a release aborta com erro explícito — em vez de a
+  suíte ser pulada silenciosamente, que é o comportamento correto no CI
+  e no dev local, onde a CLI não é instalada.
+- A publicação em índice de pacotes (PyPI) ainda **não** acontece: os
+  artefatos ficam apenas anexados à GitHub Release. Ver o `TODO` no fim
+  do `release.yml`.
+
+Tanto o CI quanto a release instalam o SoftHSM2 e exportam `SOFTHSM_LIB`
+(ver [Testes do caminho PKCS#11/HSM](#testes-do-caminho-pkcs11hsm-softhsm2)),
+para que a suíte PKCS#11 não seja pulada silenciosamente em nenhum dos
+dois.
 
 ## Política de segurança
 
