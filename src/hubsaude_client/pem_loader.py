@@ -43,14 +43,14 @@ def validate_minimum_key_size(key: PrivateKeyTypes, source: str) -> None:
         bits = key.key_size
         if bits < MIN_RSA_KEY_BITS:
             raise SmartTokenError(
-                f"Chave RSA de {bits} bits rejeitada: o tamanho mínimo aceito e "
+                f"Chave RSA de {bits} bits rejeitada: o tamanho mínimo aceito é "
                 f"{MIN_RSA_KEY_BITS} bits (NIST SP 800-57). Fonte: {source}"
             )
     elif isinstance(key, ec.EllipticCurvePrivateKey):
         bits = key.curve.key_size
         if bits < MIN_EC_FIELD_BITS:
             raise SmartTokenError(
-                f"Chave EC com campo de {bits} bits rejeitada: a curva mínima aceita e P-256 "
+                f"Chave EC com campo de {bits} bits rejeitada: a curva mínima aceita é P-256 "
                 f"({MIN_EC_FIELD_BITS} bits, NIST SP 800-57). Fonte: {source}"
             )
 
@@ -61,7 +61,7 @@ def load_private_key(path: Path, password: bytearray | None = None) -> PrivateKe
     Args:
         path: caminho para o arquivo PEM.
         password: senha para chaves criptografadas (``None`` se não
-            criptografada). E consumida: o array e zerado ao final da
+            criptografada). É consumida: o array é zerado ao final da
             chamada, em sucesso ou erro (minimiza a exposição do segredo em
             memória). O chamador não deve reutiliza-lo.
 
@@ -79,7 +79,7 @@ def load_private_key(path: Path, password: bytearray | None = None) -> PrivateKe
         clear_password(password)
         raise SmartTokenError(f"Não foi possível ler o arquivo de chave privada: {path}", exc)
     # O conteúdo lido do arquivo (que pode ser a própria chave privada em
-    # texto claro, quando não criptografada) e mantido num bytearray
+    # texto claro, quando não criptografada) é mantido num bytearray
     # mutável e zerado no finally -- minimiza a janela em que o material de
     # chave fica exposto em heap dump após o uso.
     pem_buffer = bytearray(raw)
@@ -95,7 +95,7 @@ def load_private_key_from_string(pem: str, password: bytearray | None, source: s
     Args:
         pem: conteúdo PEM da chave privada.
         password: senha para chaves criptografadas (``None`` se não
-            criptografada). E consumida: o array e zerado ao final da
+            criptografada). É consumida: o array é zerado ao final da
             chamada, em sucesso ou erro (minimiza a exposição do segredo em
             memória). O chamador não deve reutiliza-lo.
         source: identificador da fonte para mensagens de erro.
@@ -114,7 +114,7 @@ def _load_private_key_from_bytes(pem_bytes: bytes, password: bytearray | None, s
     try:
         # A lib cryptography exige `bytes` (imutável) neste parâmetro; a cópia
         # temporária criada aqui fica sem outra referência viva assim que a
-        # chamada retorna. O bytearray original do chamador e zerado no finally.
+        # chamada retorna. O bytearray original do chamador é zerado no finally.
         password_bytes = bytes(password) if password is not None else None
         key = serialization.load_pem_private_key(pem_bytes, password=password_bytes)
     except TypeError as exc:
@@ -136,7 +136,7 @@ def clear_password(password: bytearray | None) -> None:
 
     RNF-03 (higiene de segredos em memória): minimiza a janela em que a
     senha em texto puro fica exposta num dump de memória/heap. Pública
-    (não prefixada) porque também e reaproveitada por outras fontes de
+    (não prefixada) porque também é reaproveitada por outras fontes de
     senha/PIN mutáveis fora deste módulo (ex: ``strategy_factory.py``,
     bundle PKCS#12).
     """
@@ -151,7 +151,7 @@ def load_certificate(path: Path) -> x509.Certificate:
         path: caminho para o arquivo PEM do certificado.
 
     Returns:
-        O certificado X.509, ja validado quanto ao período de validade.
+        O certificado X.509, já validado quanto ao período de validade.
 
     Raises:
         SmartTokenError: se o arquivo não puder ser lido (inexistente,
@@ -173,7 +173,7 @@ def load_certificate_from_string(pem: str, source: str) -> x509.Certificate:
         source: identificador da fonte para mensagens de erro.
 
     Returns:
-        O certificado X.509, ja validado quanto ao período de validade.
+        O certificado X.509, já validado quanto ao período de validade.
 
     Raises:
         SmartTokenError: se não for um certificado X.509 válido ou estiver
@@ -202,6 +202,6 @@ def check_certificate_validity(cert: x509.Certificate, source: str) -> None:
     not_before = getattr(cert, "not_valid_before_utc", None) or cert.not_valid_before.replace(tzinfo=timezone.utc)
     not_after = getattr(cert, "not_valid_after_utc", None) or cert.not_valid_after.replace(tzinfo=timezone.utc)
     if now < not_before:
-        raise SmartTokenError(f"Certificado ainda não e válido: {source}")
+        raise SmartTokenError(f"Certificado ainda não é válido: {source}")
     if now > not_after:
         raise SmartTokenError(f"Certificado expirado: {source}")

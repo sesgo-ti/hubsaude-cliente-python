@@ -2,10 +2,10 @@
 resolução da SigningStrategy efetiva a partir dela.
 
 Não lida com o claim ``hub_ctx`` (ver Global Constraints do plano de
-execução) -- isso e responsabilidade da orquestração do cliente HTTP,
+execução) -- isso é responsabilidade da orquestração do cliente HTTP,
 fora do escopo deste módulo. As fontes de assinatura são mutuamente
 exclusivas: uma SigningStrategy própria (HSM, cofre de segredos) ou uma
-chave privada em arquivo PEM, da qual a estratégia e derivada conforme o
+chave privada em arquivo PEM, da qual a estratégia é derivada conforme o
 algoritmo JWT configurado.
 
 Ponto de entrada consumido pelo cliente HTTP/orquestração, junto
@@ -47,7 +47,7 @@ class SigningSettings:
         private_key_pem: caminho da chave privada PEM; exclusivo com
             ``signing_strategy``.
         private_key_password: senha da chave privada PEM (``None`` se não
-            criptografada). E consumida: repassada a ``pem_loader``, que
+            criptografada). É consumida: repassada a ``pem_loader``, que
             zera o array ao final de ``resolve()``, em sucesso ou erro. O
             chamador não deve reutiliza-la.
         signing_strategy: estratégia de assinatura própria (HSM, cofre de
@@ -72,7 +72,7 @@ class SigningSettings:
     def resolve(self) -> ResolvedSigning:
         """Resolve a estratégia de assinatura efetiva.
 
-        Quando a chave vem de arquivo PEM, a estratégia e criada a partir do
+        Quando a chave vem de arquivo PEM, a estratégia é criada a partir do
         algoritmo JWT configurado e a chave carregada fica disponível para
         uso em mTLS.
 

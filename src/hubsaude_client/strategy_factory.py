@@ -27,7 +27,7 @@ from hubsaude_client.private_key_signing_strategy import PrivateKeySigningStrate
 
 
 def from_private_key(private_key: PrivateKeyTypes, jwt_algorithm: str = DEFAULT_JWT_ALGORITHM) -> SigningStrategy:
-    """Cria estratégia a partir de chave privada ja carregada em memória.
+    """Cria estratégia a partir de chave privada já carregada em memória.
 
     Útil quando a chave foi obtida de outra fonte (ex: Vault API).
 
@@ -49,7 +49,7 @@ def from_pem_file(
     Args:
         path: caminho para o arquivo PEM da chave privada.
         password: senha para decriptar a chave (``None`` se não criptografada).
-            E consumida: repassada a ``pem_loader``, que zera o array ao
+            É consumida: repassada a ``pem_loader``, que zera o array ao
             final da chamada, em sucesso ou erro. O chamador não deve
             reutiliza-la.
         jwt_algorithm: algoritmo JWT (JWA) a usar na assinatura.
@@ -72,7 +72,7 @@ def from_pem_string(
 ) -> SigningStrategy:
     """Cria estratégia a partir de conteúdo PEM em string.
 
-    Útil quando o PEM e obtido de variável de ambiente ou secret manager.
+    Útil quando o PEM é obtido de variável de ambiente ou secret manager.
 
     Args:
         pem_content: conteúdo PEM da chave privada.
@@ -95,7 +95,7 @@ def from_pkcs12(data: bytes | Path, password: bytearray, jwt_algorithm: str = DE
 
     Args:
         data: conteúdo do arquivo PKCS#12, em bytes, ou o caminho do arquivo.
-        password: senha do bundle. E consumida: o array e zerado ao final da
+        password: senha do bundle. É consumida: o array é zerado ao final da
             chamada, em sucesso ou erro (RNF-03). O chamador não deve
             reutiliza-la.
         jwt_algorithm: algoritmo JWT (JWA) a usar na assinatura.
@@ -111,7 +111,7 @@ def from_pkcs12(data: bytes | Path, password: bytearray, jwt_algorithm: str = DE
     try:
         # A lib cryptography exige `bytes` (imutável) neste parâmetro; a cópia
         # temporária criada aqui fica sem outra referência viva assim que a
-        # chamada retorna. O bytearray original do chamador e zerado no finally.
+        # chamada retorna. O bytearray original do chamador é zerado no finally.
         private_key, _certificate, _additional = pkcs12.load_key_and_certificates(raw, bytes(password))
     except ValueError as exc:
         raise SmartTokenError(f"Falha ao carregar PKCS#12 (senha incorreta ou arquivo inválido?): {exc}", exc)
@@ -137,12 +137,12 @@ def from_pkcs11(
 
     Args:
         pkcs11_module_path: caminho para a biblioteca PKCS#11 do fabricante
-            (ex: ``/usr/lib/softhsm/libsofthsm2.só``).
+            (ex: ``/usr/lib/softhsm/libsofthsm2.so``).
         token_label: rótulo do token/slot.
         key_label: rótulo da chave privada no token.
         user_pin: PIN de acesso ao token. Permanece ``str`` (não
             ``bytearray`` + zeragem como em ``from_pem_file``/
-            ``from_pkcs12`` -- RNF-03): e usado uma única vez, aqui mesmo,
+            ``from_pkcs12`` -- RNF-03): é usado uma única vez, aqui mesmo,
             para abrir a sessão PKCS#11, e descartado ao final desta
             função (nunca fica retido em campo de builder entre chamadas,
             ao contrário da senha de ``client_key_store()``). Decisão
@@ -160,7 +160,7 @@ def from_pkcs11(
     """
     # Import local, não no topo do módulo: python-pkcs11 e dependência
     # opcional (extra "hsm" em pyproject.toml), com bindings nativos que a
-    # maioria dos consumidores não instala. strategy_factory.py e um único
+    # maioria dos consumidores não instala. strategy_factory.py é um único
     # arquivo com todas as factories -- um import no topo faria qualquer
     # uso de from_pem_file/from_pkcs12 (sem PKCS#11) falhar com
     # ModuleNotFoundError para quem não instalou o extra.
@@ -201,12 +201,12 @@ def load_pkcs12_key_and_certificate(
 
     Args:
         data: conteúdo do arquivo PKCS#12, em bytes, ou o caminho do arquivo.
-        password: senha do bundle. E consumida: o array e zerado ao final
+        password: senha do bundle. É consumida: o array é zerado ao final
             da chamada, em sucesso ou erro (RNF-03). O chamador não deve
             reutiliza-la.
 
     Returns:
-        A chave privada e o certificado, ambos ja validados (tamanho
+        A chave privada e o certificado, ambos já validados (tamanho
         mínimo de chave, período de validade do certificado).
 
     Raises:

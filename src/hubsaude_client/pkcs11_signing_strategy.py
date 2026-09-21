@@ -2,21 +2,21 @@
 token). A chave privada NUNCA sai do dispositivo -- este objeto guarda
 apenas um handle de sessão e a referência a chave no token.
 
-Divergência de plataforma: a mecânica CKM_*_RSA_PKCS/CKM_ECDSA do PKCS#11 ja
+Divergência de plataforma: a mecânica CKM_*_RSA_PKCS/CKM_ECDSA do PKCS#11 já
 produz a assinatura no formato exigido (RSA PKCS#1v1.5/PSS idêntico ao
 software; ECDSA como R||S bruto, NÃO DER) -- diferente de
 private_key_signing_strategy.py, aqui NÃO há conversão DER->P1363 a fazer.
 
 ECDSA usa sempre o mecanismo puro ``CKM_ECDSA`` (assinatura sobre um resumo
-ja calculado pelo chamador), nunca os mecanismos combinados
+já calculado pelo chamador), nunca os mecanismos combinados
 ``CKM_ECDSA_SHA*`` (hash + assinatura numa única operação do dispositivo):
 nem todo hardware/software de token PKCS#11 implementa as variantes
 combinadas, enquanto o mecanismo puro tem suporte praticamente universal
 entre fabricantes (confirmado em reprodução real contra SoftHSM2 -- ver
-achados técnicos). O resumo (SHA-256/384/512) e calculado aqui, do lado do
+achados técnicos). O resumo (SHA-256/384/512) é calculado aqui, do lado do
 cliente, via ``hashlib`` da biblioteca padrão, antes de enviar ao
 dispositivo. RSA (PKCS#1v1.5 e PSS) continua usando os mecanismos
-combinados ``CKM_SHA*_RSA_PKCS[_PSS]``, que não tem o mesmo problema de
+combinados ``CKM_SHA*_RSA_PKCS[_PSS]``, que não têm o mesmo problema de
 suporte.
 """
 
@@ -92,7 +92,7 @@ class Pkcs11SigningStrategy:
             SigningError: se ocorrer erro na operação do hardware.
         """
         # Import local pelo mesmo motivo do import em strategy_factory.py:
-        # python-pkcs11 e opcional (extra "hsm"). Este módulo e importado no
+        # python-pkcs11 é opcional (extra "hsm"). Este módulo é importado no
         # topo de strategy_factory.py -- se o import fosse no topo daqui, o
         # problema só migraria um nível acima, quebrando o mesmo jeito para
         # quem não instalou o extra.
@@ -107,10 +107,10 @@ class Pkcs11SigningStrategy:
         digest_fn = _ECDSA_DIGEST_BY_ALGORITHM.get(self._jwt_algorithm)
         payload = digest_fn(data) if digest_fn is not None else data
         try:
-            # self._key e tipado como "object" no construtor (handle opaco, sem
+            # self._key é tipado como "object" no construtor (handle opaco, sem
             # acoplar a assinatura pública da classe ao tipo concreto de
             # python-pkcs11) -- o atributo "sign" existe em tempo de execução
-            # em pkcs11.PrivateKey, mas não e visível estaticamente para mypy.
+            # em pkcs11.PrivateKey, mas não é visível estaticamente para mypy.
             signature = self._key.sign(payload, mechanism=mechanism)  # type: ignore[attr-defined]
         except Exception as exc:
             raise SigningError(f"Falha ao assinar via PKCS#11 com algoritmo {self._jwt_algorithm}", exc)

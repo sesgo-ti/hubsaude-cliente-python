@@ -7,7 +7,7 @@ extraída do certificado. Dois pontos de entrada:
 - :func:`verify_key_pair`: recebe uma chave privada "solta" (RSA ou EC)
   diretamente. O algoritmo da assinatura de teste é inferido do tipo/curva da
   chave (RSA -> RS256; EC -> ES256/ES384/ES512 conforme a curva).
-- :func:`verify_strategy`: recebe uma ``SigningStrategy`` ja construída.
+- :func:`verify_strategy`: recebe uma ``SigningStrategy`` já construída.
   Limitação: só e possível verificar quando a estratégia e uma
   ``PrivateKeySigningStrategy``, pois e necessário conhecer o algoritmo
   para verificar a assinatura -- estratégias customizadas (HSM/cofre de
@@ -54,8 +54,8 @@ def verify_key_pair(private_key: PrivateKeyTypes, certificate: x509.Certificate)
     do certificado, assinando um desafio e conferindo a assinatura.
 
     Complementa :func:`verify_strategy`: aquela
-    função exige uma :class:`~hubsaude_client.ports.SigningStrategy` ja
-    construída (e só consegue validar quando ela e uma
+    função exige uma :class:`~hubsaude_client.ports.SigningStrategy` já
+    construída (e só consegue validar quando ela é uma
     ``PrivateKeySigningStrategy``); esta aceita a chave privada
     diretamente, para quem monta a própria estratégia fora do builder
     (cenário HSM/customizado) e quer testar a consistência chave<->certificado

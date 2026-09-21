@@ -18,7 +18,7 @@ from hubsaude_client.pem_loader import validate_minimum_key_size
 
 
 class PrivateKeySigningStrategy:
-    """Estratégia de assinatura para uma chave privada ja carregada em memória.
+    """Estratégia de assinatura para uma chave privada já carregada em memória.
 
     Implementa o Protocol ``hubsaude_client.ports.SigningStrategy``. Reutilizada
     por todas as fontes de material criptográfico resolvidas em
@@ -32,7 +32,7 @@ class PrivateKeySigningStrategy:
         compatibilidade entre o tipo de chave e o algoritmo (fail-fast).
 
         Args:
-            private_key: chave privada RSA ou EC ja carregada.
+            private_key: chave privada RSA ou EC já carregada.
             jwt_algorithm: algoritmo JWT (JWA) a usar na assinatura.
 
         Raises:
@@ -102,13 +102,13 @@ class PrivateKeySigningStrategy:
 
 
 def _require_compatible_key_type(key: PrivateKeyTypes, params: AlgorithmParams, jwt_algorithm: str) -> None:
-    """Valida, na construção (fail-fast), que o tipo da chave e compatível
-    com o algoritmo configurado -- a mesma checagem que :meth:`_sign` ja
+    """Valida, na construção (fail-fast), que o tipo da chave é compatível
+    com o algoritmo configurado -- a mesma checagem que :meth:`_sign` já
     fazia, só que só era exercitada na primeira assinatura real.
 
     Args:
         key: chave privada a validar.
-        params: parâmetros do algoritmo ja resolvidos (RSA PKCS#1v1.5/PSS
+        params: parâmetros do algoritmo já resolvidos (RSA PKCS#1v1.5/PSS
             ou ECDSA).
         jwt_algorithm: algoritmo JWT (JWA) configurado, para a mensagem
             de erro.
