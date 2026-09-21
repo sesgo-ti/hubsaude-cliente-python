@@ -1,0 +1,174 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Instalar tox
+        run: pip install tox
+
+      # O empacotamento Python não tem como injetar a versão no build a
+      # partir da tag -- a versão publicada é sempre a que já está
+      # commitada em pyproject.toml ([project].version). A tag só existe
+      # pra disparar a release; ela precisa bater com o que já foi
+      # commitado (bump da versão no pyproject.toml, commit, e só então
+      # a tag).
+      - name: Validar tag contra a versão do pyproject.toml
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          # Mesma política do cliente Java (lá, o gate anti-SNAPSHOT):
+          # release só de versão final, sem sufixo de pré-release/dev/
+          # local do PEP 440 (1.2.0rc1, 1.2.0.dev1, 1.2.0+local).
+          case "$TAG_VERSION" in
+            *[!0-9.]*|.*|*.)
+              echo "::error::Tag ($GITHUB_REF_NAME) não é uma versão final MAJOR.MINOR.PATCH." >&2
+              exit 1
+              ;;
+          esac
+          PROJECT_VERSION="$(python -c 'import pathlib, tomllib; print(tomllib.loads(pathlib.Path("pyproject.toml").read_text(encoding="utf-8"))["project"]["version"])')"
+          if [ "$TAG_VERSION" != "$PROJECT_VERSION" ]; then
+            echo "::error::Tag ($GITHUB_REF_NAME) não bate com a versão do pyproject.toml ($PROJECT_VERSION)" >&2
+            exit 1
+          fi
+
+      # Os testes de PKCS#11 rodam contra um HSM em software real
+      # (SoftHSM2), não mockado — mesmo setup do ci.yml. Sem ele a suíte
+      # PKCS#11 seria pulada silenciosamente (skipif em
+      # tests/pkcs11_softhsm_helper.py) e a release passaria verde sem
+      # ter exercitado o caminho HSM; por isso a instalação falha
+      # explicitamente se o módulo não aparecer.
+      - name: Instalar SoftHSM2
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y softhsm2
+          lib="$(dpkg -L libsofthsm2 | grep -m1 'libsofthsm2\.so$')"
+          test -n "$lib" || { echo "libsofthsm2.so não encontrado" >&2; exit 1; }
+          echo "SOFTHSM_LIB=$lib" >> "$GITHUB_ENV"
+
+      - name: Testes e cobertura
+        run: tox -e py312
+
+      - name: Lint, formatação e checagem de tipos
+        run: tox -e lint
+
+      - name: Dependências e SAST
+        run: tox -e security
+
+      - name: Regras arquiteturais
+        run: tox -e archrules
+
+      # A suíte de integração sobe o hubsaude-simulador de verdade e fala
+      # mTLS contra ele. O JAR do simulador é distribuído pela CLI
+      # `hubsaude`, que resolve a versão por um manifesto assinado e
+      # verifica o SHA-256 do download -- mesma origem usada pelo cliente
+      # TypeScript.
+      #
+      # Versão pinada de propósito (não "latest"): torna a instalação
+      # determinística entre releases e evita que uma versão nova da CLI
+      # mude comportamento sem aviso. Atualizar manualmente quando quiser
+      # adotar uma versão nova.
+      - name: Cache da CLI hubsaude e dos componentes provisionados
+        id: cache-hubsaude
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.local/bin/hubsaude
+            ~/.local/share/hubsaude
+          key: hubsaude-cli-0.3.16-${{ runner.os }}
+
+      - name: Instalar CLI hubsaude (versão pinada)
+        if: steps.cache-hubsaude.outputs.cache-hit != 'true'
+        env:
+          HUBSAUDE_CLI_VERSION: "0.3.16"
+        run: curl -fsSL https://raw.githubusercontent.com/kyriosdata/runner/main/install.sh | bash
+
+      - name: Adicionar CLI hubsaude ao PATH
+        run: echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      # Falha explícita, não skip silencioso: se a CLI não puder ser
+      # obtida/verificada aqui, a release para. A suíte de integração em
+      # si é pulada silenciosamente quando o JAR não está disponível
+      # (comportamento correto para o ci.yml/dev local, que não instalam
+      # a CLI) -- mas numa release, uma falha na infraestrutura desse
+      # teste precisa ser visível, não mascarada como "suíte pulada,
+      # tudo certo".
+      - name: Verificar CLI hubsaude
+        run: |
+          hubsaude version || {
+            echo "::error::Não foi possível obter/verificar a CLI hubsaude — abortando a release."
+            exit 1
+          }
+
+      # O JDK é necessário porque, diferente do cliente TypeScript (que
+      # sobe o simulador pela própria CLI, com a JRE que ela provisiona),
+      # a suíte Python executa o JAR num subprocesso próprio, numa porta
+      # livre -- ver tests/hubsaude_simulator_helper.py. Por isso aqui a
+      # CLI é usada só como provisionadora do JAR, e o que a suíte
+      # precisa é do caminho do arquivo, não do serviço no ar.
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Provisionar o JAR do hubsaude-simulador
+        run: |
+          hubsaude update --component simulador
+          # O layout <dados>/simulador/server/hubsaude-simulador-<versão>.jar
+          # é convenção da CLI, não uma API pública (não há comando que
+          # imprima esse caminho). Se mudar, a falha acontece aqui, de
+          # forma visível, em vez de a suíte de integração ser pulada.
+          # `sort -V` ordena por versão (não lexicograficamente), o que
+          # importa quando o cache traz um JAR antigo junto com o novo.
+          jar="$(find "$HOME/.local/share/hubsaude/simulador/server" \
+                   -maxdepth 1 -name 'hubsaude-simulador-*.jar' | sort -V | tail -n1)"
+          if [ -z "$jar" ]; then
+            echo "::error::JAR do hubsaude-simulador não encontrado após o provisionamento — abortando a release." >&2
+            exit 1
+          fi
+          echo "Simulador provisionado: $jar"
+          # Lido por tests/hubsaude_simulator_helper.py (repassado ao tox
+          # via `passenv`). É também a variável que a CLI aceita como
+          # override do JAR -- definida aqui só depois de a CLI já ter
+          # provisionado, para não influenciar a resolução acima.
+          echo "HUBSAUDE_SIMULADOR_JAR=$jar" >> "$GITHUB_ENV"
+
+      - name: Testes de integração (simulador local)
+        run: tox -e integration
+
+      - name: Empacotar (sdist e wheel)
+        run: tox -e build
+
+      - name: Gerar SBOM
+        run: tox -e sbom
+
+      - name: Publicar GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            dist/* \
+            sbom.json \
+            --generate-notes \
+            --verify-tag
+
+      # TODO: publicar no PyPI, quando a conta/projeto existirem
+      # (SECURITY.md já declara `hubsaude-client` no PyPI como o
+      # artefato coberto). Preferir Trusted Publishing (OIDC), que
+      # dispensa token em secrets, exigindo `id-token: write` nas
+      # permissions do job.
+      # - name: Publicar no PyPI
+      #   uses: pypa/gh-action-pypi-publish@release/v1
