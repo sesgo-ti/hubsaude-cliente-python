@@ -53,7 +53,7 @@ def test_resolve_with_trust_anchor_in_memory_passes_trusted_cert(mock_build) -> 
 
 def test_resolve_integrates_for_real_with_ssl_context_factory(fake_pem_pair) -> None:
     """Sem mock: prova que TlsSettings realmente monta um ssl.SSLContext de
-    verdade através de ssl_context_factory.build_ssl_context (Task 9, ja
+    verdade através de ssl_context_factory.build_ssl_context (Task 9, já
     commitada nesta branch) -- os testes acima isolam com @patch para testar
     a lógica de precedência de TlsSettings; este aqui prova a integração
     real entre as duas tasks, pedido explícito do fluxo de trabalho atual

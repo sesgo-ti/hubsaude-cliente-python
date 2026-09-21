@@ -50,7 +50,7 @@ def test_load_private_key_password_is_zeroed_after_use(fake_encrypted_pem_key) -
 
 def test_load_private_key_password_is_zeroed_after_use_on_error_path(fake_encrypted_pem_key) -> None:
     """RNF-03: a senha deve ser zerada mesmo quando a chamada falha (aqui,
-    senha incorreta) -- não apenas no caminho feliz, ja coberto pelo teste
+    senha incorreta) -- não apenas no caminho feliz, já coberto pelo teste
     acima."""
     wrong_password = bytearray(b"senha-errada-para-zeragem")
     with pytest.raises(SmartTokenError):
@@ -90,7 +90,7 @@ def test_load_private_key_openssl_legacy_encrypted_with_empty_password_raises(
 
 def test_load_private_key_invalid_format_raises(tmp_path: Path) -> None:
     garbage_path = tmp_path / "garbage.pem"
-    garbage_path.write_text("não e um PEM válido")
+    garbage_path.write_text("não é um PEM válido")
     with pytest.raises(SmartTokenError, match="formato"):
         pem_loader.load_private_key(garbage_path)
 
@@ -114,7 +114,7 @@ def test_load_private_key_nonexistent_file_raises(tmp_path: Path) -> None:
 def test_load_private_key_nonexistent_file_zeroes_password(tmp_path: Path) -> None:
     """A senha deve ser zerada mesmo quando o arquivo nunca chega a ser
     lido -- o erro de leitura acontece antes de qualquer tentativa de
-    decriptar, mas o chamador ja entregou a senha ao método."""
+    decriptar, mas o chamador já entregou a senha ao método."""
     missing_path = tmp_path / "nao-existe.pem"
     password = bytearray(b"senha-nao-deveria-vazar")
     with pytest.raises(SmartTokenError):
@@ -208,7 +208,7 @@ def test_load_certificate_expired_raises(fake_expired_cert_pem) -> None:
 
 
 def test_load_certificate_not_yet_valid_raises(fake_not_yet_valid_cert_pem) -> None:
-    with pytest.raises(SmartTokenError, match="ainda não e válido"):
+    with pytest.raises(SmartTokenError, match="ainda não é válido"):
         pem_loader.load_certificate(fake_not_yet_valid_cert_pem)
 
 

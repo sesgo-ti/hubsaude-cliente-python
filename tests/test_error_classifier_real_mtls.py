@@ -89,7 +89,7 @@ def test_real_unknown_ca_rejection_tls13_is_classified_when_surface_is_recognize
     conhecidas do mesmo evento de servidor (rejeição de certificado de
     cliente por CA desconhecida após o ``Finished``):
 
-    - alerta ``unknown ca`` limpo (mesmo fragmento ja coberto para TLS 1.2);
+    - alerta ``unknown ca`` limpo (mesmo fragmento já coberto para TLS 1.2);
     - ``ssl.SSLEOFError`` com a mensagem "EOF occurred in violation of
       protocol", a outra superfície OpenSSL conhecida desse mesmo
       evento de servidor (ver nota no topo de ``error_classifier.py``).
@@ -116,7 +116,7 @@ def test_real_unknown_ca_rejection_tls13_is_classified_when_surface_is_recognize
             "que ainda não foi documentada no módulo error_classifier.py."
         )
 
-    # As duas superfícies do mesmo evento de servidor tem níveis de
+    # As duas superfícies do mesmo evento de servidor têm níveis de
     # confiança diferentes: o alerta limpo é inequívoco (CONFIRMED); o
     # ssl.SSLEOFError sem alerta textual é ambíguo (PROBABLE), porque o
     # mesmo texto também pode surgir de uma instabilidade de rede comum

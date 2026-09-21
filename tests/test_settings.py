@@ -48,7 +48,7 @@ def test_resolve_with_no_source_raises_value_error() -> None:
 
 def test_signing_settings_has_no_key_id_field(fake_pem_pair) -> None:
     """SigningSettings não expõe (e nunca expôs efetivamente) um campo
-    key_id -- o kid do JWT e configurado via SmartTokenClientBuilder.key_id(),
+    key_id -- o kid do JWT é configurado via SmartTokenClientBuilder.key_id(),
     único lugar onde esse valor efetivamente chega ao cliente construído.
     """
     settings = SigningSettings(private_key_pem=fake_pem_pair["key"])
@@ -62,7 +62,7 @@ def test_private_key_password_is_bytearray_and_zeroed_after_resolve(fake_encrypt
     (Task 3/6) até a ponta -- password precisa ser bytearray, não bytes,
     para o pem_loader poder zera-lo após o uso.
 
-    fake_encrypted_pem_key ja retorna {"key": <Path>, "password": <bytearray>}
+    fake_encrypted_pem_key já retorna {"key": <Path>, "password": <bytearray>}
     (ver tests/conftest.py) -- copiamos a senha para um bytearray novo aqui
     para não zerar o bytearray compartilhado da própria fixture."""
     password = bytearray(fake_encrypted_pem_key["password"])

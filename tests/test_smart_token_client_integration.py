@@ -400,7 +400,7 @@ def test_sa_aceita_client_assertion_sem_kid(simulator: SimulatorInfo, client_cre
         ssl_context=mtls_context,
     )
 
-    assert response.status_code == 200, "Com uma única chave registrada, kid e dispensável (concern Sec5.1)"
+    assert response.status_code == 200, "Com uma única chave registrada, kid é dispensável (concern Sec5.1)"
     assert "access_token" in response.text
 
 

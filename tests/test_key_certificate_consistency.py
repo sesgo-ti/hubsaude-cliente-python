@@ -63,7 +63,7 @@ def test_verify_strategy_rejects_mismatched_ec_pair(fake_mismatched_ec_pem_pair)
 def test_verify_strategy_rejects_rsa_strategy_with_ec_certificate(fake_pem_pair, fake_ec_pem_pair) -> None:
     """Estratégia RSA validada contra certificado com chave pública EC:
     cobre o branch defensivo de tipo de chave pública em _verify_signature
-    (RsaPkcs1Params/RsaPssParams), que só e alcançável com um par
+    (RsaPkcs1Params/RsaPssParams), que só é alcançável com um par
     chave-privada/certificado de famílias criptográficas diferentes."""
     key = pem_loader.load_private_key(fake_pem_pair["key"])
     ec_cert = pem_loader.load_certificate(fake_ec_pem_pair["cert"])
@@ -86,7 +86,7 @@ def test_verify_strategy_rejects_ec_strategy_with_rsa_certificate(fake_ec_pem_pa
 def test_verify_strategy_rejects_rsa_pss_strategy_with_ec_certificate(fake_pem_pair, fake_ec_pem_pair) -> None:
     """Estratégia PS256 (RSA-PSS) validada contra certificado com chave pública EC:
     cobre o branch defensivo de tipo de chave pública no ramo RsaPssParams de
-    _verify_signature, distinto do ramo RsaPkcs1Params ja coberto acima."""
+    _verify_signature, distinto do ramo RsaPkcs1Params já coberto acima."""
     key = pem_loader.load_private_key(fake_pem_pair["key"])
     ec_cert = pem_loader.load_certificate(fake_ec_pem_pair["cert"])
     strategy = PrivateKeySigningStrategy(key, "PS256")
@@ -101,7 +101,7 @@ def test_verify_signature_raises_for_unsupported_algorithm_params(fake_pem_pair,
     # Mesmo padrão usado em test_private_key_signing_strategy.py para o branch
     # análogo em PrivateKeySigningStrategy._sign. A assinatura precisa continuar
     # válida (não pode falhar em strategy.sign()), então só o parâmetro de
-    # algoritmo e trocado via a property de classe, após capturar uma assinatura
+    # algoritmo é trocado via a property de classe, após capturar uma assinatura
     # real.
     key = pem_loader.load_private_key(fake_pem_pair["key"])
     cert = pem_loader.load_certificate(fake_pem_pair["cert"])
@@ -229,7 +229,7 @@ def test_verify_key_pair_wraps_unexpected_strategy_construction_failure(fake_pem
 
 
 def test_verify_key_pair_does_not_wrap_smart_token_error_from_strategy_construction(fake_pem_pair, monkeypatch) -> None:
-    """Quando a construção da estratégia interna ja falha com
+    """Quando a construção da estratégia interna já falha com
     ``SmartTokenError`` (ex.: chave abaixo do tamanho mínimo, validada por
     ``validate_minimum_key_size``), ``verify_key_pair`` deve deixar essa
     exceção propagar sem envolve-la de novo (o ramo ``except
