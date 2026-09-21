@@ -18,20 +18,40 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
           cache: pip
+
+      # Os testes de PKCS#11 rodam contra um HSM em software real
+      # (SoftHSM2), não mockado. O caminho do módulo varia por
+      # distribuição, por isso é descoberto aqui e exportado em
+      # SOFTHSM_LIB (ver tests/pkcs11_softhsm_helper.py).
+      - name: Instalar SoftHSM2
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y softhsm2
+          # libsofthsm2.so vem do pacote `libsofthsm2`, não do `softhsm2`.
+          lib="$(dpkg -L libsofthsm2 | grep -m1 'libsofthsm2\.so$')"
+          test -n "$lib" || { echo "libsofthsm2.so não encontrado" >&2; exit 1; }
+          echo "SOFTHSM_LIB=$lib" >> "$GITHUB_ENV"
+
       - name: Instalar tox
         run: pip install tox
+
       - name: Testes e cobertura
         run: tox -e py312
+
       - name: Lint, formatação e checagem de tipos
         run: tox -e lint
+
       - name: Dependências e SAST
         run: tox -e security
+
       - name: Regras arquiteturais
         run: tox -e archrules
+
       - name: Publicar relatórios de testes
         if: always()
         uses: actions/upload-artifact@v7

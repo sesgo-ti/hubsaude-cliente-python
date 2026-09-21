@@ -13,8 +13,15 @@ import shutil
 import subprocess
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Final
 
 import pytest
+
+#: Variável de ambiente que aponta direto para o módulo PKCS#11 do
+#: SoftHSM2 (``libsofthsm2.so``), com precedência sobre
+#: :data:`SOFTHSM2_LIB_CANDIDATES` -- o caminho varia por distribuição,
+#: então o CI descobre o real e o exporta.
+ENV_VAR_SOFTHSM_LIB: Final[str] = "SOFTHSM_LIB"
 
 SOFTHSM2_LIB_CANDIDATES = (
     "/usr/lib/softhsm/libsofthsm2.so",
@@ -24,8 +31,18 @@ SOFTHSM2_LIB_CANDIDATES = (
 
 
 def find_softhsm2_lib() -> str | None:
+    """Retorna o caminho do módulo PKCS#11 do SoftHSM2: ``SOFTHSM_LIB``,
+    se definida, senão o primeiro de :data:`SOFTHSM2_LIB_CANDIDATES` que
+    existir. ``None`` se nenhum resolver -- inclusive quando a variável
+    aponta para algo que não é arquivo, caso em que os candidatos **não**
+    são tentados, para o erro de configuração não ficar mascarado (mesma
+    política de ``hubsaude_simulator_helper.simulator_jar_path``).
+    """
+    override = os.environ.get(ENV_VAR_SOFTHSM_LIB)
+    if override:
+        return override if Path(override).is_file() else None
     for candidate in SOFTHSM2_LIB_CANDIDATES:
-        if Path(candidate).exists():
+        if Path(candidate).is_file():
             return candidate
     return None
 
