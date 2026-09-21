@@ -147,7 +147,7 @@ def test_raises_when_body_is_not_valid_json() -> None:
 def test_rejects_discovered_token_endpoint_without_https() -> None:
     """P0: um .well-known comprometido (ou um MITM capaz de responde-lo)
     não pode fazer o cliente enviar client_assertion/credenciais de mTLS
-    para um token_endpoint sem TLS -- mesma proteção que ja existia para
+    para um token_endpoint sem TLS -- mesma proteção que já existia para
     valores informados manualmente no builder, agora aplicada também ao
     valor que volta da rede."""
 

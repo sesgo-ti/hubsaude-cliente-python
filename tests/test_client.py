@@ -1,7 +1,7 @@
 """Testes de ``client.SmartTokenClient``.
 
-Nenhuma rede real e usada: o ``httpx.Client`` construído internamente por
-``SmartTokenClient.__init__`` e interceptado via ``install_mock_transport``
+Nenhuma rede real é usada: o ``httpx.Client`` construído internamente por
+``SmartTokenClient.__init__`` é interceptado via ``install_mock_transport``
 (monkeypatch de ``httpx.Client`` por um factory que injeta
 ``httpx.MockTransport(handler)`` -- mesma técnica de
 ``tests/test_discovery.py``, só que aplicada uma camada acima, já que
@@ -722,7 +722,7 @@ def test_retry_warning_logs_the_trace_id_of_the_failed_attempt(
 ) -> None:
     """O warning emitido a cada tentativa transitória (RF-07) deve trazer
     o traceId da MESMA requisição que falhou -- e um traceId diferente por
-    tentativa, ja que ``TraceContext.generate()`` e chamado a cada volta
+    tentativa, já que ``TraceContext.generate()`` é chamado a cada volta
     do laço de retry, nunca reaproveitado entre tentativas."""
     captured: list[httpx.Request] = []
 
@@ -915,7 +915,7 @@ def test_token_result_repr_masks_access_token() -> None:
 # _ReadersWriterLock -- contenção real entre leitores/escritor (RNF-01)
 # ---------------------------------------------------------------------------
 #
-# Os testes de single-flight acima ja exercitam vários leitores concorrentes
+# Os testes de single-flight acima já exercitam vários leitores concorrentes
 # sem contenção com um escritor. Os dois testes abaixo forçam deliberadamente
 # a espera em `_acquire_read`/`_acquire_write` (via `threading.Condition.wait`)
 # -- cenário que só ocorre quando um escritor está ativo e um leitor chega
