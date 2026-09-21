@@ -36,7 +36,7 @@ def test_delay_doubles_between_consecutive_attempts() -> None:
 
 
 def test_no_cap_grows_unbounded() -> None:
-    """O calculo de backoff nao aplica cap/teto superior ao delay."""
+    """O cálculo de backoff não aplica cap/teto superior ao delay."""
     assert compute_retry_delay_seconds(20) == pytest.approx(2**19)
 
 

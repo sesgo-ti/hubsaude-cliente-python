@@ -1,17 +1,17 @@
-"""Validacao fail-fast de consistencia entre o material de assinatura
+"""Validação fail-fast de consistência entre o material de assinatura
 (chave privada ou SigningStrategy) e o certificado X.509 do cliente.
 
-Assina um desafio fixo e confere a assinatura com a chave publica
-extraida do certificado. Dois pontos de entrada:
+Assina um desafio fixo e confere a assinatura com a chave pública
+extraída do certificado. Dois pontos de entrada:
 
 - :func:`verify_key_pair`: recebe uma chave privada "solta" (RSA ou EC)
-  diretamente. O algoritmo da assinatura de teste e' inferido do tipo/curva da
+  diretamente. O algoritmo da assinatura de teste é inferido do tipo/curva da
   chave (RSA -> RS256; EC -> ES256/ES384/ES512 conforme a curva).
-- :func:`verify_strategy`: recebe uma ``SigningStrategy`` ja construida.
-  Limitacao: so e possivel verificar quando a estrategia e uma
-  ``PrivateKeySigningStrategy``, pois e necessario conhecer o algoritmo
-  para verificar a assinatura -- estrategias customizadas (HSM/cofre de
-  segredos com algoritmo nao exposto) sao aceitas sem validacao.
+- :func:`verify_strategy`: recebe uma ``SigningStrategy`` já construída.
+  Limitação: só e possível verificar quando a estratégia e uma
+  ``PrivateKeySigningStrategy``, pois e necessário conhecer o algoritmo
+  para verificar a assinatura -- estratégias customizadas (HSM/cofre de
+  segredos com algoritmo não exposto) são aceitas sem validação.
 """
 
 from __future__ import annotations
@@ -29,8 +29,8 @@ from hubsaude_client.ports import SigningStrategy
 from hubsaude_client.private_key_signing_strategy import PrivateKeySigningStrategy
 
 # Logger compartilhado com o restante da lib (ver _log.py) -- usar
-# logging.getLogger(__name__) diretamente faria os logs deste modulo
-# saírem sob um nome distinto do contrato de observabilidade estavel
+# logging.getLogger(__name__) diretamente faria os logs deste módulo
+# saírem sob um nome distinto do contrato de observabilidade estável
 # (hubsaude_client.SmartTokenClient) documentado em _log.py.
 _LOGGER = get_logger()
 
@@ -38,7 +38,7 @@ _CHALLENGE = b"key-pair-consistency-check"
 
 #: Mapeia a curva EC (nome retornado por ``EllipticCurve.name``) para o
 #: algoritmo JWT (JWA) cujo tamanho de assinatura R||S (RFC 7518 Sec3.4)
-#: e' compativel -- necessario porque a conversao DER->R||S
+#: é compatível -- necessário porque a conversão DER->R||S
 #: (``algorithms.encode_p1363``) exige um ``signature_length`` que
 #: corresponde ao tamanho da curva; usar sempre ES256 quebraria (overflow)
 #: para chaves P-384/P-521.
@@ -50,25 +50,25 @@ _EC_CURVE_TO_JWT_ALGORITHM: dict[str, str] = {
 
 
 def verify_key_pair(private_key: PrivateKeyTypes, certificate: x509.Certificate) -> None:
-    """Verifica que uma chave privada "solta" corresponde a chave publica
+    """Verifica que uma chave privada "solta" corresponde a chave pública
     do certificado, assinando um desafio e conferindo a assinatura.
 
     Complementa :func:`verify_strategy`: aquela
-    funcao exige uma :class:`~hubsaude_client.ports.SigningStrategy` ja
-    construida (e so consegue validar quando ela e uma
+    função exige uma :class:`~hubsaude_client.ports.SigningStrategy` já
+    construída (e só consegue validar quando ela é uma
     ``PrivateKeySigningStrategy``); esta aceita a chave privada
-    diretamente, para quem monta a propria estrategia fora do builder
-    (cenario HSM/customizado) e quer testar a consistencia chave<->certificado
+    diretamente, para quem monta a própria estratégia fora do builder
+    (cenário HSM/customizado) e quer testar a consistência chave<->certificado
     antes de usar.
 
     Args:
         private_key: chave privada RSA ou EC a validar.
-        certificate: certificado X.509 com a chave publica correspondente.
+        certificate: certificado X.509 com a chave pública correspondente.
 
     Raises:
-        SmartTokenError: se o tipo/curva da chave nao for suportado para
-            esta verificacao, ou se a assinatura de teste nao puder ser
-            verificada com a chave publica do certificado.
+        SmartTokenError: se o tipo/curva da chave não for suportado para
+            esta verificação, ou se a assinatura de teste não puder ser
+            verificada com a chave pública do certificado.
     """
     jwt_algorithm = _determine_verification_algorithm(private_key)
     try:
@@ -76,7 +76,7 @@ def verify_key_pair(private_key: PrivateKeyTypes, certificate: x509.Certificate)
     except SmartTokenError:
         raise
     except Exception as exc:
-        raise SmartTokenError(f"Falha ao verificar consistencia entre chave privada e certificado: {exc}", exc)
+        raise SmartTokenError(f"Falha ao verificar consistência entre chave privada e certificado: {exc}", exc)
     verify_strategy(strategy, certificate)
 
 
@@ -88,13 +88,13 @@ def _determine_verification_algorithm(private_key: PrivateKeyTypes) -> str:
         private_key: chave privada a inspecionar.
 
     Returns:
-        O algoritmo JWT (JWA) compativel com o tipo/curva da chave.
+        O algoritmo JWT (JWA) compatível com o tipo/curva da chave.
 
     Raises:
-        SmartTokenError: se o tipo de chave, ou a curva EC, nao for
+        SmartTokenError: se o tipo de chave, ou a curva EC, não for
             suportado por esta biblioteca (ver ``algorithms.py`` --
-            apenas RSA e EC/P-256/P-384/P-521 sao suportados; Ed25519/Ed448
-            nao sao mapeados em ``algorithms.py``).
+            apenas RSA e EC/P-256/P-384/P-521 são suportados; Ed25519/Ed448
+            não são mapeados em ``algorithms.py``).
     """
     if isinstance(private_key, rsa.RSAPrivateKey):
         return "RS256"
@@ -104,51 +104,51 @@ def _determine_verification_algorithm(private_key: PrivateKeyTypes) -> str:
         if algorithm is not None:
             return algorithm
         raise SmartTokenError(
-            f"Curva EC nao suportada para validacao de consistencia chave-certificado: {curve_name!r}"
+            f"Curva EC não suportada para validação de consistência chave-certificado: {curve_name!r}"
             f" (suportadas: {', '.join(sorted(_EC_CURVE_TO_JWT_ALGORITHM))})"
         )
     raise SmartTokenError(
-        f"Tipo de chave nao suportado para validacao de consistencia chave-certificado:"
+        f"Tipo de chave não suportado para validação de consistência chave-certificado:"
         f" {type(private_key).__name__} (suportados: RSA, EC)"
     )
 
 
 def verify_strategy(strategy: SigningStrategy, certificate: x509.Certificate) -> None:
-    """Verifica que a estrategia de assinatura corresponde ao certificado.
+    """Verifica que a estratégia de assinatura corresponde ao certificado.
 
     Args:
-        strategy: estrategia de assinatura a validar.
-        certificate: certificado X.509 com a chave publica correspondente.
+        strategy: estratégia de assinatura a validar.
+        certificate: certificado X.509 com a chave pública correspondente.
 
     Raises:
-        SmartTokenError: se a assinatura de teste nao puder ser verificada
-            com a chave publica do certificado.
+        SmartTokenError: se a assinatura de teste não puder ser verificada
+            com a chave pública do certificado.
     """
     if not isinstance(strategy, PrivateKeySigningStrategy):
         _LOGGER.debug(
-            "Estrategia de assinatura customizada: consistencia com o certificado "
-            "nao pode ser verificada automaticamente"
+            "Estratégia de assinatura customizada: consistência com o certificado "
+            "não pode ser verificada automaticamente"
         )
         return
     try:
         signature = strategy.sign(_CHALLENGE)
         _verify_signature(certificate.public_key(), strategy.algorithm_params, signature)
-        _LOGGER.debug("Verificacao de consistencia estrategia-certificado concluida com sucesso")
+        _LOGGER.debug("Verificação de consistência estratégia-certificado concluída com sucesso")
     except SmartTokenError:
         raise
     except Exception as exc:
-        raise SmartTokenError(f"Falha ao verificar consistencia entre chave privada e certificado: {exc}", exc)
+        raise SmartTokenError(f"Falha ao verificar consistência entre chave privada e certificado: {exc}", exc)
 
 
 def _verify_signature(public_key: object, params: AlgorithmParams, signature: bytes) -> None:
     try:
         if isinstance(params, RsaPkcs1Params):
             if not isinstance(public_key, rsa.RSAPublicKey):
-                raise SmartTokenError(f"Certificado nao contem chave publica RSA, recebida {type(public_key).__name__}")
+                raise SmartTokenError(f"Certificado não contém chave pública RSA, recebida {type(public_key).__name__}")
             public_key.verify(signature, _CHALLENGE, padding.PKCS1v15(), params.hash_algorithm)
         elif isinstance(params, RsaPssParams):
             if not isinstance(public_key, rsa.RSAPublicKey):
-                raise SmartTokenError(f"Certificado nao contem chave publica RSA, recebida {type(public_key).__name__}")
+                raise SmartTokenError(f"Certificado não contém chave pública RSA, recebida {type(public_key).__name__}")
             public_key.verify(
                 signature,
                 _CHALLENGE,
@@ -157,10 +157,10 @@ def _verify_signature(public_key: object, params: AlgorithmParams, signature: by
             )
         elif isinstance(params, EcdsaParams):
             if not isinstance(public_key, ec.EllipticCurvePublicKey):
-                raise SmartTokenError(f"Certificado nao contem chave publica EC, recebida {type(public_key).__name__}")
+                raise SmartTokenError(f"Certificado não contém chave pública EC, recebida {type(public_key).__name__}")
             der_signature = algorithms.decode_p1363(signature)
             public_key.verify(der_signature, _CHALLENGE, ec.ECDSA(params.hash_algorithm))
         else:
-            raise SmartTokenError(f"Parametro de algoritmo nao suportado: {type(params).__name__}")
+            raise SmartTokenError(f"Parâmetro de algoritmo não suportado: {type(params).__name__}")
     except InvalidSignature as exc:
-        raise SmartTokenError("Chave privada nao corresponde ao certificado: assinatura invalida", exc)
+        raise SmartTokenError("Chave privada não corresponde ao certificado: assinatura inválida", exc)

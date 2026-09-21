@@ -35,7 +35,7 @@ class TestCacheHabilitado:
         assert 3500 <= cached.expires_in <= 3600
 
     def test_nao_serve_token_dentro_da_margem(self) -> None:
-        # Expira em 10s < margem de 30s: deve forcar renovacao.
+        # Expira em 10s < margem de 30s: deve forçar renovação.
         cache = self._cache()
         cache.store(_SCOPE, "tok-quase-expirado", 10)
 
@@ -88,9 +88,9 @@ class TestCacheHabilitado:
         assert bounded.cached_if_valid("scope-3") is not None
 
     def test_mantem_teto_sob_operacoes_concorrentes(self) -> None:
-        """Teste de concorrencia real:
+        """Teste de concorrência real:
         N threads chamando get/put/invalidate simultaneamente sobre os
-        mesmos scopes, confirmando ausencia de excecao/corrupcao de estado.
+        mesmos scopes, confirmando ausência de exceção/corrupção de estado.
         """
         capacity = 32
         num_threads = 8
@@ -123,12 +123,12 @@ class TestCacheHabilitado:
         for t in threads:
             t.join(timeout=10)
 
-        assert not errors, f"excecoes inesperadas durante acesso concorrente: {errors}"
+        assert not errors, f"exceções inesperadas durante acesso concorrente: {errors}"
         assert not size_violations, "cache excedeu max_entries durante acesso concorrente"
         assert bounded.size() <= capacity
 
-        # Apos a concorrencia, confirma que o teto continua respeitado
-        # com operacoes sequenciais adicionais.
+        # Após a concorrência, confirma que o teto continua respeitado
+        # com operações sequenciais adicionais.
         for i in range(capacity):
             bounded.store(f"scope-final-{i}", "tok", 3600)
         assert bounded.size() == capacity

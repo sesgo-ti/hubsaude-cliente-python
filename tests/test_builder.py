@@ -3,16 +3,16 @@
 Nota sobre o fake de ``client.py``: ``build()`` faz um import tardio de
 ``hubsaude_client.client.SmartTokenClient`` (ver docstring de
 ``builder.py``, que explica o motivo -- quebrar um ciclo de import real
-entre os dois modulos). Para testar a construcao minima valida sem
-acoplar os testes do builder aos detalhes internos da implementacao
+entre os dois módulos). Para testar a construção mínima válida sem
+acoplar os testes do builder aos detalhes internos da implementação
 real de ``SmartTokenClient`` (rede, threads, etc.), os testes injetam
-um modulo fake em ``sys.modules`` antes de chamar ``build()`` -- ver
-fixture ``fake_smart_token_client_module``. Isso mantem os testes deste
-modulo focados exclusivamente na responsabilidade do builder (validacao
+um módulo fake em ``sys.modules`` antes de chamar ``build()`` -- ver
+fixture ``fake_smart_token_client_module``. Isso mantém os testes deste
+módulo focados exclusivamente na responsabilidade do builder (validação
 fail-fast e montagem dos kwargs); o comportamento do
-``SmartTokenClient`` real e testado a parte, em ``test_client.py``. Os
-testes de validacao (fail-fast) nao precisam dessa fixture: todos
-levantam ``SmartTokenError`` antes de ``build()`` alcancar o import
+``SmartTokenClient`` real é testado a parte, em ``test_client.py``. Os
+testes de validação (fail-fast) não precisam dessa fixture: todos
+levantam ``SmartTokenError`` antes de ``build()`` alcançar o import
 tardio.
 """
 
@@ -51,9 +51,9 @@ FHIR_BASE = "https://fhir.example/r4"
 @dataclass
 class _FakeSmartTokenClient:
     """Substituto de ``client.SmartTokenClient`` para os testes deste
-    modulo -- captura os kwargs recebidos de ``builder.build()`` para
-    inspecao, sem exigir a implementacao real (isola dos detalhes
-    internos de ``SmartTokenClient`` -- ver docstring do modulo).
+    módulo -- captura os kwargs recebidos de ``builder.build()`` para
+    inspeção, sem exigir a implementação real (isola dos detalhes
+    internos de ``SmartTokenClient`` -- ver docstring do módulo).
     """
 
     client_id: str
@@ -73,8 +73,8 @@ def fake_smart_token_client_module(monkeypatch: pytest.MonkeyPatch) -> type[_Fak
     """Injeta um ``hubsaude_client.client`` fake em ``sys.modules``.
 
     Permite testar ``SmartTokenClientBuilder.build()`` de ponta a ponta
-    (import tardio incluido) isolado dos detalhes internos da
-    implementacao real de ``client.py`` -- ver docstring do modulo.
+    (import tardio incluído) isolado dos detalhes internos da
+    implementação real de ``client.py`` -- ver docstring do módulo.
     """
     fake_module = types.ModuleType("hubsaude_client.client")
     fake_module.SmartTokenClient = _FakeSmartTokenClient  # type: ignore[attr-defined]
@@ -93,7 +93,7 @@ def _valid_builder() -> SmartTokenClientBuilder:
 
 
 # ---------------------------------------------------------------------------
-# Construcao minima valida
+# Construção mínima válida
 # ---------------------------------------------------------------------------
 
 
@@ -171,14 +171,14 @@ def test_uses_configured_fault_tolerance_and_cache_settings(
 def test_invalid_token_cache_margin_seconds_is_normalized_the_same_way_in_cache_and_fault_tolerance(
     fake_smart_token_client_module: type[_FakeSmartTokenClient], token_cache_margin_seconds: int
 ) -> None:
-    """Regressao: uma margem de cache invalida (``<= 0``) deve virar o
+    """Regressão: uma margem de cache inválida (``<= 0``) deve virar o
     mesmo valor normalizado (``DEFAULT_TOKEN_CACHE_MARGIN_SECONDS``) tanto
     em ``fault_tolerance.token_cache_margin_seconds`` quanto no
     ``TokenCacheStrategy`` efetivamente usado pelo cliente. Antes desta
-    correcao, ``build()`` repassava o valor cru (nao normalizado) para
-    ``TokenCacheStrategy``, divergindo do valor ja normalizado em
+    correção, ``build()`` repassava o valor cru (não normalizado) para
+    ``TokenCacheStrategy``, divergindo do valor já normalizado em
     ``FaultToleranceConfig`` -- um token expirado podia ser servido do
-    cache como valido por ate ``|margem|`` segundos apos a expiracao real."""
+    cache como válido por até ``|margem|`` segundos após a expiração real."""
     client = _valid_builder().token_cache_margin_seconds(token_cache_margin_seconds).build()
 
     assert client.fault_tolerance.token_cache_margin_seconds == DEFAULT_TOKEN_CACHE_MARGIN_SECONDS
@@ -377,8 +377,8 @@ def test_raises_when_fhir_base_is_not_https() -> None:
     ],
 )
 def test_allows_token_endpoint_on_local_host_without_https(url: str) -> None:
-    """Excecao de desenvolvimento local: um
-    authorization server local sem TLS nao deve quebrar o builder, mesma
+    """Exceção de desenvolvimento local: um
+    authorization server local sem TLS não deve quebrar o builder, mesma
     allowlist do lado Java (localhost/127.0.0.1/::1)."""
     builder = (
         SmartTokenClientBuilder()
@@ -394,10 +394,10 @@ def test_allows_token_endpoint_on_local_host_without_https(url: str) -> None:
 
 
 def test_does_not_reject_fhir_base_on_local_host_for_scheme(monkeypatch: pytest.MonkeyPatch) -> None:
-    """``fhir_base`` em localhost/127.0.0.1/::1 sem https nao deve ser
-    rejeitado por ``_validate_endpoint_config`` (RF-18). A resolucao do
-    ``token_endpoint`` via descoberta SMART e' testada separadamente em
-    ``test_discovery.py``; aqui isolamos apenas a validacao de esquema do
+    """``fhir_base`` em localhost/127.0.0.1/::1 sem https não deve ser
+    rejeitado por ``_validate_endpoint_config`` (RF-18). A resolução do
+    ``token_endpoint`` via descoberta SMART é testada separadamente em
+    ``test_discovery.py``; aqui isolamos apenas a validação de esquema do
     builder, sem depender de rede real."""
     builder = (
         SmartTokenClientBuilder()
@@ -407,7 +407,7 @@ def test_does_not_reject_fhir_base_on_local_host_for_scheme(monkeypatch: pytest.
         .tls_context_provider(FakeTlsContextProvider())
     )
 
-    builder._validate_endpoint_config()  # nao deve lancar por causa do esquema
+    builder._validate_endpoint_config()  # não deve lançar por causa do esquema
 
 
 # ---------------------------------------------------------------------------
@@ -418,7 +418,7 @@ def test_does_not_reject_fhir_base_on_local_host_for_scheme(monkeypatch: pytest.
 def test_raises_when_jwt_algorithm_is_invalid() -> None:
     builder = _valid_builder().jwt_algorithm("HS256")
 
-    with pytest.raises(SmartTokenError, match="Algoritmo JWT nao suportado"):
+    with pytest.raises(SmartTokenError, match="Algoritmo JWT não suportado"):
         builder.build()
 
 
@@ -464,15 +464,15 @@ def test_raises_when_token_cache_max_entries_is_not_positive(max_entries: int) -
 def test_raises_when_hub_context_ig_has_invalid_format() -> None:
     builder = _valid_builder().hub_context("IG-Invalido", "1.0.0")
 
-    with pytest.raises(SmartTokenError, match="ig invalido"):
+    with pytest.raises(SmartTokenError, match="ig inválido"):
         builder.build()
 
 
 def test_raises_when_hub_context_ig_is_blank_but_versao_is_present() -> None:
     """``hub_context(ig, versao)`` sempre atribui os dois juntos, mas um
-    dos dois pode normalizar para ``None`` (string vazia/so espacos) sem o
-    outro -- e' o unico jeito de alcancar a validacao de "os dois juntos"
-    em `_build_hub_context`, que fica logo antes da validacao de formato."""
+    dos dois pode normalizar para ``None`` (string vazia/só espaços) sem o
+    outro -- é o único jeito de alcançar a validação de "os dois juntos"
+    em `_build_hub_context`, que fica logo antes da validação de formato."""
     builder = _valid_builder().hub_context("   ", "1.0.0")
 
     with pytest.raises(SmartTokenError, match="hub_context exige ig e versao juntos"):
@@ -490,7 +490,7 @@ def test_raises_when_hub_context_versao_is_blank_but_ig_is_present() -> None:
 def test_raises_when_hub_context_versao_has_invalid_format(versao: str) -> None:
     builder = _valid_builder().hub_context("meu-ig", versao)
 
-    with pytest.raises(SmartTokenError, match="versao invalida"):
+    with pytest.raises(SmartTokenError, match="versão inválida"):
         builder.build()
 
 
@@ -540,7 +540,7 @@ def test_private_key_pem_and_signing_strategy_are_mutually_exclusive(fake_pem_pa
 
 def test_private_key_pem_with_invalid_pem_content_raises_smart_token_error(tmp_path) -> None:
     garbage_path = tmp_path / "garbage.pem"
-    garbage_path.write_text("nao e um PEM valido")
+    garbage_path.write_text("não é um PEM válido")
     builder = (
         SmartTokenClientBuilder()
         .client_id(CLIENT_ID)
@@ -554,7 +554,7 @@ def test_private_key_pem_with_invalid_pem_content_raises_smart_token_error(tmp_p
 
 
 # ---------------------------------------------------------------------------
-# certificate_pem() -- exige private_key_pem(), verifica consistencia (RF-15)
+# certificate_pem() -- exige private_key_pem(), verifica consistência (RF-15)
 # ---------------------------------------------------------------------------
 
 
@@ -593,15 +593,15 @@ def test_certificate_pem_with_mismatched_certificate_raises(fake_mismatched_pem_
         .private_key_pem(fake_mismatched_pem_pair["matching_key"])
         .certificate_pem(fake_mismatched_pem_pair["mismatched_cert"])
     )
-    # Nota: o desvio abaixo (match="nao corresponde", nao "consistencia") esta
-    # documentado no relatorio desta task -- key_certificate_consistency.
-    # verify_strategy() (Task 5, ja existe) levanta SmartTokenError com a
-    # mensagem exata "Chave privada nao corresponde ao certificado: assinatura
-    # invalida" no caminho InvalidSignature, que nao contem a substring
-    # "consistencia" (essa so aparece no log de debug de sucesso e na
-    # mensagem generica de excecao inesperada, nenhum dos dois exercitado
+    # Nota: o desvio abaixo (match="não corresponde", não "consistência") está
+    # documentado no relatório desta task -- key_certificate_consistency.
+    # verify_strategy() (Task 5, já existe) levanta SmartTokenError com a
+    # mensagem exata "Chave privada não corresponde ao certificado: assinatura
+    # inválida" no caminho InvalidSignature, que não contém a substring
+    # "consistência" (essa só aparece no log de debug de sucesso e na
+    # mensagem genérica de exceção inesperada, nenhum dos dois exercitado
     # aqui).
-    with pytest.raises(SmartTokenError, match="nao corresponde"):
+    with pytest.raises(SmartTokenError, match="não corresponde"):
         builder.build()
 
 
@@ -665,18 +665,18 @@ def test_client_key_store_and_certificate_pem_are_mutually_exclusive(fake_pkcs12
 
 
 # ---------------------------------------------------------------------------
-# server_trust_anchor() -- Path/str ou x509.Certificate em memoria
+# server_trust_anchor() -- Path/str ou x509.Certificate em memória
 # ---------------------------------------------------------------------------
 
 
 def test_server_trust_anchor_with_path_builds_client(
     fake_pem_pair, fake_smart_token_client_module: type[_FakeSmartTokenClient]
 ) -> None:
-    # Nota: nao usa _valid_builder() aqui (desvio do brief documentado no
-    # relatorio) -- _valid_builder() ja chama .tls_context_provider(...), o
+    # Nota: não usa _valid_builder() aqui (desvio do brief documentado no
+    # relatório) -- _valid_builder() já chama .tls_context_provider(...), o
     # que colidiria com server_trust_anchor() (mutuamente exclusivos, ver
     # test_server_trust_anchor_and_tls_context_provider_are_mutually_exclusive
-    # abaixo, que usa _valid_builder() de proposito para exercitar exatamente
+    # abaixo, que usa _valid_builder() de propósito para exercitar exatamente
     # esse conflito).
     client = (
         SmartTokenClientBuilder()
@@ -715,7 +715,7 @@ def test_server_trust_anchor_and_tls_context_provider_are_mutually_exclusive(fak
 
 
 # ---------------------------------------------------------------------------
-# tls_protocol() -- sobrescreve a versao do protocolo TLS (padrao: TLSv1.3)
+# tls_protocol() -- sobrescreve a versão do protocolo TLS (padrão: TLSv1.3)
 # ---------------------------------------------------------------------------
 
 
@@ -760,9 +760,9 @@ def test_tls_protocol_and_tls_context_provider_are_mutually_exclusive() -> None:
 def test_tls_protocol_invalid_value_raises_on_context_resolution(
     fake_pem_pair, fake_smart_token_client_module: type[_FakeSmartTokenClient]
 ) -> None:
-    # Assim como as demais opcoes de TlsSettings, a validacao do valor de
-    # tls_protocol e adiada para a resolucao efetiva do ssl.SSLContext
-    # (ver docstring do modulo) -- build() em si so guarda a configuracao.
+    # Assim como as demais opções de TlsSettings, a validação do valor de
+    # tls_protocol é adiada para a resolução efetiva do ssl.SSLContext
+    # (ver docstring do módulo) -- build() em si só guarda a configuração.
     client = (
         SmartTokenClientBuilder()
         .client_id(CLIENT_ID)
@@ -772,23 +772,23 @@ def test_tls_protocol_invalid_value_raises_on_context_resolution(
         .tls_protocol("TLSv1.0")
         .build()
     )
-    with pytest.raises(SmartTokenError, match="Protocolo TLS nao suportado"):
+    with pytest.raises(SmartTokenError, match="Protocolo TLS não suportado"):
         client.tls_context_provider.ssl_context()
 
 
 # ---------------------------------------------------------------------------
-# signing_strategy() com PKCS#11 -- prova de conexao ponta a ponta.
+# signing_strategy() com PKCS#11 -- prova de conexão ponta a ponta.
 #
-# strategy_factory.from_pkcs11 (Task 7) nao tem metodo de conveniencia
-# dedicado no builder (ver docstring do modulo);
-# e usado via signing_strategy(strategy_factory.from_pkcs11(...)), o mesmo
+# strategy_factory.from_pkcs11 (Task 7) não tem método de conveniência
+# dedicado no builder (ver docstring do módulo);
+# é usado via signing_strategy(strategy_factory.from_pkcs11(...)), o mesmo
 # caminho de qualquer SigningStrategy customizada. Este teste roda contra um
-# token SoftHSM2 real (nao mock), provando que o resultado de from_pkcs11 e
+# token SoftHSM2 real (não mock), provando que o resultado de from_pkcs11 é
 # aceito pelo builder de ponta a ponta.
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(not softhsm2_available(), reason="SoftHSM2 nao disponivel no ambiente")
+@pytest.mark.skipif(not softhsm2_available(), reason="SoftHSM2 não disponível no ambiente")
 def test_signing_strategy_accepts_pkcs11_strategy_end_to_end(
     softhsm2_token,  # noqa: F811
     fake_smart_token_client_module: type[_FakeSmartTokenClient],
@@ -818,7 +818,7 @@ def test_signing_strategy_accepts_pkcs11_strategy_end_to_end(
 
 
 # ---------------------------------------------------------------------------
-# TTL acima do recomendado (aviso, nao bloqueia)
+# TTL acima do recomendado (aviso, não bloqueia)
 # ---------------------------------------------------------------------------
 
 

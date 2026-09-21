@@ -11,7 +11,7 @@ from tests.pkcs11_softhsm_helper import (
     softhsm2_token,  # noqa: F401  (fixture)
 )
 
-pytestmark = pytest.mark.skipif(not softhsm2_available(), reason="SoftHSM2 nao disponivel no ambiente")
+pytestmark = pytest.mark.skipif(not softhsm2_available(), reason="SoftHSM2 não disponível no ambiente")
 
 
 def test_from_pkcs11_signs_with_hardware_backed_key(softhsm2_token) -> None:  # noqa: F811
@@ -29,8 +29,8 @@ def test_from_pkcs11_signs_with_hardware_backed_key(softhsm2_token) -> None:  # 
 
 def test_from_pkcs11_unknown_token_label_raises(softhsm2_token) -> None:  # noqa: F811
     """Cobre o branch ``except Exception`` de ``lib.get_token(...)``: um
-    ``token_label`` que nao corresponde a nenhum token inicializado."""
-    with pytest.raises(SmartTokenError, match="Token PKCS#11 nao encontrado"):
+    ``token_label`` que não corresponde a nenhum token inicializado."""
+    with pytest.raises(SmartTokenError, match="Token PKCS#11 não encontrado"):
         strategy_factory.from_pkcs11(
             pkcs11_module_path=softhsm2_token["module_path"],
             token_label="token-que-nao-existe",
@@ -40,7 +40,7 @@ def test_from_pkcs11_unknown_token_label_raises(softhsm2_token) -> None:  # noqa
 
 
 def test_from_pkcs11_unknown_key_label_raises(softhsm2_token) -> None:  # noqa: F811
-    with pytest.raises(SmartTokenError, match="nao encontrada"):
+    with pytest.raises(SmartTokenError, match="não encontrada"):
         strategy_factory.from_pkcs11(
             pkcs11_module_path=softhsm2_token["module_path"],
             token_label=softhsm2_token["token_label"],
@@ -71,9 +71,9 @@ def test_pkcs11_signing_strategy_exposes_jwt_algorithm(softhsm2_token) -> None: 
 
 
 def test_from_pkcs11_generic_key_access_error_raises(softhsm2_token) -> None:  # noqa: F811
-    """Cobre o branch ``except Exception`` (nao ``NoSuchKey``) de
+    """Cobre o branch ``except Exception`` (não ``NoSuchKey``) de
     ``from_pkcs11`` ao acessar a chave, com um erro real de hardware: dois
-    pares de chave com o mesmo rotulo no token fazem ``session.get_key``
+    pares de chave com o mesmo rótulo no token fazem ``session.get_key``
     levantar ``pkcs11.exceptions.MultipleObjectsReturned``, via SoftHSM2
     real, sem qualquer monkeypatch."""
     import pkcs11
@@ -98,11 +98,11 @@ def test_pkcs11_signing_strategy_sign_wraps_hardware_error(
     """Cobre o branch ``except Exception`` de ``Pkcs11SigningStrategy.sign``.
 
     Diferente dos outros testes deste arquivo, aqui a chave PKCS#11 real e
-    usada para construir a estrategia, mas o metodo ``sign`` do objeto de
-    chave retornado pela biblioteca (uma instancia comum, nao a classe
-    Cython em si) e substituido via ``monkeypatch`` para simular uma falha
-    de hardware -- atribuir um atributo de instancia em
-    ``pkcs11.PrivateKey`` funciona normalmente (ao contrario de
+    usada para construir a estratégia, mas o método ``sign`` do objeto de
+    chave retornado pela biblioteca (uma instância comum, não a classe
+    Cython em si) e substituído via ``monkeypatch`` para simular uma falha
+    de hardware -- atribuir um atributo de instância em
+    ``pkcs11.PrivateKey`` funciona normalmente (ao contrário de
     monkeypatch na *classe* de alguns outros objetos da biblioteca)."""
     strategy = strategy_factory.from_pkcs11(
         pkcs11_module_path=softhsm2_token["module_path"],

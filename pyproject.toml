@@ -69,7 +69,7 @@ exclude_dirs = ["tests", ".venv", "dist"]
 # "# nosec <código> -- justificativa" inline no código a adicionar
 # itens aqui; use esta lista só para casos amplos e comprovadamente
 # aceitáveis em todo o projeto.
-skips = []  # TODO: revisar se ha supressoes globais realmente necessarias
+skips = []  # TODO: revisar se há supressões globais realmente necessárias
 
 [tool.bandit.assert_used]
 # B101 (uso de "assert"): esperado em arquivos de teste, não em produção
@@ -83,7 +83,7 @@ skips = ["*_test.py", "test_*.py"]
 # Pylint fica responsável pela parte de boas práticas mais profunda.
 # ------------------------------------------------------------------
 # [tool.pylint.main]
-# # TODO: definir o conjunto de regras de boas praticas desejado
+# # TODO: definir o conjunto de regras de boas práticas desejado
 #
 # [tool.pylint."messages control"]
 # disable = []
@@ -103,33 +103,33 @@ skips = ["*_test.py", "test_*.py"]
 # ------------------------------------------------------------------
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-# "integration" nao entra na execucao padrao (pytest sem -m) -- ver
+# "integration" não entra na execução padrão (pytest sem -m) -- ver
 # [testenv:integration] no tox.ini.
 markers = [
     "integration: sobe o simulador real (hubsaude-simulador via subprocess) e fala mTLS real; mais lento, requer JDK + HUBSAUDE_SIMULADOR_JAR",
-    "quarantine: teste isolado por instabilidade/flakiness conhecida, fora da execucao padrao ate ser corrigido; categoria independente de 'integration' -- nenhum teste usa este marker ainda, e' so' infraestrutura de categorizacao.",
-    "real_hub: fala com um HubSaude real (nao o simulador), via mTLS de verdade, usando credenciais/certificado real de um estabelecimento; fora da execucao padrao e do target 'integration' (que so' sobe o simulador) -- requer HUBSAUDE_REAL_* nas env vars, ver tests/test_smart_token_client_real_hub.py. So' roda com 'pytest -m real_hub'.",
+    "quarantine: teste isolado por instabilidade/flakiness conhecida, fora da execução padrão até ser corrigido; categoria independente de 'integration' -- nenhum teste usa este marker ainda, é só infraestrutura de categorização.",
+    "real_hub: fala com um HubSaude real (não o simulador), via mTLS de verdade, usando credenciais/certificado real de um estabelecimento; fora da execução padrão e do target 'integration' (que só sobe o simulador) -- requer HUBSAUDE_REAL_* nas env vars, ver tests/test_smart_token_client_real_hub.py. Só roda com 'pytest -m real_hub'.",
 ]
 
 
 # ------------------------------------------------------------------
 # [tool.importlinter]
-# Regra arquitetural: os modulos de assinatura/criptografia nao podem
-# depender do cliente HTTP. Sem pacote proprio (layout achatado,
-# decisao definitiva -- ver "Layout achatado do pacote de
-# assinatura/TLS" em CONTRIBUTING.md) -- por isso os modulos sao
-# listados individualmente e a lista cresce conforme novos modulos de
-# assinatura sao adicionados.
+# Regra arquitetural: os módulos de assinatura/criptografia não podem
+# depender do cliente HTTP. Sem pacote próprio (layout achatado,
+# decisão definitiva -- ver "Layout achatado do pacote de
+# assinatura/TLS" em CONTRIBUTING.md) -- por isso os módulos são
+# listados individualmente e a lista cresce conforme novos módulos de
+# assinatura são adicionados.
 # ------------------------------------------------------------------
 [tool.importlinter]
 root_package = "hubsaude_client"
-# Necessario porque o modulo proibido (httpx) e externo ao root_package;
+# Necessário porque o módulo proibido (httpx) é externo ao root_package;
 # sem isso, import-linter recusa validar contratos "forbidden" contra
 # pacotes de fora de "hubsaude_client".
 include_external_packages = true
 
 [[tool.importlinter.contracts]]
-name = "Modulos de assinatura nao dependem de HTTP"
+name = "Módulos de assinatura não dependem de HTTP"
 type = "forbidden"
 source_modules = [
     "hubsaude_client.algorithms",

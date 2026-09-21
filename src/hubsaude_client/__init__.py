@@ -1,25 +1,25 @@
-"""Biblioteca cliente Python do HubSaude para obtencao de access tokens
+"""Biblioteca cliente Python do HubSaude para obtenção de access tokens
 SMART Backend Services (``client_credentials`` + ``private_key_jwt``,
 RFC 7523).
 
-O ponto de entrada e ``hubsaude_client.builder.SmartTokenClientBuilder``,
-que produz um ``hubsaude_client.client.SmartTokenClient`` ja validado
+O ponto de entrada é ``hubsaude_client.builder.SmartTokenClientBuilder``,
+que produz um ``hubsaude_client.client.SmartTokenClient`` já validado
 (fail-fast) e pronto para assinar o ``client_assertion`` com o material
-criptografico do estabelecimento e negociar o token no authorization
-server. O pacote reune os colaboradores dessa jornada: estrategias de
-assinatura (``SigningStrategy``), carga e validacao de material PEM,
-tolerancia a falhas com retry exponencial, salvaguardas de sanidade da
-resposta do token endpoint, configuracao TLS/mTLS (via
+criptográfico do estabelecimento e negociar o token no authorization
+server. O pacote reúne os colaboradores dessa jornada: estratégias de
+assinatura (``SigningStrategy``), carga e validação de material PEM,
+tolerância a falhas com retry exponencial, salvaguardas de sanidade da
+resposta do token endpoint, configuração TLS/mTLS (via
 ``TlsContextProvider``, port em ``ports.py`` que abstrai de onde vem o
-``ssl.SSLContext`` pronto) e propagacao de contexto de trace W3C.
+``ssl.SSLContext`` pronto) e propagação de contexto de trace W3C.
 
-``SmartTokenClientBuilder``/``SmartTokenClient`` nao sao reexportados
+``SmartTokenClientBuilder``/``SmartTokenClient`` não são reexportados
 aqui -- consumidores importam de ``hubsaude_client.builder``/
-``hubsaude_client.client`` diretamente (mesma convencao ja usada pelos
+``hubsaude_client.client`` diretamente (mesma convenção já usada pelos
 demais colaboradores internos desta lib).
 
-A biblioteca e distribuida para consumidores externos; suas excecoes de
-dominio (``SmartTokenError``) nao devem vazar detalhes de
+A biblioteca é distribuída para consumidores externos; suas exceções de
+domínio (``SmartTokenError``) não devem vazar detalhes de
 credenciais.
 """
 

@@ -93,9 +93,9 @@ def fake_ec_pem_pair(tmp_path):
 
 @pytest.fixture
 def fake_pkcs1_pem_key(tmp_path):
-    """Chave privada RSA nao criptografada, em formato PKCS#1 tradicional
+    """Chave privada RSA não criptografada, em formato PKCS#1 tradicional
     (``-----BEGIN RSA PRIVATE KEY-----``, sem o envelope PKCS#8 usado
-    pelas demais fixtures deste modulo)."""
+    pelas demais fixtures deste módulo)."""
     from cryptography.hazmat.primitives import serialization
     from cryptography.hazmat.primitives.asymmetric import rsa
 
@@ -114,7 +114,7 @@ def fake_pkcs1_pem_key(tmp_path):
 @pytest.fixture
 def fake_openssl_legacy_encrypted_pem_key(tmp_path):
     """Chave privada RSA cifrada com senha conhecida, no formato OpenSSL
-    tradicional (``-----BEGIN RSA PRIVATE KEY-----`` com cabecalho
+    tradicional (``-----BEGIN RSA PRIVATE KEY-----`` com cabeçalho
     ``Proc-Type: 4,ENCRYPTED``), distinto do PKCS#8 cifrado usado por
     ``fake_encrypted_pem_key``."""
     from cryptography.hazmat.primitives import serialization
@@ -130,14 +130,14 @@ def fake_openssl_legacy_encrypted_pem_key(tmp_path):
             encryption_algorithm=serialization.BestAvailableEncryption(password),
         )
     )
-    # bytearray (mutavel): pem_loader.load_private_key consome e zera a senha apos o uso.
+    # bytearray (mutável): pem_loader.load_private_key consome e zera a senha após o uso.
     return {"key": key_path, "password": bytearray(password)}
 
 
 @pytest.fixture
 def fake_mismatched_pem_pair(tmp_path, fake_pem_pair):
     """Certificado de uma chave RSA diferente da chave de fake_pem_pair,
-    para testar deteccao de par chave/certificado inconsistente."""
+    para testar detecção de par chave/certificado inconsistente."""
     import datetime
 
     from cryptography import x509
@@ -165,7 +165,7 @@ def fake_mismatched_pem_pair(tmp_path, fake_pem_pair):
 @pytest.fixture
 def fake_mismatched_ec_pem_pair(tmp_path, fake_ec_pem_pair):
     """Certificado de uma chave EC diferente da chave de fake_ec_pem_pair,
-    para testar deteccao de par chave/certificado EC inconsistente."""
+    para testar detecção de par chave/certificado EC inconsistente."""
     import datetime
 
     from cryptography import x509
@@ -206,13 +206,13 @@ def fake_encrypted_pem_key(tmp_path):
             encryption_algorithm=serialization.BestAvailableEncryption(password),
         )
     )
-    # bytearray (mutavel): pem_loader.load_private_key consome e zera a senha apos o uso.
+    # bytearray (mutável): pem_loader.load_private_key consome e zera a senha após o uso.
     return {"key": key_path, "password": bytearray(password)}
 
 
 @pytest.fixture
 def fake_expired_cert_pem(tmp_path):
-    """Certificado X.509 autoassinado ja expirado, em disco."""
+    """Certificado X.509 autoassinado já expirado, em disco."""
     import datetime
 
     from cryptography import x509
@@ -241,7 +241,7 @@ def fake_expired_cert_pem(tmp_path):
 
 @pytest.fixture
 def fake_not_yet_valid_cert_pem(tmp_path):
-    """Certificado X.509 autoassinado ainda nao valido (not_before no futuro), em disco."""
+    """Certificado X.509 autoassinado ainda não válido (not_before no futuro), em disco."""
     import datetime
 
     from cryptography import x509
@@ -302,7 +302,7 @@ def fake_pkcs12_bundle(tmp_path):
 
 @pytest.fixture
 def fake_pkcs12_bundle_without_key(tmp_path):
-    """Bundle PKCS#12 valido mas sem chave privada (so certificado)."""
+    """Bundle PKCS#12 válido mas sem chave privada (só certificado)."""
     import datetime
 
     from cryptography import x509
@@ -334,7 +334,7 @@ def fake_pkcs12_bundle_without_key(tmp_path):
 
 @pytest.fixture
 def fake_pkcs12_bundle_without_certificate(tmp_path):
-    """Bundle PKCS#12 valido mas sem certificado (so chave privada)."""
+    """Bundle PKCS#12 válido mas sem certificado (só chave privada)."""
     from cryptography.hazmat.primitives import serialization
     from cryptography.hazmat.primitives.asymmetric import rsa
     from cryptography.hazmat.primitives.serialization import pkcs12
@@ -351,25 +351,25 @@ def fake_pkcs12_bundle_without_certificate(tmp_path):
 
 @pytest.fixture
 def real_mtls_client_cert_rejection(tmp_path):
-    """Fabrica de handshakes mTLS *reais* (sockets loopback + OpenSSL de
-    verdade, sem ``ssl.SSLError`` simulado a mao) em que o servidor
+    """Fábrica de handshakes mTLS *reais* (sockets loopback + OpenSSL de
+    verdade, sem ``ssl.SSLError`` simulado a mão) em que o servidor
     rejeita o certificado de cliente por CA desconhecida.
 
-    Devolve uma funcao ``handshake(tls_protocol) -> BaseException | None``
+    Devolve uma função ``handshake(tls_protocol) -> BaseException | None``
     que: gera uma CA de servidor e uma CA de cliente *distintas* (o
-    servidor so' confia na propria), sobe um servidor TLS efemero em
+    servidor só confia na própria), sobe um servidor TLS efêmero em
     ``127.0.0.1`` exigindo certificado de cliente, conecta usando
     ``hubsaude_client.ssl_context_factory.build_ssl_context`` -- o mesmo
-    caminho de producao usado pelo builder/client.py -- e devolve a
-    excecao capturada do lado do cliente (``None`` se o handshake, ao
-    contrario do esperado, tiver sucesso).
+    caminho de produção usado pelo builder/client.py -- e devolve a
+    exceção capturada do lado do cliente (``None`` se o handshake, ao
+    contrário do esperado, tiver sucesso).
 
-    Usada para validar heuristicas de classificacao de erro
+    Usada para validar heurísticas de classificação de erro
     (``error_classifier.is_likely_client_certificate_rejection``) contra
-    o comportamento real do OpenSSL, e nao apenas contra mensagens de
-    ``ssl.SSLError`` construidas manualmente no restante da suite -- essa
-    cobertura contra handshake real e' uma adicao genuina desta suite,
-    sem equivalente na implementacao de referencia.
+    o comportamento real do OpenSSL, e não apenas contra mensagens de
+    ``ssl.SSLError`` construídas manualmente no restante da suíte -- essa
+    cobertura contra handshake real é uma adição genuína desta suíte,
+    sem equivalente na implementação de referência.
     """
     import datetime
     import socket
@@ -417,7 +417,7 @@ def real_mtls_client_cert_rejection(tmp_path):
 
     server_ca_key, server_ca_cert = _make_ca("hubsaude-test Server CA")
     server_key, server_cert = _make_leaf(server_ca_key, server_ca_cert, "localhost", is_server=True)
-    # CA distinta e propositalmente NAO confiada pelo servidor -- e' isso
+    # CA distinta e propositalmente NÃO confiada pelo servidor -- é isso
     # que faz o servidor rejeitar o certificado de cliente.
     client_ca_key, client_ca_cert = _make_ca("hubsaude-test Client CA (untrusted)")
     client_key, client_cert = _make_leaf(client_ca_key, client_ca_cert, "hubsaude-test-client", is_server=False)
@@ -434,7 +434,7 @@ def real_mtls_client_cert_rejection(tmp_path):
     )
 
     def handshake(tls_protocol: str) -> BaseException | None:
-        version = ssl_context_factory._resolve_tls_version(tls_protocol)  # mesma resolucao de producao
+        version = ssl_context_factory._resolve_tls_version(tls_protocol)  # mesma resolução de produção
 
         server_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         server_ctx.load_cert_chain(str(server_cert_path), str(server_key_path))
@@ -453,9 +453,9 @@ def real_mtls_client_cert_rejection(tmp_path):
                 raw_conn, _addr = listener.accept()
                 try:
                     with server_ctx.wrap_socket(raw_conn, server_side=True) as tls_conn:
-                        tls_conn.recv(16)  # forca a troca pos-handshake sob TLS 1.3
+                        tls_conn.recv(16)  # força a troca pós-handshake sob TLS 1.3
                 except ssl.SSLError:
-                    pass  # esperado: e' exatamente a rejeicao sob teste
+                    pass  # esperado: é exatamente a rejeição sob teste
             except OSError:
                 pass
 

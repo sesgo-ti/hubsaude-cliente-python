@@ -29,7 +29,7 @@ def test_generate_never_all_zeros() -> None:
 
 def test_generate_is_unique_across_calls() -> None:
     contexts = {(TraceContext.generate().trace_id, TraceContext.generate().span_id) for _ in range(50)}
-    # Cada chamada gera um par novo; nao deve haver colisao em 50 amostras.
+    # Cada chamada gera um par novo; não deve haver colisão em 50 amostras.
     assert len(contexts) == 50
 
 
@@ -47,10 +47,10 @@ def test_traceparent_matches_w3c_pattern() -> None:
 @pytest.mark.parametrize(
     "trace_id",
     [
-        "0" * 32,  # todo-zeros: invalido
+        "0" * 32,  # todo-zeros: inválido
         "a" * 31,  # curto demais
         "a" * 33,  # longo demais
-        "A" * 32,  # maiusculo: invalido
+        "A" * 32,  # maiúsculo: inválido
         "g" * 32,  # caractere fora do alfabeto hex
     ],
 )
@@ -62,10 +62,10 @@ def test_invalid_trace_id_raises(trace_id: str) -> None:
 @pytest.mark.parametrize(
     "span_id",
     [
-        "0" * 16,  # todo-zeros: invalido
+        "0" * 16,  # todo-zeros: inválido
         "b" * 15,  # curto demais
         "b" * 17,  # longo demais
-        "B" * 16,  # maiusculo: invalido
+        "B" * 16,  # maiúsculo: inválido
         "g" * 16,  # caractere fora do alfabeto hex
     ],
 )

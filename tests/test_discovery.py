@@ -24,7 +24,7 @@ def _json_response(status_code: int, payload: dict) -> httpx.Response:
 
 
 # ---------------------------------------------------------------------------
-# Resposta valida
+# Resposta válida
 # ---------------------------------------------------------------------------
 
 
@@ -136,19 +136,19 @@ def test_raises_when_body_is_not_valid_json() -> None:
     with pytest.raises(SmartTokenError) as excinfo:
         discovery.discover_token_endpoint(FHIR_BASE)
 
-    assert "JSON valido" in str(excinfo.value)
+    assert "JSON válido" in str(excinfo.value)
 
 
 # ---------------------------------------------------------------------------
-# Validacao de esquema do token_endpoint descoberto
+# Validação de esquema do token_endpoint descoberto
 # ---------------------------------------------------------------------------
 
 
 def test_rejects_discovered_token_endpoint_without_https() -> None:
     """P0: um .well-known comprometido (ou um MITM capaz de responde-lo)
-    nao pode fazer o cliente enviar client_assertion/credenciais de mTLS
-    para um token_endpoint sem TLS -- mesma protecao que ja existia para
-    valores informados manualmente no builder, agora aplicada tambem ao
+    não pode fazer o cliente enviar client_assertion/credenciais de mTLS
+    para um token_endpoint sem TLS -- mesma proteção que já existia para
+    valores informados manualmente no builder, agora aplicada também ao
     valor que volta da rede."""
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -169,7 +169,7 @@ def test_rejects_discovered_token_endpoint_without_https() -> None:
     ],
 )
 def test_allows_discovered_token_endpoint_on_local_host_without_https(local_token_endpoint: str) -> None:
-    """Excecao de desenvolvimento local (P1): um authorization server de
+    """Exceção de desenvolvimento local (P1): um authorization server de
     teste em localhost/127.0.0.1/::1 pode ser descoberto em http, mesma
     allowlist do builder e do lado Java."""
 

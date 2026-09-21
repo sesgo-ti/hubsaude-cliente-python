@@ -19,13 +19,13 @@ def test_get_logger_returns_a_logger_instance() -> None:
 
 def test_get_logger_returns_the_same_shared_instance() -> None:
     """logging.getLogger() com o mesmo nome sempre devolve o mesmo objeto:
-    nao ha logger proprio por modulo (error_classifier, response_guard,
-    discovery, etc.) -- todos compartilham esta unica instancia."""
+    não há logger próprio por módulo (error_classifier, response_guard,
+    discovery, etc.) -- todos compartilham esta única instância."""
     assert get_logger() is get_logger()
 
 
 def test_no_module_creates_a_logger_with_dunder_name() -> None:
-    """Contrato de observabilidade: nenhum modulo interno usa
-    logging.getLogger(__name__), pois isso quebraria o filtro estavel por
+    """Contrato de observabilidade: nenhum módulo interno usa
+    logging.getLogger(__name__), pois isso quebraria o filtro estável por
     "hubsaude_client.SmartTokenClient"."""
     assert get_logger().name != __name__

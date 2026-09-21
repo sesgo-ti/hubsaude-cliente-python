@@ -170,12 +170,12 @@ def start_simulator(port: int | None = None) -> SimulatorProcess:
     jar_path = simulator_jar_path()
     if jar_path is None:
         raise RuntimeError(
-            f"JAR do simulador nao encontrado: defina a variavel de ambiente "
-            f"{ENV_VAR_SIMULATOR_JAR} apontando para o hubsaude-simulador.jar executavel, "
-            f"ou copie o JAR para '{_LOCAL_JAR_FALLBACK}' (caminho de conveniencia, nao versionado)."
+            f"JAR do simulador não encontrado: defina a variável de ambiente "
+            f"{ENV_VAR_SIMULATOR_JAR} apontando para o hubsaude-simulador.jar executável, "
+            f"ou copie o JAR para '{_LOCAL_JAR_FALLBACK}' (caminho de conveniência, não versionado)."
         )
     if not java_available():
-        raise RuntimeError("Executavel 'java' nao encontrado no PATH; necessario para subir o simulador.")
+        raise RuntimeError("Executável 'java' não encontrado no PATH; necessário para subir o simulador.")
 
     resolved_port = port if port is not None else allocate_free_port()
     base_url = f"https://localhost:{resolved_port}"
@@ -199,7 +199,7 @@ def start_simulator(port: int | None = None) -> SimulatorProcess:
     try:
         _wait_until_ready(simulator)
     except Exception:
-        # Nao deixa um processo filho orfao para tras se o health-check
+        # Não deixa um processo filho órfão para trás se o health-check
         # nunca ficar verde.
         simulator.stop()
         raise
@@ -213,7 +213,7 @@ def _drain_output_in_background(process: "subprocess.Popen[str]") -> None:
     def _drain() -> None:
         assert process.stdout is not None
         for _line in process.stdout:
-            pass  # descarta -- so' precisamos manter o pipe drenado
+            pass  # descarta -- só precisamos manter o pipe drenado
 
     thread = threading.Thread(target=_drain, name="simulador-output-reader", daemon=True)
     thread.start()
@@ -228,11 +228,11 @@ def _wait_until_ready(
     responder ``200``, verificando a cada tentativa se o processo ainda
     está vivo."""
     health_url = simulator.base_url + _HEALTH_PATH
-    # verify=False: trust-all temporario, so' para o polling do
-    # health-check -- o certificado real do simulador ainda nao foi
-    # extraido neste ponto (isso e feito por extract_server_certificate,
-    # depois que o simulador ja esta de pe).
-    with httpx.Client(verify=False, timeout=5.0) as client:  # noqa: S501 (trust-all deliberado, so' health-check local)
+    # verify=False: trust-all temporário, só para o polling do
+    # health-check -- o certificado real do simulador ainda não foi
+    # extraído neste ponto (isso e feito por extract_server_certificate,
+    # depois que o simulador já está de pé).
+    with httpx.Client(verify=False, timeout=5.0) as client:  # noqa: S501 (trust-all deliberado, só health-check local)
         for attempt in range(1, max_attempts + 1):
             if not simulator.is_alive():
                 raise RuntimeError(
@@ -244,10 +244,10 @@ def _wait_until_ready(
                 if response.status_code == 200:
                     return
             except httpx.HTTPError:
-                pass  # ainda nao esta pronto para aceitar conexoes -- tenta de novo
+                pass  # ainda não está pronto para aceitar conexões -- tenta de novo
             time.sleep(delay_seconds)
 
-    raise RuntimeError(f"Simulador nao ficou pronto em {max_attempts * delay_seconds:.0f}s. URL: {health_url}")
+    raise RuntimeError(f"Simulador não ficou pronto em {max_attempts * delay_seconds:.0f}s. URL: {health_url}")
 
 
 def extract_server_certificate(host: str, port: int, timeout: float = 5.0) -> x509.Certificate:
@@ -270,12 +270,12 @@ def extract_server_certificate(host: str, port: int, timeout: float = 5.0) -> x5
     """
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     context.check_hostname = False
-    context.verify_mode = ssl.CERT_NONE  # nosec B501 -- trust-all deliberado, so' para extrair o certificado
+    context.verify_mode = ssl.CERT_NONE  # nosec B501 -- trust-all deliberado, só para extrair o certificado
 
     with socket.create_connection((host, port), timeout=timeout) as raw_sock:
         with context.wrap_socket(raw_sock, server_hostname=host) as tls_sock:
             der_bytes = tls_sock.getpeercert(binary_form=True)
 
     if not der_bytes:
-        raise RuntimeError(f"Servidor {host}:{port} nao apresentou certificado no handshake TLS.")
+        raise RuntimeError(f"Servidor {host}:{port} não apresentou certificado no handshake TLS.")
     return x509.load_der_x509_certificate(der_bytes)

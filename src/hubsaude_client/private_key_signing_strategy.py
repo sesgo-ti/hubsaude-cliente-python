@@ -1,7 +1,7 @@
-"""Implementacao de SigningStrategy baseada em chave privada em memoria.
+"""Implementação de SigningStrategy baseada em chave privada em memória.
 
 Thread safety (RF-12.4): cada chamada a sign() usa apenas a chave
-imutavel recebida no construtor, sem estado mutavel compartilhado --
+imutável recebida no construtor, sem estado mutável compartilhado --
 naturalmente thread-safe, sem necessidade de locks.
 """
 
@@ -18,29 +18,29 @@ from hubsaude_client.pem_loader import validate_minimum_key_size
 
 
 class PrivateKeySigningStrategy:
-    """Estrategia de assinatura para uma chave privada ja carregada em memoria.
+    """Estratégia de assinatura para uma chave privada já carregada em memória.
 
     Implementa o Protocol ``hubsaude_client.ports.SigningStrategy``. Reutilizada
-    por todas as fontes de material criptografico resolvidas em
-    ``strategy_factory.py`` (PEM, PKCS#12, PKCS#11 -- este ultimo delega a
+    por todas as fontes de material criptográfico resolvidas em
+    ``strategy_factory.py`` (PEM, PKCS#12, PKCS#11 -- este último delega a
     assinatura ao hardware de forma transparente, pois o objeto de chave
     permanece apenas um handle).
     """
 
     def __init__(self, private_key: PrivateKeyTypes, jwt_algorithm: str = DEFAULT_JWT_ALGORITHM) -> None:
-        """Cria a estrategia, validando o tamanho minimo da chave e a
+        """Cria a estratégia, validando o tamanho mínimo da chave e a
         compatibilidade entre o tipo de chave e o algoritmo (fail-fast).
 
         Args:
-            private_key: chave privada RSA ou EC ja carregada.
+            private_key: chave privada RSA ou EC já carregada.
             jwt_algorithm: algoritmo JWT (JWA) a usar na assinatura.
 
         Raises:
-            SmartTokenError: se o algoritmo nao for reconhecido, se a
-                chave estiver abaixo do tamanho minimo aceito, ou se o
-                tipo da chave (RSA/EC) nao for compativel com o algoritmo
+            SmartTokenError: se o algoritmo não for reconhecido, se a
+                chave estiver abaixo do tamanho mínimo aceito, ou se o
+                tipo da chave (RSA/EC) não for compatível com o algoritmo
                 configurado (ex.: chave RSA com algoritmo ECDSA) -- validado
-                aqui, na construcao, em vez de so na primeira chamada real a
+                aqui, na construção, em vez de só na primeira chamada real a
                 :meth:`sign`.
         """
         validate_minimum_key_size(private_key, "privateKey")
@@ -51,12 +51,12 @@ class PrivateKeySigningStrategy:
 
     @property
     def jwt_algorithm(self) -> str:
-        """Algoritmo JWT (JWA) configurado para esta estrategia."""
+        """Algoritmo JWT (JWA) configurado para esta estratégia."""
         return self._jwt_algorithm
 
     @property
     def algorithm_params(self) -> AlgorithmParams:
-        """Parametros criptograficos resolvidos para o algoritmo configurado."""
+        """Parâmetros criptográficos resolvidos para o algoritmo configurado."""
         return self._params
 
     def sign(self, data: bytes) -> bytes:
@@ -70,7 +70,7 @@ class PrivateKeySigningStrategy:
             R||S conforme RFC 7518 §3.4).
 
         Raises:
-            SigningError: se ocorrer erro criptografico, incluindo
+            SigningError: se ocorrer erro criptográfico, incluindo
                 incompatibilidade entre o tipo de chave e o algoritmo configurado.
         """
         try:
@@ -98,23 +98,23 @@ class PrivateKeySigningStrategy:
                 raise SigningError(f"Algoritmo {self._jwt_algorithm} requer chave EC, recebida {type(key).__name__}")
             der_signature = key.sign(data, ec.ECDSA(params.hash_algorithm))
             return algorithms.encode_p1363(der_signature, params.signature_length)
-        raise SigningError(f"Parametro de algoritmo nao suportado: {type(params).__name__}")
+        raise SigningError(f"Parâmetro de algoritmo não suportado: {type(params).__name__}")
 
 
 def _require_compatible_key_type(key: PrivateKeyTypes, params: AlgorithmParams, jwt_algorithm: str) -> None:
-    """Valida, na construcao (fail-fast), que o tipo da chave e compativel
-    com o algoritmo configurado -- a mesma checagem que :meth:`_sign` ja
-    fazia, so que so era exercitada na primeira assinatura real.
+    """Valida, na construção (fail-fast), que o tipo da chave é compatível
+    com o algoritmo configurado -- a mesma checagem que :meth:`_sign` já
+    fazia, só que só era exercitada na primeira assinatura real.
 
     Args:
         key: chave privada a validar.
-        params: parametros do algoritmo ja resolvidos (RSA PKCS#1v1.5/PSS
+        params: parâmetros do algoritmo já resolvidos (RSA PKCS#1v1.5/PSS
             ou ECDSA).
         jwt_algorithm: algoritmo JWT (JWA) configurado, para a mensagem
             de erro.
 
     Raises:
-        SmartTokenError: se o tipo da chave nao corresponder ao exigido
+        SmartTokenError: se o tipo da chave não corresponder ao exigido
             pelo algoritmo (RSA para PKCS#1v1.5/PSS, EC para ECDSA).
     """
     if isinstance(params, (RsaPkcs1Params, RsaPssParams)) and not isinstance(key, rsa.RSAPrivateKey):

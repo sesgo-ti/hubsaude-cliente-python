@@ -1,17 +1,17 @@
-"""Validacao compartilhada de esquema https para URLs (RF-10, RF-18).
+"""Validação compartilhada de esquema https para URLs (RF-10, RF-18).
 
-Exige que uma URL use o esquema ``https``, com excecao explicita para
-hosts locais (``localhost``, ``127.0.0.1``, ``::1``) em ``http`` -- util em
-desenvolvimento e testes com servidor local, nunca em producao.
+Exige que uma URL use o esquema ``https``, com exceção explícita para
+hosts locais (``localhost``, ``127.0.0.1``, ``::1``) em ``http`` -- útil em
+desenvolvimento e testes com servidor local, nunca em produção.
 
 Compartilhado por ``builder.py`` (URLs de ``token_endpoint``/``fhir_base``
-informadas explicitamente por quem constroi o cliente) e ``discovery.py``
+informadas explicitamente por quem constrói o cliente) e ``discovery.py``
 (URL de ``token_endpoint`` retornada pelo servidor de descoberta SMART):
-extraido para um modulo proprio para que os
-dois lados reutilizem a mesma logica e a mesma lista de hosts locais, sem
-duplicacao nem dependencia de um modulo sobre o outro.
+extraído para um módulo próprio para que os
+dois lados reutilizem a mesma lógica e a mesma lista de hosts locais, sem
+duplicação nem dependência de um módulo sobre o outro.
 
-Nao faz parte da API publica da biblioteca (nao exportado em
+Não faz parte da API pública da biblioteca (não exportado em
 ``__init__.py``).
 """
 
@@ -24,10 +24,10 @@ from hubsaude_client.exceptions import SmartTokenError
 
 _REQUIRED_URL_SCHEME: Final[str] = "https"
 
-#: Hosts tratados como locais para fins da excecao de esquema http
-#: (RF-18) -- uteis em desenvolvimento e testes com servidor local, nunca
-#: em producao. ``urlsplit(...).hostname`` ja normaliza IPv6 sem
-#: colchetes e em minusculas, entao uma unica entrada "::1" cobre tanto
+#: Hosts tratados como locais para fins da exceção de esquema http
+#: (RF-18) -- úteis em desenvolvimento e testes com servidor local, nunca
+#: em produção. ``urlsplit(...).hostname`` já normaliza IPv6 sem
+#: colchetes e em minúsculas, então uma única entrada "::1" cobre tanto
 #: ``http://[::1]`` quanto ``http://::1``.
 _LOCAL_HOSTS: Final[frozenset[str]] = frozenset({"localhost", "127.0.0.1", "::1"})
 
@@ -35,23 +35,23 @@ _LOCAL_HOSTS: Final[frozenset[str]] = frozenset({"localhost", "127.0.0.1", "::1"
 def require_https_scheme(url: str, field_name: str) -> None:
     """Exige que ``url`` use o esquema ``https`` (RF-10, RF-18).
 
-    Excecao explicita: ``http://localhost``, ``http://127.0.0.1`` e
-    ``http://[::1]``/``http://::1`` sao aceitos, para nao quebrar o
+    Exceção explícita: ``http://localhost``, ``http://127.0.0.1`` e
+    ``http://[::1]``/``http://::1`` são aceitos, para não quebrar o
     desenvolvimento local contra um authorization server de teste sem
     TLS.
 
     Args:
-        url: URL a validar (ja normalizada/sem espacos laterais).
+        url: URL a validar (já normalizada/sem espaços laterais).
         field_name: nome do campo, para a mensagem de erro.
 
     Raises:
-        SmartTokenError: se o esquema nao for ``https`` (case-insensitive)
-            e o host nao for um dos hosts locais permitidos em ``http``, ou
-            se ``url`` for malformada a ponto de nao poder ser decomposta
+        SmartTokenError: se o esquema não for ``https`` (case-insensitive)
+            e o host não for um dos hosts locais permitidos em ``http``, ou
+            se ``url`` for malformada a ponto de não poder ser decomposta
             (ex.: literal IPv6 sem colchete de fechamento) -- ``urlsplit``
-            lanca ``ValueError`` crua nesses casos, convertida aqui para
-            manter um unico tipo de excecao de dominio na fronteira publica
-            desta funcao.
+            lança ``ValueError`` crua nesses casos, convertida aqui para
+            manter um único tipo de exceção de domínio na fronteira pública
+            desta função.
     """
     try:
         parts = urlsplit(url)
@@ -65,7 +65,7 @@ def require_https_scheme(url: str, field_name: str) -> None:
         return
     raise SmartTokenError(
         f"{field_name} deve usar o esquema https, recebido: {url!r}"
-        " (credenciais e client_assertion nao podem trafegar fora de TLS;"
-        " o esquema http e permitido apenas para localhost/127.0.0.1/::1,"
+        " (credenciais e client_assertion não podem trafegar fora de TLS;"
+        " o esquema http é permitido apenas para localhost/127.0.0.1/::1,"
         " em desenvolvimento e testes locais)"
     )

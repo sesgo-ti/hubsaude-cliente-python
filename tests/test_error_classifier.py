@@ -72,7 +72,7 @@ def test_generic_io_like_failure_is_not_retriable() -> None:
 
 def test_tls_failure_is_never_retriable_even_if_wrapped_in_connect_error() -> None:
     """httpx envolve falha de handshake mTLS num ConnectError; a falha TLS
-    na cadeia de causas deve prevalecer sobre o tipo externo transitorio."""
+    na cadeia de causas deve prevalecer sobre o tipo externo transitório."""
     tls_failure = ssl.SSLError("[SSL: SSLV3_ALERT_HANDSHAKE_FAILURE] handshake failure")
     wrapped = httpx.ConnectError("connection failed")
     wrapped.__cause__ = tls_failure
@@ -113,7 +113,7 @@ def test_recognizes_alert_wrapped_in_httpx_connect_error() -> None:
 
 def test_does_not_confuse_with_server_certificate_verification_failure() -> None:
     """ssl.SSLCertVerificationError: o CLIENTE rejeitou o certificado do
-    SERVIDOR (trust anchor local ausente/incorreto) -- nao e' o servidor
+    SERVIDOR (trust anchor local ausente/incorreto) -- não é o servidor
     rejeitando o certificado do cliente."""
     cert_verification_failure = ssl.SSLCertVerificationError(
         1, "certificate verify failed: unable to get local issuer certificate"
@@ -123,8 +123,8 @@ def test_does_not_confuse_with_server_certificate_verification_failure() -> None
 
 def test_server_cert_verification_failure_excludes_even_with_alert_text_elsewhere() -> None:
     """Se a cadeia contiver SSLCertVerificationError em qualquer ponto, a
-    heuristica de rejeicao do certificado de CLIENTE nao se aplica --
-    mesmo que outro no da cadeia mencione um alerta tipico."""
+    heurística de rejeição do certificado de CLIENTE não se aplica --
+    mesmo que outro no da cadeia mencione um alerta típico."""
     cert_verification_failure = ssl.SSLCertVerificationError(1, "certificate verify failed")
     outer = ssl.SSLError("[SSL: SSLV3_ALERT_HANDSHAKE_FAILURE] handshake failure")
     outer.__cause__ = cert_verification_failure
@@ -132,11 +132,11 @@ def test_server_cert_verification_failure_excludes_even_with_alert_text_elsewher
 
 
 def test_recognizes_tls13_eof_after_handshake_variant_as_probable() -> None:
-    """Sob TLS 1.3, alguns builds de OpenSSL encerram a conexao sem alerta
-    textual reconhecivel quando o servidor rejeita o certificado de
-    cliente apos o ``Finished`` (ver nota no topo de
-    ``error_classifier.py``). Sinal AMBIGUO (PROBABLE, nao CONFIRMED):
-    tambem pode ser apenas instabilidade de rede comum."""
+    """Sob TLS 1.3, alguns builds de OpenSSL encerram a conexão sem alerta
+    textual reconhecível quando o servidor rejeita o certificado de
+    cliente após o ``Finished`` (ver nota no topo de
+    ``error_classifier.py``). Sinal AMBÍGUO (PROBABLE, não CONFIRMED):
+    também pode ser apenas instabilidade de rede comum."""
     exc = ssl.SSLEOFError("EOF occurred in violation of protocol (_ssl.c:1006)")
     assert is_likely_client_certificate_rejection(exc) is CertRejectionConfidence.PROBABLE
 
@@ -149,19 +149,19 @@ def test_recognizes_tls13_eof_variant_wrapped_in_httpx_connect_error_as_probable
 
 
 def test_ssl_eof_error_with_generic_message_is_not_a_client_certificate_rejection() -> None:
-    """So' o texto exato da variante conhecida deve ser reconhecido -- um
-    ``ssl.SSLEOFError`` generico (ex.: queda de conexao TCP antes do
-    handshake completar) nao deve virar falso positivo."""
+    """Só o texto exato da variante conhecida deve ser reconhecido -- um
+    ``ssl.SSLEOFError`` genérico (ex.: queda de conexão TCP antes do
+    handshake completar) não deve virar falso positivo."""
     exc = ssl.SSLEOFError("some other EOF condition")
     assert is_likely_client_certificate_rejection(exc) is CertRejectionConfidence.NONE
 
 
 def test_ssl_error_with_eof_message_but_wrong_type_is_not_recognized() -> None:
     """A checagem exige o tipo exato ``ssl.SSLEOFError``: um ``ssl.SSLError``
-    generico com o mesmo texto (cenario que nao deveria ocorrer na pratica,
-    mas nao pode ser tratado como a variante especifica) nao e' reconhecido
+    genérico com o mesmo texto (cenário que não deveria ocorrer na prática,
+    mas não pode ser tratado como a variante específica) não é reconhecido
     por esse fragmento -- e nenhum dos fragmentos de alerta bate com esse
-    texto, entao o resultado e' ``NONE``."""
+    texto, então o resultado é ``NONE``."""
     exc = ssl.SSLError("EOF occurred in violation of protocol (_ssl.c:1006)")
     assert is_likely_client_certificate_rejection(exc) is CertRejectionConfidence.NONE
 
@@ -269,11 +269,11 @@ def test_logs_error_on_mtls_rejection(
 def test_probable_cert_rejection_is_retriable_unlike_confirmed(
     classifier: ErrorClassifier, trace: TraceContext
 ) -> None:
-    """Sinal AMBIGUO (PROBABLE, ssl.SSLEOFError sem alerta textual) nao
+    """Sinal AMBÍGUO (PROBABLE, ssl.SSLEOFError sem alerta textual) não
     deve interromper o retry -- diferente do sinal CONFIRMED, que
     interrompe imediatamente (ver test_converts_mtls_rejection_into_smart_token_error_with_guidance).
-    Pode ser rejeicao de certificado, mas tambem pode ser so'
-    instabilidade de rede; a excecao deve ser devolvida para o chamador
+    Pode ser rejeição de certificado, mas também pode ser só
+    instabilidade de rede; a exceção deve ser devolvida para o chamador
     tentar de novo."""
     probable_failure = ssl.SSLEOFError("EOF occurred in violation of protocol (_ssl.c:1006)")
     wrapped = httpx.ConnectError("connection failed")
@@ -289,7 +289,7 @@ def test_probable_cert_rejection_is_retriable_unlike_confirmed(
 
 def test_exhaustion_hint_empty_for_confirmed_rejection(classifier: ErrorClassifier) -> None:
     """CONFIRMED nunca chega a esgotar o retry (interrompe antes, ver
-    retriable_or_reraise) -- mas o metodo em si deve devolver string vazia
+    retriable_or_reraise) -- mas o método em si deve devolver string vazia
     pra esse sinal, por clareza de contrato."""
     tls_failure = ssl.SSLError("[SSL: TLSV1_ALERT_CERTIFICATE_REVOKED] certificate revoked")
     assert classifier.exhaustion_hint(tls_failure) == ""
@@ -334,7 +334,7 @@ def test_includes_retry_after_and_guidance_on_429(classifier: ErrorClassifier, t
     message = str(exc)
     assert "HTTP 429" in message
     assert "(Retry-After: 30)" in message
-    assert "a decisao de aguardar e reenviar e' do chamador" in message
+    assert "a decisão de aguardar e reenviar é do chamador" in message
 
 
 def test_omits_retry_after_when_absent(classifier: ErrorClassifier, trace: TraceContext) -> None:

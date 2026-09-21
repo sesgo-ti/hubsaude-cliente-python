@@ -1,9 +1,9 @@
 """Testes de ``client.SmartTokenClient``.
 
-Nenhuma rede real e usada: o ``httpx.Client`` construido internamente por
-``SmartTokenClient.__init__`` e interceptado via ``install_mock_transport``
+Nenhuma rede real é usada: o ``httpx.Client`` construído internamente por
+``SmartTokenClient.__init__`` é interceptado via ``install_mock_transport``
 (monkeypatch de ``httpx.Client`` por um factory que injeta
-``httpx.MockTransport(handler)`` -- mesma tecnica de
+``httpx.MockTransport(handler)`` -- mesma técnica de
 ``tests/test_discovery.py``, só que aplicada uma camada acima, já que
 ``client.py`` não expõe um jeito de injetar o transporte/``httpx.Client``
 diretamente). ``FakeSigningStrategy``/``FakeTlsContextProvider``
@@ -149,7 +149,7 @@ def _form_data(request: httpx.Request) -> dict[str, str]:
 
 def test_uses_token_endpoint_directly_without_any_http_call(install_mock_transport) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        raise AssertionError(f"nenhuma requisicao HTTP era esperada na construcao, recebida: {request.url}")
+        raise AssertionError(f"nenhuma requisição HTTP era esperada na construção, recebida: {request.url}")
 
     install_mock_transport(handler)
     client = SmartTokenClient(**_base_kwargs())
@@ -170,7 +170,7 @@ def test_discovers_token_endpoint_from_fhir_base_once_at_construction(install_mo
     client = SmartTokenClient(**_base_kwargs(token_endpoint=None, fhir_base=FHIR_BASE))
 
     assert client.get_token_endpoint() == TOKEN_ENDPOINT
-    assert calls == [WELL_KNOWN_URL]  # descoberta ocorreu exatamente uma vez, na construcao
+    assert calls == [WELL_KNOWN_URL]  # descoberta ocorreu exatamente uma vez, na construção
     client.close()
 
 
@@ -278,7 +278,7 @@ def test_verify_key_pair_consistency_static_wrapper_accepts_matching_pair(fake_p
 
     key = pem_loader.load_private_key(fake_pem_pair["key"])
     cert = pem_loader.load_certificate(fake_pem_pair["cert"])
-    SmartTokenClient.verify_key_pair_consistency(key, cert)  # nao deve lancar
+    SmartTokenClient.verify_key_pair_consistency(key, cert)  # não deve lançar
 
 
 def test_verify_key_pair_consistency_static_wrapper_rejects_mismatched_pair(fake_mismatched_pem_pair) -> None:
@@ -286,7 +286,7 @@ def test_verify_key_pair_consistency_static_wrapper_rejects_mismatched_pair(fake
 
     key = pem_loader.load_private_key(fake_mismatched_pem_pair["matching_key"])
     mismatched_cert = pem_loader.load_certificate(fake_mismatched_pem_pair["mismatched_cert"])
-    with pytest.raises(SmartTokenError, match="nao corresponde"):
+    with pytest.raises(SmartTokenError, match="não corresponde"):
         SmartTokenClient.verify_key_pair_consistency(key, mismatched_cert)
 
 
@@ -339,7 +339,7 @@ def test_assertion_is_base64url_without_padding(install_mock_transport) -> None:
     header_b64, payload_b64, signature_b64 = assertion.split(".")
     for part in (header_b64, payload_b64, signature_b64):
         assert "=" not in part
-        assert "+" not in part and "/" not in part  # alfabeto URL-safe, nao o padrao
+        assert "+" not in part and "/" not in part  # alfabeto URL-safe, não o padrão
     client.close()
 
 
@@ -362,7 +362,7 @@ def test_signing_strategy_receives_header_dot_payload(install_mock_transport) ->
 def test_each_real_fetch_uses_a_fresh_jti(install_mock_transport) -> None:
     captured: list[httpx.Request] = []
     install_mock_transport(_token_success_handler(captured=captured))
-    # Cache desligado: garante que a segunda chamada tambem vai a rede.
+    # Cache desligado: garante que a segunda chamada também vai a rede.
     client = SmartTokenClient(**_base_kwargs(token_cache=TokenCacheStrategy(enabled=False)))
 
     client.obtain_token("scope-a")
@@ -376,7 +376,7 @@ def test_each_real_fetch_uses_a_fresh_jti(install_mock_transport) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Requisicao de token / trace (RF-02)
+# Requisição de token / trace (RF-02)
 # ---------------------------------------------------------------------------
 
 
@@ -449,7 +449,7 @@ def test_each_real_fetch_uses_a_fresh_trace_context(install_mock_transport) -> N
 
 
 # ---------------------------------------------------------------------------
-# Sucesso, cache e invalidacao (RF-03/RF-04/RF-06)
+# Sucesso, cache e invalidação (RF-03/RF-04/RF-06)
 # ---------------------------------------------------------------------------
 
 
@@ -483,7 +483,7 @@ def test_second_call_for_same_scope_is_served_from_cache(install_mock_transport)
     second = client.obtain_token("system/Patient.rs")
 
     assert first == second
-    assert len(captured) == 1  # segunda chamada nao foi a rede
+    assert len(captured) == 1  # segunda chamada não foi a rede
     client.close()
 
 
@@ -551,13 +551,13 @@ def test_invalidate_cache_all_scopes_forces_new_fetch_for_every_scope(install_mo
 
 
 # ---------------------------------------------------------------------------
-# Single-flight / concorrencia (RF-05)
+# Single-flight / concorrência (RF-05)
 # ---------------------------------------------------------------------------
 
 
 def test_single_flight_dedupes_concurrent_calls_for_same_scope(install_mock_transport) -> None:
     """N threads pedindo o mesmo scope simultaneamente devem resultar em
-    apenas UMA requisicao HTTP real (lock striping + double-checked
+    apenas UMA requisição HTTP real (lock striping + double-checked
     locking, RF-05)."""
     call_count = 0
     count_lock = threading.Lock()
@@ -594,14 +594,14 @@ def test_single_flight_dedupes_concurrent_calls_for_same_scope(install_mock_tran
     for t in threads:
         t.join(timeout=10)
 
-    assert not errors, f"excecoes inesperadas durante acesso concorrente: {errors}"
+    assert not errors, f"exceções inesperadas durante acesso concorrente: {errors}"
     assert results == ["tok-compartilhado"] * 16
     assert call_count == 1
     client.close()
 
 
 def test_single_flight_does_not_serialize_distinct_scopes(install_mock_transport) -> None:
-    """Scopes distintos nao devem competir pelo mesmo lock de stripe a
+    """Scopes distintos não devem competir pelo mesmo lock de stripe a
     ponto de impedir progresso -- aqui apenas confirma que ambos os scopes
     completam com sucesso quando pedidos concorrentemente."""
     scopes_seen: list[str] = []
@@ -637,11 +637,11 @@ def test_single_flight_does_not_serialize_distinct_scopes(install_mock_transport
 
 
 def test_scope_lock_striping_bounds_lock_count_for_many_dynamic_scopes(install_mock_transport) -> None:
-    """Mesmo com uma quantidade grande de scopes dinamicos, o numero de
-    locks distintos de single-flight efetivamente usados nao deve crescer
+    """Mesmo com uma quantidade grande de scopes dinâmicos, o número de
+    locks distintos de single-flight efetivamente usados não deve crescer
     sem limite -- deve permanecer <= _SCOPE_LOCK_STRIPES (RF-05 item 3,
-    memoria O(1) independente do numero de scopes observados). O mesmo
-    scope tambem deve sempre selecionar o mesmo lock (determinismo do
+    memória O(1) independente do número de scopes observados). O mesmo
+    scope também deve sempre selecionar o mesmo lock (determinismo do
     striping via ``hash(scope) % _SCOPE_LOCK_STRIPES``), pre-requisito
     para o single-flight funcionar de fato."""
     install_mock_transport(_token_success_handler())
@@ -664,7 +664,7 @@ def test_scope_lock_striping_bounds_lock_count_for_many_dynamic_scopes(install_m
 
 
 # ---------------------------------------------------------------------------
-# Retry em falha transitoria (RF-07)
+# Retry em falha transitória (RF-07)
 # ---------------------------------------------------------------------------
 
 
@@ -713,17 +713,17 @@ def test_exhausts_retries_and_raises_smart_token_error(install_mock_transport, m
     with pytest.raises(SmartTokenError) as excinfo:
         client.obtain_token()
 
-    assert attempts == 2  # nao excede max_retries
+    assert attempts == 2  # não excede max_retries
     assert isinstance(excinfo.value.__cause__, httpx.ConnectTimeout)
 
 
 def test_retry_warning_logs_the_trace_id_of_the_failed_attempt(
     install_mock_transport, monkeypatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """O warning emitido a cada tentativa transitoria (RF-07) deve trazer
-    o traceId da MESMA requisicao que falhou -- e um traceId diferente por
-    tentativa, ja que ``TraceContext.generate()`` e chamado a cada volta
-    do laco de retry, nunca reaproveitado entre tentativas."""
+    """O warning emitido a cada tentativa transitória (RF-07) deve trazer
+    o traceId da MESMA requisição que falhou -- e um traceId diferente por
+    tentativa, já que ``TraceContext.generate()`` é chamado a cada volta
+    do laço de retry, nunca reaproveitado entre tentativas."""
     captured: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -743,10 +743,10 @@ def test_retry_warning_logs_the_trace_id_of_the_failed_attempt(
     warning_records = [r for r in caplog.records if r.levelno == logging.WARNING]
     assert len(warning_records) == 2  # uma por tentativa falha (attempt < max_retries)
 
-    # traceId enviado de fato no header traceparent das duas requisicoes
+    # traceId enviado de fato no header traceparent das duas requisições
     # que falharam (formato "00-<trace-id>-<span-id>-00", ver trace.py).
     expected_trace_ids = [req.headers[TraceContext.TRACEPARENT_HEADER].split("-")[1] for req in captured[:2]]
-    # _LOG.warning(msg, attempt, max_retries, client_id, trace.trace_id, last_exc) -> args[3] e' o traceId.
+    # _LOG.warning(msg, attempt, max_retries, client_id, trace.trace_id, last_exc) -> args[3] é o traceId.
     logged_trace_ids = [record.args[3] for record in warning_records]
 
     assert logged_trace_ids == expected_trace_ids
@@ -797,8 +797,8 @@ def test_non_transient_transport_failure_propagates_unwrapped(install_mock_trans
     install_mock_transport(handler)
     client = SmartTokenClient(**_base_kwargs())
 
-    # Nao e' timeout/connect/read/write nem EOF prematuro -> ErrorClassifier
-    # nao considera transitorio e relanca a excecao original, sem retry
+    # Não é timeout/connect/read/write nem EOF prematuro -> ErrorClassifier
+    # não considera transitório e relança a exceção original, sem retry
     # nem wrapping em SmartTokenError.
     with pytest.raises(httpx.RemoteProtocolError):
         client.obtain_token()
@@ -821,7 +821,7 @@ def test_likely_client_certificate_rejection_raises_smart_token_error(install_mo
     with pytest.raises(SmartTokenError) as excinfo:
         client.obtain_token()
 
-    assert attempts == 1  # sem retry: suspeita de rejeicao de certificado e' definitiva
+    assert attempts == 1  # sem retry: suspeita de rejeição de certificado é definitiva
     assert "certificado de cliente" in str(excinfo.value)
 
 
@@ -835,7 +835,7 @@ def test_close_is_idempotent(install_mock_transport) -> None:
     client = SmartTokenClient(**_base_kwargs())
 
     client.close()
-    client.close()  # nao deve levantar excecao
+    client.close()  # não deve levantar exceção
 
 
 def test_obtain_token_after_close_raises_smart_token_error(install_mock_transport) -> None:
@@ -866,7 +866,7 @@ def test_close_logs_warning_when_signing_strategy_close_fails(
     """Cobre o branch ``except Exception`` de
     ``_close_signing_strategy_if_supported``: uma falha ao fechar a
     ``signing_strategy`` e apenas logada (best-effort), nunca propagada --
-    ``close()`` do cliente ja liberou cache/http client nesta chamada e nao
+    ``close()`` do cliente já liberou cache/http client nesta chamada e não
     deve falhar por causa de um colaborador best-effort."""
     install_mock_transport(_token_success_handler())
     signing_strategy = FakeSigningStrategy()
@@ -878,7 +878,7 @@ def test_close_logs_warning_when_signing_strategy_close_fails(
     client = SmartTokenClient(**_base_kwargs(signing_strategy=signing_strategy))
 
     with caplog.at_level(logging.WARNING, logger="hubsaude_client.SmartTokenClient"):
-        client.close()  # nao deve levantar excecao
+        client.close()  # não deve levantar exceção
 
     assert any(
         record.levelno == logging.WARNING and "signing_strategy" in record.getMessage() for record in caplog.records
@@ -912,15 +912,15 @@ def test_token_result_repr_masks_access_token() -> None:
 
 
 # ---------------------------------------------------------------------------
-# _ReadersWriterLock -- contencao real entre leitores/escritor (RNF-01)
+# _ReadersWriterLock -- contenção real entre leitores/escritor (RNF-01)
 # ---------------------------------------------------------------------------
 #
-# Os testes de single-flight acima ja exercitam varios leitores concorrentes
-# sem contencao com um escritor. Os dois testes abaixo forcam deliberadamente
+# Os testes de single-flight acima já exercitam vários leitores concorrentes
+# sem contenção com um escritor. Os dois testes abaixo forçam deliberadamente
 # a espera em `_acquire_read`/`_acquire_write` (via `threading.Condition.wait`)
-# -- cenario que so' ocorre quando um escritor esta ativo e um leitor chega
-# (ou vice-versa) -- para exercitar o unico ramo de `_ReadersWriterLock` que
-# os testes de fluxo normal do client nao alcancam.
+# -- cenário que só ocorre quando um escritor está ativo e um leitor chega
+# (ou vice-versa) -- para exercitar o único ramo de `_ReadersWriterLock` que
+# os testes de fluxo normal do client não alcançam.
 
 
 def test_reader_waits_while_writer_is_active() -> None:
@@ -936,7 +936,7 @@ def test_reader_waits_while_writer_is_active() -> None:
 
     def reader() -> None:
         writer_holding.wait(timeout=5)
-        # Aqui o escritor certamente esta ativo -- _acquire_read cai no
+        # Aqui o escritor certamente está ativo -- _acquire_read cai no
         # `while self._writer_active: self._condition.wait()`.
         with lock.read_lock():
             reader_acquired.set()
@@ -945,19 +945,19 @@ def test_reader_waits_while_writer_is_active() -> None:
     reader_thread = threading.Thread(target=reader)
     writer_thread.start()
     writer_thread_started = writer_holding.wait(timeout=5)
-    assert writer_thread_started, "escritor nao sinalizou posse do lock a tempo"
+    assert writer_thread_started, "escritor não sinalizou posse do lock a tempo"
 
     reader_thread.start()
     # Da tempo do leitor de fato bloquear em `condition.wait()` antes de liberar
-    # o escritor -- sem isso o teste nao garante que o ramo de espera rodou.
+    # o escritor -- sem isso o teste não garante que o ramo de espera rodou.
     time.sleep(0.05)
-    assert not reader_acquired.is_set(), "leitor nao deveria progredir com o escritor ainda ativo"
+    assert not reader_acquired.is_set(), "leitor não deveria progredir com o escritor ainda ativo"
 
     release_writer.set()
     writer_thread.join(timeout=5)
     reader_thread.join(timeout=5)
 
-    assert reader_acquired.is_set(), "leitor deveria progredir apos o escritor liberar o lock"
+    assert reader_acquired.is_set(), "leitor deveria progredir após o escritor liberar o lock"
 
 
 def test_writer_waits_while_reader_is_active() -> None:
@@ -973,7 +973,7 @@ def test_writer_waits_while_reader_is_active() -> None:
 
     def writer() -> None:
         reader_holding.wait(timeout=5)
-        # Aqui o leitor certamente esta ativo -- _acquire_write cai no
+        # Aqui o leitor certamente está ativo -- _acquire_write cai no
         # `while self._writer_active or self._active_readers > 0: self._condition.wait()`.
         with lock.write_lock():
             writer_acquired.set()
@@ -982,14 +982,14 @@ def test_writer_waits_while_reader_is_active() -> None:
     writer_thread = threading.Thread(target=writer)
     reader_thread.start()
     reader_thread_started = reader_holding.wait(timeout=5)
-    assert reader_thread_started, "leitor nao sinalizou posse do lock a tempo"
+    assert reader_thread_started, "leitor não sinalizou posse do lock a tempo"
 
     writer_thread.start()
     time.sleep(0.05)
-    assert not writer_acquired.is_set(), "escritor nao deveria progredir com o leitor ainda ativo"
+    assert not writer_acquired.is_set(), "escritor não deveria progredir com o leitor ainda ativo"
 
     release_reader.set()
     reader_thread.join(timeout=5)
     writer_thread.join(timeout=5)
 
-    assert writer_acquired.is_set(), "escritor deveria progredir apos o leitor liberar o lock"
+    assert writer_acquired.is_set(), "escritor deveria progredir após o leitor liberar o lock"

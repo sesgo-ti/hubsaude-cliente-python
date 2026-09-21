@@ -21,15 +21,15 @@ def test_build_ssl_context_pins_tls13_by_default() -> None:
 
 
 def test_build_ssl_context_unsupported_protocol_raises() -> None:
-    with pytest.raises(SmartTokenError, match="Protocolo TLS nao suportado"):
+    with pytest.raises(SmartTokenError, match="Protocolo TLS não suportado"):
         ssl_context_factory.build_ssl_context(tls_protocol="SSLv3")
 
 
 def test_build_ssl_context_with_trust_anchor_path(fake_pem_pair) -> None:
     context = ssl_context_factory.build_ssl_context(server_trust_anchor_path=fake_pem_pair["cert"])
-    # Nao usar get_ca_certs() aqui: so lista certs com BasicConstraints
-    # CA:true, e fake_pem_pair gera um cert de teste sem essa extensao
-    # (nao e uma CA). cert_store_stats()["x509"] conta o cert carregado
+    # Não usar get_ca_certs() aqui: só lista certs com BasicConstraints
+    # CA:true, e fake_pem_pair gera um cert de teste sem essa extensão
+    # (não é uma CA). cert_store_stats()["x509"] conta o cert carregado
     # independente da flag -- ver nota no topo deste brief.
     assert context.cert_store_stats()["x509"] == 1
 
@@ -57,8 +57,8 @@ def test_build_ssl_context_with_expired_client_cert_raises(fake_pem_pair, fake_e
 
     client_key = pem_loader.load_private_key(fake_pem_pair["key"])
     # Carrega o certificado expirado direto da lib, sem passar por
-    # pem_loader.load_certificate (que ja rejeitaria antes de chegar em
-    # build_ssl_context) -- o objetivo aqui e testar a validacao dentro de
+    # pem_loader.load_certificate (que já rejeitaria antes de chegar em
+    # build_ssl_context) -- o objetivo aqui é testar a validação dentro de
     # ssl_context_factory especificamente.
     expired_cert = x509.load_pem_x509_certificate(fake_expired_cert_pem.read_bytes())
     with pytest.raises(SmartTokenError, match="expirado"):
