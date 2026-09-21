@@ -27,14 +27,13 @@ jobs:
       - name: Validar tag contra a versão do pyproject.toml
         run: |
           TAG_VERSION="${GITHUB_REF_NAME#v}"
-          # Só versão final, sem sufixo de pré-release/dev/local do
-          # PEP 440 — mesma política do gate anti-SNAPSHOT do Java.
-          case "$TAG_VERSION" in
-            *[!0-9.]*|.*|*.)
-              echo "::error::Tag ($GITHUB_REF_NAME) não é uma versão final MAJOR.MINOR.PATCH." >&2
-              exit 1
-              ;;
-          esac
+          # Só versão final MAJOR.MINOR.PATCH, sem sufixo de
+          # pré-release/dev/local do PEP 440 — mesma política do gate
+          # anti-SNAPSHOT do Java.
+          if ! [[ "$TAG_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Tag ($GITHUB_REF_NAME) não é uma versão final MAJOR.MINOR.PATCH." >&2
+            exit 1
+          fi
           PROJECT_VERSION="$(python -c 'import pathlib, tomllib; print(tomllib.loads(pathlib.Path("pyproject.toml").read_text(encoding="utf-8"))["project"]["version"])')"
           if [ "$TAG_VERSION" != "$PROJECT_VERSION" ]; then
             echo "::error::Tag ($GITHUB_REF_NAME) não bate com a versão do pyproject.toml ($PROJECT_VERSION)" >&2
@@ -63,8 +62,12 @@ jobs:
       - name: Regras arquiteturais
         run: tox -e archrules
 
-      # Versão pinada de propósito (não "latest"), para a release ser
-      # determinística. Atualizar à mão ao adotar uma versão nova.
+      # Versão e checksum pinados de propósito, não "latest": a release
+      # é determinística e não depende de nenhuma referência mutável.
+      # Instala o binário direto do release, em vez do install.sh
+      # publicado em `main`, porque um script baixado de branch é
+      # mutável — e este job tem contents: write. Atualizar os dois
+      # valores à mão (checksums.txt do release) ao adotar versão nova.
       - name: Cache da CLI hubsaude e dos componentes provisionados
         id: cache-hubsaude
         uses: actions/cache@v6
@@ -78,7 +81,12 @@ jobs:
         if: steps.cache-hubsaude.outputs.cache-hit != 'true'
         env:
           HUBSAUDE_CLI_VERSION: "0.3.16"
-        run: curl -fsSL https://raw.githubusercontent.com/kyriosdata/runner/main/install.sh | bash
+          HUBSAUDE_CLI_SHA256: "34db814dc004efa44ff11fff60ed770cc7cbc721b6c8fbe164cd4b7d350beec3"
+        run: |
+          url="https://github.com/kyriosdata/runner/releases/download/hubsaude-cli-v${HUBSAUDE_CLI_VERSION}/hubsaude-linux-amd64"
+          curl -fsSL -o "$RUNNER_TEMP/hubsaude" "$url"
+          echo "$HUBSAUDE_CLI_SHA256  $RUNNER_TEMP/hubsaude" | sha256sum -c -
+          install -D -m 0755 "$RUNNER_TEMP/hubsaude" "$HOME/.local/bin/hubsaude"
 
       - name: Adicionar CLI hubsaude ao PATH
         run: echo "$HOME/.local/bin" >> "$GITHUB_PATH"

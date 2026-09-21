@@ -36,7 +36,7 @@ junit.xml
 htmlcov/
 .tox/
 *.egg-info/
-# Artefatos de distribuicao e SBOM gerados pelos targets "build" e
+# Artefatos de distribuição e SBOM gerados pelos ambientes "build" e
 # "sbom" do tox.ini -- publicados na release, nunca versionados.
 dist/
 sbom.json
@@ -49,9 +49,9 @@ sbom.json
 *.war
 *.ear
 
-# Caminho de conveniencia local para o JAR do hubsaude-simulador usado
-# pelos testes de integracao (tests/hubsaude_simulator_helper.py) --
-# alternativa a HUBSAUDE_SIMULADOR_JAR, especifica de maquina.
+# Caminho de conveniência local para o JAR do hubsaude-simulador usado
+# pelos testes de integração (tests/hubsaude_simulator_helper.py) --
+# alternativa a HUBSAUDE_SIMULADOR_JAR, específica de máquina.
 .simulator/
 
 # Ignore local environment files

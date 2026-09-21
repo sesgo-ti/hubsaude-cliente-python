@@ -34,15 +34,15 @@ def find_softhsm2_lib() -> str | None:
     """Retorna o caminho do módulo PKCS#11 do SoftHSM2: ``SOFTHSM_LIB``,
     se definida, senão o primeiro de :data:`SOFTHSM2_LIB_CANDIDATES` que
     existir. ``None`` se nenhum resolver -- inclusive quando a variável
-    aponta para arquivo inexistente, caso em que os candidatos **não**
+    aponta para algo que não é arquivo, caso em que os candidatos **não**
     são tentados, para o erro de configuração não ficar mascarado (mesma
     política de ``hubsaude_simulator_helper.simulator_jar_path``).
     """
     override = os.environ.get(ENV_VAR_SOFTHSM_LIB)
     if override:
-        return override if Path(override).exists() else None
+        return override if Path(override).is_file() else None
     for candidate in SOFTHSM2_LIB_CANDIDATES:
-        if Path(candidate).exists():
+        if Path(candidate).is_file():
             return candidate
     return None
 

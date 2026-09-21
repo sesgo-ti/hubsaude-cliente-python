@@ -76,6 +76,19 @@ def test_find_softhsm2_lib_env_var_pointing_to_missing_file_does_not_fall_back(
     assert helper.find_softhsm2_lib() is None
 
 
+def test_find_softhsm2_lib_env_var_pointing_to_directory_is_ignored(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Diretório não é módulo carregável: aceitá-lo faria
+    ``softhsm2_available()`` devolver ``True`` e a falha só apareceria
+    lá na frente, dentro do ``pkcs11.lib()``."""
+    directory = tmp_path / "libsofthsm2.so"
+    directory.mkdir()
+    monkeypatch.setenv(helper.ENV_VAR_SOFTHSM_LIB, str(directory))
+
+    assert helper.find_softhsm2_lib() is None
+
+
 def test_softhsm2_available_false_without_lib(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(helper, "SOFTHSM2_LIB_CANDIDATES", (str(tmp_path / "nao-existe.so"),))
 
