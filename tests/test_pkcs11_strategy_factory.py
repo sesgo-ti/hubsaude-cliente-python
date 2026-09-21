@@ -29,8 +29,8 @@ def test_from_pkcs11_signs_with_hardware_backed_key(softhsm2_token) -> None:  # 
 
 def test_from_pkcs11_unknown_token_label_raises(softhsm2_token) -> None:  # noqa: F811
     """Cobre o branch ``except Exception`` de ``lib.get_token(...)``: um
-    ``token_label`` que nao corresponde a nenhum token inicializado."""
-    with pytest.raises(SmartTokenError, match="Token PKCS#11 nao encontrado"):
+    ``token_label`` que não corresponde a nenhum token inicializado."""
+    with pytest.raises(SmartTokenError, match="Token PKCS#11 não encontrado"):
         strategy_factory.from_pkcs11(
             pkcs11_module_path=softhsm2_token["module_path"],
             token_label="token-que-nao-existe",

@@ -108,9 +108,9 @@ def test_sign_raises_for_unsupported_algorithm_params(monkeypatch: pytest.Monkey
 
 def test_sign_raises_when_key_type_no_longer_matches_rsa_algorithm(monkeypatch: pytest.MonkeyPatch) -> None:
     """Cobre o branch defensivo ``if not isinstance(key, rsa.RSAPrivateKey)``
-    dentro de ``_sign()``: inalcancavel via construtor (``_require_compatible_key_type``
-    ja valida isso na construcao), exercitado aqui trocando ``_private_key``
-    apos a construcao para simular o tipo incompativel chegando em ``_sign``."""
+    dentro de ``_sign()``: inalcançável via construtor (``_require_compatible_key_type``
+    já valida isso na construção), exercitado aqui trocando ``_private_key``
+    após a construção para simular o tipo incompatível chegando em ``_sign``."""
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     strategy = PrivateKeySigningStrategy(key, "RS256")
     ec_key = ec.generate_private_key(ec.SECP256R1())
@@ -121,7 +121,7 @@ def test_sign_raises_when_key_type_no_longer_matches_rsa_algorithm(monkeypatch: 
 
 def test_sign_raises_when_key_type_no_longer_matches_ec_algorithm(monkeypatch: pytest.MonkeyPatch) -> None:
     """Cobre o branch defensivo ``if not isinstance(key, ec.EllipticCurvePrivateKey)``
-    dentro de ``_sign()``, simetrico ao teste RSA acima."""
+    dentro de ``_sign()``, simétrico ao teste RSA acima."""
     key = ec.generate_private_key(ec.SECP256R1())
     strategy = PrivateKeySigningStrategy(key, "ES256")
     rsa_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)

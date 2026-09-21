@@ -866,7 +866,7 @@ def test_close_logs_warning_when_signing_strategy_close_fails(
     """Cobre o branch ``except Exception`` de
     ``_close_signing_strategy_if_supported``: uma falha ao fechar a
     ``signing_strategy`` e apenas logada (best-effort), nunca propagada --
-    ``close()`` do cliente ja liberou cache/http client nesta chamada e nao
+    ``close()`` do cliente já liberou cache/http client nesta chamada e não
     deve falhar por causa de um colaborador best-effort."""
     install_mock_transport(_token_success_handler())
     signing_strategy = FakeSigningStrategy()
@@ -878,7 +878,7 @@ def test_close_logs_warning_when_signing_strategy_close_fails(
     client = SmartTokenClient(**_base_kwargs(signing_strategy=signing_strategy))
 
     with caplog.at_level(logging.WARNING, logger="hubsaude_client.SmartTokenClient"):
-        client.close()  # nao deve levantar excecao
+        client.close()  # não deve levantar exceção
 
     assert any(
         record.levelno == logging.WARNING and "signing_strategy" in record.getMessage() for record in caplog.records
