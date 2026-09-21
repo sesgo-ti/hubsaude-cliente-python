@@ -13,9 +13,21 @@ import shutil
 import subprocess
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Final
 
 import pytest
 
+#: Nome da variável de ambiente que aponta diretamente para o módulo
+#: PKCS#11 do SoftHSM2 (``libsofthsm2.so``). Tem precedência sobre
+#: :data:`SOFTHSM2_LIB_CANDIDATES`: o caminho do módulo varia por
+#: distribuição, então o CI descobre o caminho real (``dpkg -L
+#: libsofthsm2``) e o exporta, em vez de depender de a lista de
+#: candidatos abaixo cobrir a distribuição do runner. Mesmo mecanismo
+#: usado pelo cliente TypeScript.
+ENV_VAR_SOFTHSM_LIB: Final[str] = "SOFTHSM_LIB"
+
+#: Caminhos checados quando ``SOFTHSM_LIB`` não está definida --
+#: instalações usuais do pacote em Linux, suficientes para dev local.
 SOFTHSM2_LIB_CANDIDATES = (
     "/usr/lib/softhsm/libsofthsm2.so",
     "/usr/lib/x86_64-linux-gnu/softhsm/libsofthsm2.so",
@@ -24,6 +36,22 @@ SOFTHSM2_LIB_CANDIDATES = (
 
 
 def find_softhsm2_lib() -> str | None:
+    """Retorna o caminho do módulo PKCS#11 do SoftHSM2, resolvendo nesta
+    ordem:
+
+    1. :data:`ENV_VAR_SOFTHSM_LIB` (``SOFTHSM_LIB``), se definida. Se
+       apontar para um arquivo inexistente, retorna ``None`` **sem**
+       cair para os candidatos: uma variável mal configurada deve ficar
+       visível (suíte pulada/falha), não ser mascarada silenciosamente
+       por outra fonte -- mesma política de
+       ``hubsaude_simulator_helper.simulator_jar_path``.
+    2. :data:`SOFTHSM2_LIB_CANDIDATES`, na ordem.
+
+    ``None`` se nenhuma das duas fontes resolver um arquivo existente.
+    """
+    override = os.environ.get(ENV_VAR_SOFTHSM_LIB)
+    if override:
+        return override if Path(override).exists() else None
     for candidate in SOFTHSM2_LIB_CANDIDATES:
         if Path(candidate).exists():
             return candidate
