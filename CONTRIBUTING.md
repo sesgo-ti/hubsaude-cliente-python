@@ -242,14 +242,18 @@ A release é disparada por uma tag `vMAJOR.MINOR.PATCH`
 
 O empacotamento Python não injeta a versão a partir da tag: a versão
 publicada é sempre a que está commitada em `pyproject.toml`
-(`[project].version`). A tag só dispara o workflow — por isso ela é
-validada contra o `pyproject.toml` e a release falha se as duas
-divergirem. A ordem, portanto, é:
+(`[project].version`). A tag só dispara o workflow. Há outros dois
+lugares que carregam a versão à mão — a seção do `CHANGELOG.md` e o
+badge do `README.md` — e os três são validados contra a tag, com a
+release falhando se qualquer um divergir. A ordem, portanto, é:
 
 ```bash
-# 1. bump da versão em pyproject.toml ([project].version), commitado e
-#    mergeado normalmente (via PR)
-# 2. na branch já com o bump:
+# 1. num PR normal, preparar a versão nova:
+#    - pyproject.toml: [project].version
+#    - CHANGELOG.md: promover o conteúdo de [Unreleased] para uma seção
+#      "## [0.2.0] - AAAA-MM-DD" (formato Keep a Changelog)
+#    - README.md: badge de versão no topo
+# 2. com o PR mergeado, na branch já com o bump:
 git tag v0.2.0
 git push origin v0.2.0
 ```
