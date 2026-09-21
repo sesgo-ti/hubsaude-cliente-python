@@ -107,7 +107,7 @@ class TraceContext:
     def traceparent(self) -> str:
         """Monta o valor do header ``traceparent``.
 
-        Formato ``00-<trace-id>-<parent-id>-00``, onde parent-id e o
+        Formato ``00-<trace-id>-<parent-id>-00``, onde parent-id é o
         span-id desta instância (W3C Trace Context Sec3.2.2).
 
         Returns:

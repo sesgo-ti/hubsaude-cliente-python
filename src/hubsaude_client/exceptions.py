@@ -1,8 +1,8 @@
 """Exceções de domínio do hubsaude_client.
 
-O nome oficial da exceção-base e ``SmartTokenError``, NÃO
+O nome oficial da exceção-base é ``SmartTokenError``, NÃO
 ``SmartTokenException``, seguindo a convenção Python de sufixo ``Error``
-(análoga a ``ValueError``/``KeyError``). E usada por ``algorithms.py``
+(análoga a ``ValueError``/``KeyError``). É usada por ``algorithms.py``
 e pelos demais módulos da biblioteca.
 """
 

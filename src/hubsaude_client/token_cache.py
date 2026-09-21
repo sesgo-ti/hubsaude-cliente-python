@@ -10,14 +10,14 @@ do chamador (``client.py``).
 Nota de escopo: o *lock striping* (locks fixos selecionados por
 ``hash(scope) % N``) usado para garantir *single-flight* de renovação --
 no máximo uma requisição HTTP em voo por scope -- fica fora deste módulo
-e e responsabilidade de ``client.py`` (``SmartTokenClient``): e la que a decisão de
+e é responsabilidade de ``client.py`` (``SmartTokenClient``): é lá que a decisão de
 "fazer ou não a chamada de rede" de fato acontece, e mantê-la fora deste
 módulo preserva ``token_cache.py`` como um colaborador puro de cache
 (cache-aside), sem qualquer conhecimento de rede/HTTP ou de política de
 retry. O single-flight será garantido de ponta a ponta pela combinação
 dos dois colaboradores: o lock por scope em ``client.py`` serializa as
 renovações, e o cache-aside aqui evita que uma thread que esperou o lock
-refaça uma chamada de rede ja resolvida por outra (double-checked
+refaça uma chamada de rede já resolvida por outra (double-checked
 locking). O único lock definido *neste* módulo (``threading.Lock``,
 abaixo) e um mecanismo diferente: protege apenas a estrutura de dados
 interna do cache contra corrupção em acesso concorrente -- não decide
@@ -55,11 +55,11 @@ class CachedToken:
     expires_at: datetime
 
     def is_valid(self, margin_seconds: int, now: datetime) -> bool:
-        """Verifica se o token ainda e válido considerando a margem.
+        """Verifica se o token ainda é válido considerando a margem.
 
         Args:
             margin_seconds: segundos de margem antes da expiração; uma
-                entrada que expira dentro dessa margem e tratada como
+                entrada que expira dentro dessa margem é tratada como
                 inválida, forçando renovação antecipada.
             now: instante corrente (timezone-aware).
 
@@ -129,10 +129,10 @@ class TokenCacheStrategy:
         Args:
             enabled: se ``True``, tokens são cacheados por scope; se
                 ``False``, ``cached_if_valid`` sempre retorna ``None`` e
-                ``store`` e no-op (cache totalmente desligado).
+                ``store`` é no-op (cache totalmente desligado).
             margin_seconds: margem em segundos para considerar o token
                 próximo da expiração e forçar renovação antecipada.
-                Normalização de valores inválidos e responsabilidade do
+                Normalização de valores inválidos é responsabilidade do
                 chamador (``fault_tolerance.py``/``client.py``).
             max_entries: quantidade máxima de scopes retidos
                 simultaneamente no cache (janela LRU). Deve ser positivo.
@@ -156,11 +156,11 @@ class TokenCacheStrategy:
         """Retorna o token em cache para o scope, se habilitado e válido.
 
         Quando a entrada existe mas já está inválida (expirada ou dentro da margem
-        de renovação), ela e removida do cache nesta mesma chamada
+        de renovação), ela é removida do cache nesta mesma chamada
         (eviction antecipada), evitando reter entradas mortas.
 
         Args:
-            normalized_scope: scope ja normalizado pelo chamador (``strip()``;
+            normalized_scope: scope já normalizado pelo chamador (``strip()``;
                 ``""`` para "sem scope").
 
         Returns:
@@ -186,10 +186,10 @@ class TokenCacheStrategy:
         """Armazena o token no cache quando habilitado; caso contrário, no-op.
 
         Se, após a inserção, o número de entradas exceder ``max_entries``, a entrada usada há mais
-        tempo (menos recentemente acessada) e descartada (eviction LRU).
+        tempo (menos recentemente acessada) é descartada (eviction LRU).
 
         Args:
-            normalized_scope: scope ja normalizado pelo chamador.
+            normalized_scope: scope já normalizado pelo chamador.
             access_token: token de acesso recém-obtido do token endpoint.
             expires_in: validade do token em segundos, a partir de agora.
         """
@@ -207,7 +207,7 @@ class TokenCacheStrategy:
         """Invalida o cache para um scope específico (no-op se ausente).
 
         Args:
-            normalized_scope: scope ja normalizado cujo token deve ser
+            normalized_scope: scope já normalizado cujo token deve ser
                 invalidado.
         """
         with self._lock:

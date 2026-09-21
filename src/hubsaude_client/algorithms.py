@@ -50,7 +50,7 @@ class RsaPssParams:
 class EcdsaParams:
     """Parâmetros para ECDSA (ES256/ES384/ES512), RFC 7518 §3.4.
 
-    signature_length e o comprimento total, em bytes, da assinatura R||S
+    signature_length é o comprimento total, em bytes, da assinatura R||S
     (2x o comprimento de cada coordenada, arredondado para cima).
     """
 

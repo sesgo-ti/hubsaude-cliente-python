@@ -26,7 +26,7 @@ _REQUIRED_URL_SCHEME: Final[str] = "https"
 
 #: Hosts tratados como locais para fins da exceção de esquema http
 #: (RF-18) -- úteis em desenvolvimento e testes com servidor local, nunca
-#: em produção. ``urlsplit(...).hostname`` ja normaliza IPv6 sem
+#: em produção. ``urlsplit(...).hostname`` já normaliza IPv6 sem
 #: colchetes e em minúsculas, então uma única entrada "::1" cobre tanto
 #: ``http://[::1]`` quanto ``http://::1``.
 _LOCAL_HOSTS: Final[frozenset[str]] = frozenset({"localhost", "127.0.0.1", "::1"})
@@ -41,7 +41,7 @@ def require_https_scheme(url: str, field_name: str) -> None:
     TLS.
 
     Args:
-        url: URL a validar (ja normalizada/sem espaços laterais).
+        url: URL a validar (já normalizada/sem espaços laterais).
         field_name: nome do campo, para a mensagem de erro.
 
     Raises:
@@ -66,6 +66,6 @@ def require_https_scheme(url: str, field_name: str) -> None:
     raise SmartTokenError(
         f"{field_name} deve usar o esquema https, recebido: {url!r}"
         " (credenciais e client_assertion não podem trafegar fora de TLS;"
-        " o esquema http e permitido apenas para localhost/127.0.0.1/::1,"
+        " o esquema http é permitido apenas para localhost/127.0.0.1/::1,"
         " em desenvolvimento e testes locais)"
     )

@@ -50,14 +50,14 @@ class FaultToleranceConfig:
         """Normaliza campos inválidos.
 
         ``connect_timeout``/``request_timeout`` são obrigatórios; a
-        tipagem (``timedelta``, não ``timedelta | None``) ja documenta o
-        contrato — nenhuma checagem adicional em runtime e feita para
+        tipagem (``timedelta``, não ``timedelta | None``) já documenta o
+        contrato — nenhuma checagem adicional em runtime é feita para
         esses dois campos, pelo mesmo motivo que o resto da lib não
         valida ``None`` em atributos tipados como não-opcionais.
 
         ``assertion_ttl_seconds``, ``token_cache_margin_seconds`` e
         ``max_retries`` iguais a zero ou negativos são silenciosamente
-        trocados pelos defaults — como a dataclass e ``frozen``, a
+        trocados pelos defaults — como a dataclass é ``frozen``, a
         substituição usa ``object.__setattr__`` (mesma técnica de
         ``__post_init__`` em dataclasses imutáveis).
         """
