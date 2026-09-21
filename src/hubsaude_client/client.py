@@ -369,7 +369,7 @@ class SmartTokenClient:
         ``client_assertion``.
 
         Não exige uma instância de ``SmartTokenClient``: é um método
-        estático, chamavel diretamente como
+        estático, chamável diretamente como
         ``SmartTokenClient.verify_key_pair_consistency(...)``.
 
         Args:
@@ -508,10 +508,10 @@ class SmartTokenClient:
                     body_text = body_bytes.decode("utf-8", errors="replace")
                     raise self._error_classifier.http_failure(response, trace, body_text)
             except httpx.RequestError as exc:
-                # Relança diretamente se não-retriavel (ou levanta
+                # Relança diretamente se não-retriável (ou levanta
                 # SmartTokenError quando a rejeição do certificado de
                 # cliente é CONFIRMADA); devolve a exceção quando
-                # retriavel -- inclusive no sinal AMBÍGUO de rejeição do
+                # retriável -- inclusive no sinal AMBÍGUO de rejeição do
                 # certificado (ver ErrorClassifier.retriable_or_reraise) --
                 # para a lógica de retry abaixo.
                 last_exc = self._error_classifier.retriable_or_reraise(exc, trace)

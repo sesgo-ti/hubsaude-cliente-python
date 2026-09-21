@@ -18,7 +18,7 @@ conexão TCP durante leitura ou escrita (``httpx.ConnectError``,
 Isso não significa, porém, que toda falha de TLS interrompe o retry: ver
 :func:`is_likely_client_certificate_rejection` e
 :class:`CertRejectionConfidence` -- o sinal CONFIRMED interrompe
-imediatamente, mas o sinal PROBABLE (ambíguo) é tratado como retriavel
+imediatamente, mas o sinal PROBABLE (ambíguo) é tratado como retriável
 por :meth:`ErrorClassifier.retriable_or_reraise`, por caminho separado
 de :func:`is_transient_network_failure`.
 
@@ -215,7 +215,7 @@ class ErrorClassifier:
         alerta TLS explícito e inequívoco) interrompe o retry
         imediatamente. O sinal PROVÁVEL (``ssl.SSLEOFError`` sem alerta
         textual, ver :class:`CertRejectionConfidence`) é tratado como
-        retriavel: pode ser rejeição de certificado, mas também pode ser
+        retriável: pode ser rejeição de certificado, mas também pode ser
         apenas instabilidade de rede comum, e não há como distinguir os
         dois casos só com essa exceção -- interromper o retry por um sinal
         ambíguo negaria ao mecanismo de recuperação a chance de atuar.
@@ -228,10 +228,10 @@ class ErrorClassifier:
             trace: contexto de trace W3C enviado na tentativa que falhou.
 
         Returns:
-            A própria exceção, quando retriavel.
+            A própria exceção, quando retriável.
 
         Raises:
-            httpx.RequestError: quando a exceção não é retriavel.
+            httpx.RequestError: quando a exceção não é retriável.
             SmartTokenError: quando a falha é confirmada como rejeição do
                 certificado de cliente no mTLS.
         """

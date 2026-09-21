@@ -150,7 +150,7 @@ class SmartConfigurationDiscovery:
 
         Nota de escopo: ao contrário do fluxo de obtenção de token
         (``client.py``), a descoberta não classifica a falha como
-        retriavel/não-retriavel nem tenta novamente — RF-09 trata a
+        retriável/não-retriável nem tenta novamente — RF-09 trata a
         descoberta como uma resolução única na construção do cliente;
         decidir se vale reconstruir o cliente após uma falha aqui e do
         chamador.

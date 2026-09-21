@@ -69,7 +69,7 @@ def test_real_unknown_ca_rejection_tls13_is_never_treated_as_retriable(real_mtls
     (ver nota no topo de ``error_classifier.py``).
 
     O que este teste garante, e que *não* varia por plataforma: a
-    conexão nunca é tratada como retriavel nesse cenário, porque
+    conexão nunca é tratada como retriável nesse cenário, porque
     ``is_transient_network_failure`` exclui todo ``ssl.SSLError``
     (inclusive ``ssl.SSLEOFError``) antes de qualquer outra checagem --
     a garantia de segurança real (não reenviar credencial contra um
