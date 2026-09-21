@@ -36,6 +36,10 @@ junit.xml
 htmlcov/
 .tox/
 *.egg-info/
+# Artefatos de distribuicao e SBOM gerados pelos targets "build" e
+# "sbom" do tox.ini -- publicados na release, nunca versionados.
+dist/
+sbom.json
 
 # Logs
 *.log
