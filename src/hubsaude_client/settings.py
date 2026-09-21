@@ -90,7 +90,7 @@ class SigningSettings:
                 raise ValueError("Defina signing_strategy OU private_key_pem, não ambos")
             return ResolvedSigning(self.signing_strategy, None)
         if self.private_key_pem is None:
-            raise ValueError("E obrigatório definir signing_strategy ou private_key_pem")
+            raise ValueError("É obrigatório definir signing_strategy ou private_key_pem")
         client_key = pem_loader.load_private_key(self.private_key_pem, self.private_key_password)
         strategy = strategy_factory.from_private_key(client_key, self.jwt_algorithm)
         return ResolvedSigning(strategy, client_key)
