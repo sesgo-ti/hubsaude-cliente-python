@@ -25,18 +25,14 @@ jobs:
           cache: pip
 
       # Os testes de PKCS#11 rodam contra um HSM em software real
-      # (SoftHSM2), não mockado — precisa estar instalado no runner. O
-      # caminho do módulo (`libsofthsm2.so`) varia por distribuição, por
-      # isso é descoberto dinamicamente em vez de hardcoded (ver
-      # `SOFTHSM_LIB` em tests/pkcs11_softhsm_helper.py).
+      # (SoftHSM2), não mockado. O caminho do módulo varia por
+      # distribuição, por isso é descoberto aqui e exportado em
+      # SOFTHSM_LIB (ver tests/pkcs11_softhsm_helper.py).
       - name: Instalar SoftHSM2
         run: |
           sudo apt-get update
           sudo apt-get install -y softhsm2
-          # O módulo PKCS#11 (libsofthsm2.so) pertence ao pacote
-          # `libsofthsm2` (dependência de `softhsm2`, que só traz os
-          # utilitários como `softhsm2-util`) — buscar em `softhsm2` aqui
-          # encontra nada.
+          # libsofthsm2.so vem do pacote `libsofthsm2`, não do `softhsm2`.
           lib="$(dpkg -L libsofthsm2 | grep -m1 'libsofthsm2\.so$')"
           test -n "$lib" || { echo "libsofthsm2.so não encontrado" >&2; exit 1; }
           echo "SOFTHSM_LIB=$lib" >> "$GITHUB_ENV"

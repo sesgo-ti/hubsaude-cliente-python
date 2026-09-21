@@ -1,13 +1,9 @@
 """Testes unitários (sem precisar de SoftHSM2 instalado) para a
 resolução do caminho do módulo PKCS#11 em
-``tests/pkcs11_softhsm_helper.py`` — variável de ambiente ``SOFTHSM_LIB``
-vs. a lista de candidatos por distribuição.
-
-Os testes que efetivamente falam com um token SoftHSM2 real vivem em
-``tests/test_pkcs11_strategy_factory.py`` e ``tests/test_builder.py``
-(pulados via ``skipif(not softhsm2_available())``). Este módulo, em
-contraste, roda sempre na suíte padrão — a lógica de resolução de
-caminho não depende de nenhum pré-requisito externo.
+``tests/pkcs11_softhsm_helper.py`` -- variável ``SOFTHSM_LIB`` vs. a
+lista de candidatos por distribuição. Os testes que falam com um token
+SoftHSM2 real vivem em ``tests/test_pkcs11_strategy_factory.py`` e
+``tests/test_builder.py``, pulados quando ele não está disponível.
 """
 
 from __future__ import annotations
@@ -71,9 +67,7 @@ def test_find_softhsm2_lib_env_var_pointing_to_missing_file_does_not_fall_back(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """Uma env var mal configurada (caminho inexistente, ex.: typo) não
-    deve ser mascarada silenciosamente pelos candidatos -- fica visível
-    como ``None`` (a suíte PKCS#11 pula, o CI/release reclama), mesmo
-    que um candidato exista."""
+    deve ser mascarada silenciosamente pelos candidatos."""
     candidate = tmp_path / "libsofthsm2.so"
     candidate.write_bytes(b"")
     monkeypatch.setenv(helper.ENV_VAR_SOFTHSM_LIB, str(tmp_path / "caminho-errado.so"))
