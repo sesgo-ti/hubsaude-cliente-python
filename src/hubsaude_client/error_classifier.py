@@ -42,7 +42,7 @@ que chega ao cliente para o mesmo cenário de rejeição **varia por
 plataforma/versão do OpenSSL**: em algumas combinações (ex.:
 ``OpenSSL 3.0.13``) o cliente recebe ``ssl.SSLEOFError`` ("EOF occurred
 in violation of protocol"), sem alerta textual reconhecível; em outras,
-o mesmo cenário produz um alerta ``unknown ca`` limpo, ja coberto pelo
+o mesmo cenário produz um alerta ``unknown ca`` limpo, já coberto pelo
 fragmento acima. Essa variante ``ssl.SSLEOFError`` também
 passou a ser reconhecida por
 :func:`is_likely_client_certificate_rejection` (fragmento
@@ -54,7 +54,7 @@ também pode surgir de uma instabilidade de rede comum sem relação com o
 certificado, então essa variante não interrompe o retry por si só,
 diferente do alerta limpo (``CONFIRMED``). Em nenhuma das duas variantes
 a exceção é tratada como transitória por
-``is_transient_network_failure`` (que ja exclui todo ``ssl.SSLError``,
+``is_transient_network_failure`` (que já exclui todo ``ssl.SSLError``,
 incluindo ``ssl.SSLEOFError``) -- a retriabilidade do sinal ``PROBABLE``
 vem de um caminho separado, em
 :meth:`ErrorClassifier.retriable_or_reraise`.
@@ -121,7 +121,7 @@ _PREMATURE_EOF_MESSAGE_FRAGMENTS: Final[tuple[str, ...]] = (
 #: CLIENTE pelo servidor durante o handshake mTLS (revogado, expirado, não
 #: confiável, CA desconhecida, ou conexão corrompida após o Finished).
 #: Cobrem tanto o código de alerta OpenSSL (com "_") quanto o texto
-#: descritivo (com espaço), ja que ``ssl.SSLError`` mistura os dois
+#: descritivo (com espaço), já que ``ssl.SSLError`` mistura os dois
 #: conforme a plataforma.
 #:
 #: ``unknown_ca``/``unknown ca`` foi adicionado após reprodução com
@@ -305,10 +305,10 @@ class ErrorClassifier:
         Args:
             response: resposta recebida do servidor de autorização.
             trace: contexto de trace W3C enviado na requisição.
-            body_text: corpo da resposta ja lido pelo chamador (ex.: via
+            body_text: corpo da resposta já lido pelo chamador (ex.: via
                 ``TokenResponseGuard.read_body`` sobre uma resposta em
                 streaming, respeitando o limite de tamanho). Quando ``None`` (compatibilidade com
-                chamadores que ja tem a resposta integralmente lida em
+                chamadores que já têm a resposta integralmente lida em
                 memória, ex.: ``discovery.py`` e os testes deste módulo),
                 cai de volta para ``response.text``.
 
@@ -389,7 +389,7 @@ def is_likely_client_certificate_rejection(exc: BaseException | None) -> CertRej
     PROBABLE: qualquer ``ssl.SSLEOFError`` (tipo exato, não
     ``ssl.SSLError`` genérico) cuja mensagem seja a variante sem alerta
     textual que builds de OpenSSL sob TLS 1.3 produzem para o mesmo
-    cenário -- sinal ambíguo, ja que o mesmo texto também pode surgir de
+    cenário -- sinal ambíguo, já que o mesmo texto também pode surgir de
     uma instabilidade de rede comum sem relação com o certificado.
 
     Validado com handshake mTLS real sob TLS 1.2 (alerta ``unknown ca``,
@@ -469,7 +469,7 @@ def _build_http_error_message(
         status_code: status HTTP da resposta.
         response: resposta recebida do servidor de autorização.
         trace: contexto de trace W3C enviado na requisição.
-        body_text: corpo ja lido pelo chamador (ver ``http_failure``);
+        body_text: corpo já lido pelo chamador (ver ``http_failure``);
             quando ``None``, usa ``response.text``.
 
     Returns:

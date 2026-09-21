@@ -12,7 +12,7 @@ não deste módulo: aqui só existe a mecânica de uma resolução isolada.
 Não faz parte da API pública da biblioteca (não exportado em
 ``__init__.py``).
 
-O ``httpx.Client`` e recebido por injeção, nunca criado internamente —
+O ``httpx.Client`` é recebido por injeção, nunca criado internamente —
 garante que a descoberta reutiliza a mesma configuração de TLS/mTLS e os
 mesmos timeouts do cliente principal (RF-09 item 3), sem duplicar essa
 configuração aqui. Cada chamada gera seu próprio :class:`TraceContext`
@@ -63,10 +63,10 @@ class SmartConfigurationDiscovery:
     __slots__ = ("_http_client",)
 
     def __init__(self, http_client: httpx.Client) -> None:
-        """Cria a descoberta sobre um ``httpx.Client`` ja configurado.
+        """Cria a descoberta sobre um ``httpx.Client`` já configurado.
 
         Args:
-            http_client: cliente HTTP injetado pelo chamador, ja
+            http_client: cliente HTTP injetado pelo chamador, já
                 configurado com o ``ssl_context`` (TLS/mTLS) e os
                 timeouts que o cliente principal usara — esta classe
                 não cria nem configura seu próprio ``httpx.Client``.
@@ -78,8 +78,8 @@ class SmartConfigurationDiscovery:
 
         Args:
             fhir_base: URL base do servidor FHIR (sem o sufixo
-                ``/.well-known/smart-configuration``, que e adicionado
-                por este método). Barra final e tolerada.
+                ``/.well-known/smart-configuration``, que é adicionado
+                por este método). Barra final é tolerada.
 
         Returns:
             O ``token_endpoint`` resolvido.
@@ -131,7 +131,7 @@ class SmartConfigurationDiscovery:
 
         # RF-10/RF-18: o token_endpoint devolvido
         # pelo servidor de descoberta precisa ser validado quanto ao
-        # esquema, assim como um token_endpoint informado manualmente ja é
+        # esquema, assim como um token_endpoint informado manualmente já é
         # em builder.py -- um .well-known comprometido (ou um MITM capaz de
         # responder por ele) não pode fazer este cliente enviar o
         # client_assertion (e credenciais de mTLS) para um endpoint sem TLS.
@@ -203,12 +203,12 @@ class SmartConfigurationDiscovery:
             return response.json()
         except ValueError as exc:
             _LOG.error(
-                "Resposta de descoberta SMART não e JSON válido em %s traceId=%s",
+                "Resposta de descoberta SMART não é JSON válido em %s traceId=%s",
                 well_known_url,
                 trace.trace_id,
             )
             raise SmartTokenError(
-                f"Resposta de descoberta SMART em {well_known_url} não e JSON válido" f" (traceId={trace.trace_id})",
+                f"Resposta de descoberta SMART em {well_known_url} não é JSON válido" f" (traceId={trace.trace_id})",
                 exc,
             )
 
@@ -227,7 +227,7 @@ def _build_well_known_url(fhir_base: str) -> str:
 
 def _extract_token_endpoint(payload: Any) -> str | None:
     """Extrai o campo ``token_endpoint`` de um documento de descoberta
-    ja decodificado.
+    já decodificado.
 
     Args:
         payload: corpo JSON decodificado da resposta (tipo arbitrário —

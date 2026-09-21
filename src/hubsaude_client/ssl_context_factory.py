@@ -3,7 +3,7 @@ servidor e (opcionalmente) do certificado/chave do cliente para mTLS.
 
 - ssl.SSLContext.load_cert_chain() exige caminho de arquivo real; os
   parâmetros chegam sempre como objetos em memória (PrivateKeyTypes/
-  x509.Certificate), então um arquivo temporário de vida curta e sempre
+  x509.Certificate), então um arquivo temporário de vida curta é sempre
   necessário para a apresentação do certificado do cliente em mTLS.
 - ssl.SSLContext(PROTOCOL_TLS_CLIENT) NÃO carrega nenhum CA
   automaticamente -- e preciso chamar load_default_certs()
@@ -44,7 +44,7 @@ def build_ssl_context(
     Args:
         server_trust_anchor_path: caminho de um certificado PEM do servidor
             a confiar; ignorado se ``trusted_cert`` for fornecido.
-        trusted_cert: certificado do servidor a confiar, ja em memória; tem
+        trusted_cert: certificado do servidor a confiar, já em memória; tem
             precedência sobre ``server_trust_anchor_path``.
         tls_protocol: protocolo TLS ("TLSv1.2" ou "TLSv1.3").
         client_key: chave privada do cliente, para mTLS.
@@ -90,7 +90,7 @@ def _configure_trust(
         check_certificate_validity(trusted_cert, _subject_of(trusted_cert))
         context.load_verify_locations(cadata=_to_pem_str(trusted_cert))
     elif server_trust_anchor_path is not None:
-        trusted = load_certificate(server_trust_anchor_path)  # ja valida período de validade
+        trusted = load_certificate(server_trust_anchor_path)  # já valida período de validade
         context.load_verify_locations(cadata=_to_pem_str(trusted))
     else:
         context.load_default_certs(ssl.Purpose.SERVER_AUTH)
@@ -108,15 +108,15 @@ def _load_client_cert_chain(
     e um objeto ``bytes`` imutável (retorno de
     ``PrivateKeyTypes.private_bytes()`` da biblioteca ``cryptography``, que
     só devolve ``bytes``, nunca ``bytearray``) e por isso NÃO pode ser
-    zerado explicitamente após o uso, diferente do padrão ja usado em
+    zerado explicitamente após o uso, diferente do padrão já usado em
     outras partes desta biblioteca para senhas (``bytearray`` mutável,
     zerado após o uso -- ver ``pem_loader.clear_password``). O conteúdo
     da chave privada em texto claro permanece em memória até o coletor de
     lixo do Python decidir liberar o objeto, sem controle explícito deste
-    código. Mesma limitação, documentada, ja aceita para o PIN de
-    ``strategy_factory.from_pkcs11`` (também ``str`` imutável) -- este e o
+    código. Mesma limitação, documentada, já aceita para o PIN de
+    ``strategy_factory.from_pkcs11`` (também ``str`` imutável) -- este é o
     equivalente para a chave privada neste ponto específico. O arquivo
-    temporário em si não e o problema: e criado com permissão
+    temporário em si não é o problema: é criado com permissão
     leitura/escrita apenas para o dono e removido logo em seguida, no
     ``finally``.
     """
@@ -126,7 +126,7 @@ def _load_client_cert_chain(
         encryption_algorithm=serialization.NoEncryption(),
     )
     cert_pem = client_cert.public_bytes(serialization.Encoding.PEM)
-    # tempfile.mkstemp() ja cria o arquivo com permissão 0o600 (leitura/
+    # tempfile.mkstemp() já cria o arquivo com permissão 0o600 (leitura/
     # escrita apenas para o dono) por padrão nesta plataforma -- sem
     # necessidade de os.chmod() explícito logo em seguida.
     fd, path_str = tempfile.mkstemp(suffix=".pem")
