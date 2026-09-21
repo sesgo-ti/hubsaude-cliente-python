@@ -1,7 +1,7 @@
 """Orquestração principal do SDK: ``SmartTokenClient`` (SMART Backend
 Services, RF-01/RF-02/RF-03/RF-05/RF-07/RF-09/RF-17).
 
-E a peça central que os demais colaboradores ja
+E a peça central que os demais colaboradores já
 implementados (``ports.SigningStrategy``/``TlsContextProvider``,
 ``token_cache.TokenCacheStrategy``, ``error_classifier.ErrorClassifier``,
 ``response_guard.TokenResponseGuard``, ``discovery.SmartConfigurationDiscovery``,
@@ -23,14 +23,14 @@ Concorrência (RF-05, RNF-01):
   ``hash(scope) % _SCOPE_LOCK_STRIPES`` garante, na prática, no máximo
   uma requisição de renovação em voo por scope (*single-flight*), com
   memória O(1) em relação ao número de scopes distintos (RF-05 item 3).
-- *Double-checked locking*: o cache e reconsultado após adquirir o lock
+- *Double-checked locking*: o cache é reconsultado após adquirir o lock
   do stripe, para que uma thread que esperou o lock reaproveite o
-  resultado ja obtido por outra em vez de refazer a chamada de rede
+  resultado já obtido por outra em vez de refazer a chamada de rede
   (RF-05 item 2).
 - Um ``_ReadersWriterLock`` privado (sem equivalente direto no stdlib)
   protege o ciclo de vida: ``obtain_token``/``obtain_token_response``
   tomam o lock de leitura (permite fan-out concorrente entre scopes
-  distintos); ``close()`` toma o lock de escrita, que só e concedido
+  distintos); ``close()`` toma o lock de escrita, que só é concedido
   após todas as leituras em voo terminarem -- fechamento idempotente
   que aguarda operações em curso antes de liberar recursos (RNF-01).
 
@@ -70,7 +70,7 @@ from hubsaude_client.trace import TraceContext
 
 if TYPE_CHECKING:
     # Só resolvido por mypy/type checkers -- evita import em runtime de
-    # builder.py (que ja importa este módulo em runtime dentro de
+    # builder.py (que já importa este módulo em runtime dentro de
     # build()), o que criaria um ciclo de import real.
     from hubsaude_client.builder import HubContext
 
@@ -173,13 +173,13 @@ class SmartTokenClient:
         """Constrói o cliente pronto para uso.
 
         Não chamado diretamente pelo consumidor externo -- ver
-        :class:`hubsaude_client.builder.SmartTokenClientBuilder`, que ja
+        :class:`hubsaude_client.builder.SmartTokenClientBuilder`, que já
         validou (fail-fast) toda a configuração recebida aqui: exatamente
         um entre ``token_endpoint``/``fhir_base`` está preenchido,
-        ``jwt_algorithm`` ja foi normalizado/validado, timeouts são
+        ``jwt_algorithm`` já foi normalizado/validado, timeouts são
         positivos, etc. Este construtor não revalida essas invariantes.
 
-        Quando ``fhir_base`` e informado, a resolução do token endpoint
+        Quando ``fhir_base`` é informado, a resolução do token endpoint
         via ``.well-known/smart-configuration`` (RF-09) acontece aqui,
         uma única vez (RF-09 item 5), usando o mesmo ``httpx.Client``
         (mesma configuração TLS/mTLS e mesmos timeouts) que este cliente
@@ -189,10 +189,10 @@ class SmartTokenClient:
             client_id: identificador do cliente (credenciamento prévio).
             token_endpoint: URL do token endpoint, quando conhecida
                 explicitamente. Mutuamente exclusivo com ``fhir_base``
-                (ja validado pelo builder).
+                (já validado pelo builder).
             fhir_base: URL base FHIR para descoberta via
                 ``.well-known/smart-configuration``, quando
-                ``token_endpoint`` não e informado.
+                ``token_endpoint`` não é informado.
             signing_strategy: estratégia de assinatura do
                 ``client_assertion`` (port ``ports.SigningStrategy``).
             tls_context_provider: fornecedor do contexto TLS/mTLS (port
@@ -201,12 +201,12 @@ class SmartTokenClient:
             fault_tolerance: timeouts, TTL da assertion e número máximo
                 de tentativas em falha transitória.
             token_cache: estratégia de cache de tokens por scope.
-            jwt_algorithm: algoritmo JWT (``alg``) ja normalizado
+            jwt_algorithm: algoritmo JWT (``alg``) já normalizado
                 (uppercase) e validado pelo builder.
             key_id: ``kid`` a incluir no header do JWT, ou ``None`` para
                 omiti-lo.
             hub_context: contexto de Guia de Implementação (claim
-                ``hub_ctx``) ja validado pelo builder, ou ``None`` para
+                ``hub_ctx``) já validado pelo builder, ou ``None`` para
                 omitir o claim.
 
         Raises:
@@ -238,10 +238,10 @@ class SmartTokenClient:
         elif token_endpoint is not None:
             self._token_endpoint = token_endpoint
         else:
-            # Inalcançável: o builder ja garante exclusividade mútua entre
+            # Inalcançável: o builder já garante exclusividade mútua entre
             # token_endpoint/fhir_base antes de construir este cliente.
             # Sem "assert" aqui (removido em bytecode otimizado, ver B101,
-            # mesmo critério ja aplicado em builder.py) -- SmartTokenError
+            # mesmo critério já aplicado em builder.py) -- SmartTokenError
             # explícito também ajuda o narrowing de tipos do mypy.
             raise SmartTokenError(  # pragma: no cover -- guarda defensiva inalcançável, ver comentário acima
                 "estado inesperado: nem token_endpoint nem fhir_base preenchidos"
@@ -271,7 +271,7 @@ class SmartTokenClient:
 
         Raises:
             SmartTokenError: em qualquer falha de obtenção (ver
-                :meth:`obtain_token_response`), ou se o cliente ja tiver
+                :meth:`obtain_token_response`), ou se o cliente já tiver
                 sido fechado.
         """
         return self.obtain_token_response(scope).access_token
@@ -297,7 +297,7 @@ class SmartTokenClient:
             SmartTokenError: falha ao contatar o servidor (transporte
                 esgotado, resposta HTTP != 200, corpo inválido/excedendo
                 o limite, ou suspeita de rejeição do certificado de
-                cliente no mTLS), ou se o cliente ja tiver sido fechado.
+                cliente no mTLS), ou se o cliente já tiver sido fechado.
             SigningError: falha criptográfica na estratégia de assinatura.
         """
         with self._rw_lock.read_lock():
@@ -310,7 +310,7 @@ class SmartTokenClient:
 
             stripe_lock = self._scope_locks[hash(normalized_scope) % _SCOPE_LOCK_STRIPES]
             with stripe_lock:
-                # Double-checked: outra thread pode ja ter renovado
+                # Double-checked: outra thread pode já ter renovado
                 # enquanto esta esperava o lock do stripe.
                 cached = self._token_cache.cached_if_valid(normalized_scope)
                 if cached is not None:
@@ -340,8 +340,8 @@ class SmartTokenClient:
     def get_token_endpoint(self) -> str:
         """Retorna o token endpoint efetivo em uso.
 
-        Quando o cliente foi construído com ``fhir_base``, este e o
-        endpoint ja resolvido pela descoberta SMART (RF-09) -- nunca a
+        Quando o cliente foi construído com ``fhir_base``, este é o
+        endpoint já resolvido pela descoberta SMART (RF-09) -- nunca a
         URL base FHIR original.
         """
         return self._token_endpoint
@@ -409,7 +409,7 @@ class SmartTokenClient:
         ``ports.SigningStrategy``, ver docstring la).
 
         Falhas aqui são apenas logadas (não propagadas): o cliente já está
-        encerrando e o cache/http client ja foram liberados nesta chamada
+        encerrando e o cache/http client já foram liberados nesta chamada
         a :meth:`close`.
         """
         close_fn = getattr(self._signing_strategy, "close", None)
@@ -437,15 +437,15 @@ class SmartTokenClient:
     # ------------------------------------------------------------------
 
     def _check_not_closed(self) -> None:
-        """Levanta erro explícito se o cliente ja tiver sido fechado.
+        """Levanta erro explícito se o cliente já tiver sido fechado.
 
         Raises:
-            SmartTokenError: se :meth:`close` ja tiver sido chamado.
+            SmartTokenError: se :meth:`close` já tiver sido chamado.
         """
         if self._closed:
             raise SmartTokenError(
-                f"SmartTokenClient (clientId={self._client_id}) ja foi fechado (close());"
-                " não e possível obter novos tokens"
+                f"SmartTokenClient (clientId={self._client_id}) já foi fechado (close());"
+                " não é possível obter novos tokens"
             )
 
     def _fetch_token(self, normalized_scope: str):  # type: ignore[no-untyped-def]
@@ -461,7 +461,7 @@ class SmartTokenClient:
         imediato, sem nova tentativa (RF-03 item 3/4, RF-07 item 2).
 
         Args:
-            normalized_scope: scope ja normalizado (``""`` para "sem
+            normalized_scope: scope já normalizado (``""`` para "sem
                 scope").
 
         Returns:
@@ -493,15 +493,15 @@ class SmartTokenClient:
                 # ``stream=True`` (via Client.stream(), não Client.post()) é
                 # essencial para que o limite de tamanho do corpo em
                 # response_guard.read_body() interrompa a leitura durante o
-                # transporte -- sem streaming, httpx ja baixa o corpo
+                # transporte -- sem streaming, httpx já baixa o corpo
                 # inteiro para memória antes de response_guard poder agir,
                 # tornando a proteção apenas cosmética.
                 with self._http_client.stream("POST", self._token_endpoint, data=data, headers=headers) as response:
                     if response.status_code == 200:
                         return self._response_guard.parse_success_response(response, trace)
-                    # Caminho de erro: também le em streaming, respeitando o
+                    # Caminho de erro: também lê em streaming, respeitando o
                     # mesmo limite de tamanho (response.text exigiria o
-                    # corpo inteiro ja lido, o que httpx não faz sozinho em
+                    # corpo inteiro já lido, o que httpx não faz sozinho em
                     # modo stream -- é preciso ler explicitamente aqui,
                     # ainda dentro do "with", antes da conexão ser fechada).
                     body_bytes = self._response_guard.read_body(response, trace)
@@ -588,9 +588,9 @@ class _ReadersWriterLock:
 
     Implementado com um ``threading.Condition`` sobre um
     ``threading.Lock`` -- sem prioridade especial para escritores
-    (aceitável aqui: ``close()`` e chamado no máximo uma vez, no
+    (aceitável aqui: ``close()`` é chamado no máximo uma vez, no
     encerramento do processo, então inanição do escritor por leitores
-    contínuos não e um cenário realista para este uso).
+    contínuos não é um cenário realista para este uso).
     """
 
     def __init__(self) -> None:

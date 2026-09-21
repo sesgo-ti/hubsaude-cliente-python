@@ -10,16 +10,16 @@ Decisão de design: optou-se por um **builder mutável com métodos encadeáveis
 ``@dataclass`` + ``build()`` sobre campos públicos. Motivo: a classe reúne
 mais de uma dezena de parâmetros opcionais com validação cruzada (ex.:
 ``token_endpoint``/``fhir_base`` mutuamente exclusivos, ``hub_context``
-exigindo ``ig``/``versão`` juntos) — um builder fluente deixa a ordem de
+exigindo ``ig``/``versao`` juntos) — um builder fluente deixa a ordem de
 chamadas irrelevante e a intenção de cada parâmetro explícita no ponto de
 uso, o que uma dataclass com dezenas de campos posicionais/kwargs não
 oferece com a mesma clareza. O builder em si **não precisa ser
 thread-safe**: construção e passo único no bootstrap da aplicação
-integradora (quem precisa ser thread-safe e o ``SmartTokenClient``
+integradora (quem precisa ser thread-safe é o ``SmartTokenClient``
 retornado — responsabilidade de ``client.py``).
 
 Métodos de conveniência para as fontes de credencial mais comuns
-(carga de PEM, PKCS#12, trust anchor) ja estão todos
+(carga de PEM, PKCS#12, trust anchor) já estão todos
 ligados nesta base de código. ``private_key_pem()`` delega a
 ``strategy_factory.from_pem_file``/``SigningSettings``;
 ``certificate_pem()`` e ``server_trust_anchor()`` delegam a
@@ -39,8 +39,8 @@ se encaixa nos atalhos acima (ex.: cofre de segredos remoto).
 PKCS#11/HSM (``strategy_factory.from_pkcs11``) já está disponível
 mas **não tem um método de conveniência dedicado no builder** -- a
 configuração (módulo, token, PIN) não tem um equivalente natural de
-"caminho de arquivo" como os demais atalhos, então o uso e via
-``.signing_strategy(...)`` com a factory, ja funcional hoje:
+"caminho de arquivo" como os demais atalhos, então o uso é via
+``.signing_strategy(...)`` com a factory, já funcional hoje:
 
     SmartTokenClientBuilder()
         .signing_strategy(strategy_factory.from_pkcs11(
@@ -56,7 +56,7 @@ configuração (módulo, token, PIN) não tem um equivalente natural de
         tls_context_provider: TlsContextProvider,
         fault_tolerance: FaultToleranceConfig,
         token_cache: TokenCacheStrategy,
-        jwt_algorithm: str,              # ja normalizado (uppercase) e validado
+        jwt_algorithm: str,              # já normalizado (uppercase) e validado
         key_id: str | None,
         hub_context: HubContext | None,
     )
@@ -65,7 +65,7 @@ Quando ``fhir_base`` e informado (em vez de ``token_endpoint``), a
 resolução via ``SmartConfigurationDiscovery`` (RF-09) **não** acontece
 aqui: RF-09 item 5 exige que ela ocorra uma única vez, na construção do
 cliente, usando a mesma configuração TLS/mTLS e os mesmos timeouts do
-cliente principal — como e ``client.py`` quem monta o
+cliente principal — como é ``client.py`` quem monta o
 ``httpx.Client`` interno a partir de ``tls_context_provider``,
 é ele quem deve, no seu ``__init__``, invocar
 ``SmartConfigurationDiscovery`` com esse mesmo ``httpx.Client`` quando
@@ -147,11 +147,11 @@ class HubContext:
     ``client-assertion-contexto-ig.md`` Sec3.4).
 
     Instâncias só são construídas por :meth:`SmartTokenClientBuilder.hub_context`
-    após validação de formato -- ``ig``/``versão`` aqui ja estão validados.
+    após validação de formato -- ``ig``/``versao`` aqui já estão validados.
 
     Attributes:
         ig: alias do Guia de Implementação (``[a-z][a-z0-9-]{1,30}``).
-        versão: versão SemVer completa (``MAJOR.MINOR.PATCH``, sem
+        versao: versão SemVer completa (``MAJOR.MINOR.PATCH``, sem
             pre-release).
     """
 
@@ -179,7 +179,7 @@ class SmartTokenClientBuilder:
     """Builder fluente e público do ``SmartTokenClient``.
 
     Instâncias são de uso único e descartável: configure via os métodos
-    encadeáveis abaixo e chame :meth:`build` uma vez. Não e thread-safe
+    encadeáveis abaixo e chame :meth:`build` uma vez. Não é thread-safe
     (ver nota de design no docstring do módulo) -- não compartilhe uma
     instância de builder entre threads.
     """
@@ -270,7 +270,7 @@ class SmartTokenClientBuilder:
         """Define a estratégia de assinatura do ``client_assertion`` (obrigatório).
 
         Aceita qualquer implementação que satisfaça ``ports.SigningStrategy``
-        -- em memória, PEM ja carregado por fora, HSM/PKCS#11 (via
+        -- em memória, PEM já carregado por fora, HSM/PKCS#11 (via
         ``strategy_factory.from_pkcs11``), etc. Mutuamente exclusivo com
         :meth:`private_key_pem` -- exatamente um dos dois deve ser
         informado antes de :meth:`build`.
@@ -350,7 +350,7 @@ class SmartTokenClientBuilder:
 
         Valores ``<= 0`` são normalizados para o padrão por
         ``FaultToleranceConfig`` -- e :meth:`build` garante que o mesmo
-        valor ja normalizado (nunca o valor cru passado aqui) é o que
+        valor já normalizado (nunca o valor cru passado aqui) é o que
         chega ao cache de tokens efetivamente usado pelo cliente.
         """
         self._token_cache_margin_seconds = seconds
@@ -369,12 +369,12 @@ class SmartTokenClientBuilder:
 
         Ambos os argumentos são obrigatórios juntos -- não há forma de
         limpar apenas um dos dois depois de configurado. Quando nenhuma
-        chamada a este método e feita, o claim ``hub_ctx`` e omitido do
-        JWT (RF-01 item 3), que e o padrão.
+        chamada a este método é feita, o claim ``hub_ctx`` é omitido do
+        JWT (RF-01 item 3), que é o padrão.
 
         Args:
             ig: alias do Guia de Implementação (``[a-z][a-z0-9-]{1,30}``).
-            versão: versão SemVer completa (``MAJOR.MINOR.PATCH``).
+            versao: versão SemVer completa (``MAJOR.MINOR.PATCH``).
         """
         self._hub_context_ig = ig
         self._hub_context_versao = versao
@@ -401,7 +401,7 @@ class SmartTokenClientBuilder:
         Args:
             path: caminho para o arquivo PEM da chave privada.
             password: senha para decriptar a chave (``None`` se não
-                criptografada). E consumida: repassada a ``pem_loader``, que
+                criptografada). É consumida: repassada a ``pem_loader``, que
                 zera o array ao final de :meth:`build`. O chamador não deve
                 reutiliza-la.
 
@@ -443,12 +443,12 @@ class SmartTokenClientBuilder:
         mesmo bundle fornece tanto a estratégia de assinatura do
         ``client_assertion`` quanto o certificado de cliente para mTLS.
         Mutuamente exclusivo com :meth:`private_key_pem`/:meth:`signing_strategy`
-        (fonte de assinatura) e com :meth:`certificate_pem` (ja fornece seu
+        (fonte de assinatura) e com :meth:`certificate_pem` (já fornece seu
         próprio certificado).
 
         Args:
             path: caminho para o arquivo PKCS#12 (``.p12``/``.pfx``).
-            password: senha do bundle. E consumida: repassada a
+            password: senha do bundle. É consumida: repassada a
                 ``strategy_factory``, que zera o array ao final de
                 :meth:`build` (RNF-03). O chamador não deve reutiliza-la.
             alias: aceito para manter a mesma assinatura de método entre as
@@ -469,13 +469,13 @@ class SmartTokenClientBuilder:
         """Define um trust anchor customizado (substitui o trust store padrão).
 
         Aceita um caminho de arquivo PEM ou um certificado ``x509.Certificate``
-        ja em memória (ex: obtido dinamicamente em testes de integração),
+        já em memória (ex: obtido dinamicamente em testes de integração),
         resolvido num único método via dispatch por tipo. Uso pretendido:
         homologação/simuladores locais, não produção (que deve confiar no
         trust store padrão do sistema).
 
         Args:
-            trust_anchor: caminho do certificado PEM, ou o certificado ja
+            trust_anchor: caminho do certificado PEM, ou o certificado já
                 carregado em memória.
         """
         if isinstance(trust_anchor, x509.Certificate):
@@ -487,7 +487,7 @@ class SmartTokenClientBuilder:
     def tls_protocol(self, tls_protocol: str) -> SmartTokenClientBuilder:
         """Sobrescreve a versão do protocolo TLS (padrão: ``TlsSettings``/"TLSv1.3").
 
-        Efetivo apenas quando o contexto TLS e resolvido internamente pelos
+        Efetivo apenas quando o contexto TLS é resolvido internamente pelos
         métodos de conveniência (``certificate_pem``/``client_key_store``/
         ``server_trust_anchor``, ou nenhum deles, usando o trust store
         padrão) -- sem efeito, e mutuamente exclusivo, com
@@ -513,7 +513,7 @@ class SmartTokenClientBuilder:
         ``private_key_pem``/``tls_context_provider`` -> exclusividade e
         esquema de ``token_endpoint``/``fhir_base`` -> ``jwt_algorithm`` ->
         timeouts -> ``token_cache_max_entries`` -> ``hub_context``. Nenhuma
-        chamada de rede e feita aqui (a eventual descoberta via
+        chamada de rede é feita aqui (a eventual descoberta via
         ``fhir_base`` acontece dentro de ``SmartTokenClient.__init__`` --
         ver nota no docstring do módulo).
 
@@ -544,11 +544,11 @@ class SmartTokenClientBuilder:
         )
         token_cache = TokenCacheStrategy(
             enabled=self._enable_token_cache,
-            # Usa o valor ja normalizado por FaultToleranceConfig (nunca
+            # Usa o valor já normalizado por FaultToleranceConfig (nunca
             # self._token_cache_margin_seconds cru): TokenCacheStrategy não
             # normaliza internamente (ver docstring de seu __init__), então
             # repassar o valor cru aqui reintroduziria margens <= 0 vivas no
-            # cache mesmo quando fault_tolerance ja caiu para o default --
+            # cache mesmo quando fault_tolerance já caiu para o default --
             # os dois colaboradores devem enxergar exatamente a mesma margem
             # efetiva.
             margin_seconds=fault_tolerance.token_cache_margin_seconds,
@@ -598,7 +598,7 @@ class SmartTokenClientBuilder:
             A estratégia efetiva; a chave privada em memória reaproveitável
             para mTLS (``None`` quando a estratégia veio de HSM/cofre de
             segredos, que nunca expõe a chave); e o certificado de cliente
-            ja resolvido quando a fonte foi ``client_key_store`` (``None``
+            já resolvido quando a fonte foi ``client_key_store`` (``None``
             nos demais casos -- ``certificate_pem`` resolve o certificado
             separadamente em :meth:`_resolve_tls_context_provider`).
         """
@@ -610,9 +610,9 @@ class SmartTokenClientBuilder:
             )
 
         if self._client_key_store_path is not None:
-            # _client_key_store_password e sempre preenchida junto com
+            # _client_key_store_password é sempre preenchida junto com
             # _client_key_store_path (as duas só são atribuídas juntas, em
-            # client_key_store()) -- o None aqui e inalcançável na prática,
+            # client_key_store()) -- o None aqui é inalcançável na prática,
             # mas mypy não faz narrowing entre campos distintos; SmartTokenError
             # explícito narrowa o tipo para o restante do bloco.
             if self._client_key_store_password is None:
@@ -675,7 +675,7 @@ class SmartTokenClientBuilder:
             if client_cert_from_key_store is not None:
                 raise SmartTokenError(
                     "certificate_pem e client_key_store são mutuamente exclusivos"
-                    " (client_key_store ja fornece seu próprio certificado)"
+                    " (client_key_store já fornece seu próprio certificado)"
                 )
             if client_key is None:
                 raise SmartTokenError(
@@ -700,7 +700,7 @@ class SmartTokenClientBuilder:
     def _require_signing_strategy(self) -> SigningStrategy:
         if self._signing_strategy is None:
             raise SmartTokenError(
-                "signing_strategy e obrigatório (client_credentials + private_key_jwt"
+                "signing_strategy é obrigatório (client_credentials + private_key_jwt"
                 " exige uma estratégia de assinatura do client_assertion, via"
                 " signing_strategy() ou private_key_pem())"
             )
@@ -714,8 +714,8 @@ class SmartTokenClientBuilder:
     def _require_tls_context_provider(self) -> TlsContextProvider:
         if self._tls_context_provider is None:
             raise SmartTokenError(
-                "tls_context_provider e obrigatório (toda comunicação com o"
-                " servidor de autorização e feita sobre TLS/mTLS)"
+                "tls_context_provider é obrigatório (toda comunicação com o"
+                " servidor de autorização é feita sobre TLS/mTLS)"
             )
         if not isinstance(self._tls_context_provider, TlsContextProvider):
             raise SmartTokenError(
@@ -731,7 +731,7 @@ class SmartTokenClientBuilder:
         token_endpoint = _normalize_optional_str(self._token_endpoint)
         fhir_base = _normalize_optional_str(self._fhir_base)
         if token_endpoint is None and fhir_base is None:
-            raise SmartTokenError("informe token_endpoint() ou fhir_base() -- exatamente um dos dois e obrigatório")
+            raise SmartTokenError("informe token_endpoint() ou fhir_base() -- exatamente um dos dois é obrigatório")
         if token_endpoint is not None and fhir_base is not None:
             raise SmartTokenError(
                 "token_endpoint e fhir_base são mutuamente exclusivos (RF-09 item 2); informe apenas um dos dois"
@@ -741,7 +741,7 @@ class SmartTokenClientBuilder:
         elif fhir_base is not None:
             require_https_scheme(fhir_base, "fhir_base")
         else:
-            # Inalcançável: os dois ifs acima ja garantem que exatamente um
+            # Inalcançável: os dois ifs acima já garantem que exatamente um
             # dos dois está preenchido neste ponto. Sem "assert" (removido
             # em bytecode otimizado, ver B101) -- SmartTokenError explícito
             # também ajuda o narrowing de tipos do mypy no ramo anterior.
@@ -749,7 +749,7 @@ class SmartTokenClientBuilder:
                 "estado inesperado: nem token_endpoint nem fhir_base preenchidos após validação de exclusividade mútua"
             )
         # Reatribui as versões normalizadas (strip aplicado), preservando o
-        # contrato de que build() só consome valores ja normalizados.
+        # contrato de que build() só consome valores já normalizados.
         self._token_endpoint = token_endpoint
         self._fhir_base = fhir_base
 
@@ -757,8 +757,8 @@ class SmartTokenClientBuilder:
         """Valida e normaliza (uppercase) o algoritmo JWT configurado.
 
         Delega a validação propriamente dita para ``algorithms.resolve``,
-        que ja lança ``SmartTokenError`` com a lista de algoritmos válidos
-        quando o valor informado não e reconhecido (RF-16 item 2).
+        que já lança ``SmartTokenError`` com a lista de algoritmos válidos
+        quando o valor informado não é reconhecido (RF-16 item 2).
         """
         return algorithms.resolve(self._jwt_algorithm).jwt_algorithm
 
@@ -774,7 +774,7 @@ class SmartTokenClientBuilder:
 
         Validado aqui (com ``SmartTokenError``, o tipo de exceção público
         da lib) além de em ``TokenCacheStrategy.__init__`` (que lança
-        ``ValueError``) -- defesa em profundidade; este builder e o ponto
+        ``ValueError``) -- defesa em profundidade; este builder é o ponto
         de entrada público e deve falhar com o tipo de exceção esperado
         pelos consumidores.
         """
@@ -791,7 +791,7 @@ class SmartTokenClientBuilder:
             return None
         if ig is None or versao is None:
             raise SmartTokenError(
-                "hub_context exige ig e versão juntos; informe os dois em uma única chamada a hub_context(ig, versão)"
+                "hub_context exige ig e versao juntos; informe os dois em uma única chamada a hub_context(ig, versao)"
             )
         if not _HUB_CONTEXT_IG_PATTERN.match(ig):
             raise SmartTokenError(f"hub_context: ig inválido ({ig!r}); deve seguir o padrão [a-z][a-z0-9-]{{1,30}}")
@@ -806,8 +806,8 @@ class SmartTokenClientBuilder:
         """Loga aviso (não bloqueia) quando o TTL excede o recomendado.
 
         RF-01 item 4 usa "DEVERIA" (SHOULD, RFC 2119) -- o servidor
-        rejeita ``exp`` acima de ``iat + 300``, mas isso e responsabilidade
-        do orquestrador (``client.py``) reportar como falha; aqui e só um
+        rejeita ``exp`` acima de ``iat + 300``, mas isso é responsabilidade
+        do orquestrador (``client.py``) reportar como falha; aqui é só um
         aviso preventivo na construção.
         """
         if self._assertion_ttl_seconds > _RECOMMENDED_MAX_ASSERTION_TTL_SECONDS:
@@ -833,7 +833,7 @@ def _require_non_blank(value: str | None, field_name: str) -> str:
         SmartTokenError: se ``value`` for ``None`` ou vazio após ``strip()``.
     """
     if value is None or not value.strip():
-        raise SmartTokenError(f"{field_name} e obrigatório e não pode ser vazio")
+        raise SmartTokenError(f"{field_name} é obrigatório e não pode ser vazio")
     return value.strip()
 
 
