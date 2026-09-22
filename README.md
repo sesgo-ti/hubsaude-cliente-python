@@ -1,5 +1,6 @@
 # hubsaude-cliente-python
 
+[![Version](https://img.shields.io/badge/Version-0.1.0-yellow)](CHANGELOG.md)
 [![Python 3.12+](https://img.shields.io/badge/Python-3.12%2B-blue)](https://www.python.org/)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 
@@ -597,9 +598,10 @@ A release é disparada por uma tag `vMAJOR.MINOR.PATCH`
 
 O empacotamento Python não injeta a versão a partir da tag: a versão
 publicada é sempre a que está commitada em `pyproject.toml`
-(`[project].version`). A tag apenas dispara o workflow, que a valida
-contra o `pyproject.toml` e falha se as duas divergirem. Logo, primeiro
-o bump da versão (commitado/mergeado), depois a tag:
+(`[project].version`). A tag apenas dispara o workflow, que valida
+contra ela o `pyproject.toml`, a seção do [`CHANGELOG.md`](CHANGELOG.md)
+e o badge de versão no topo deste README — falhando se qualquer um
+divergir. Logo, primeiro o PR com os três atualizados, depois a tag:
 
 ```bash
 git tag v0.2.0

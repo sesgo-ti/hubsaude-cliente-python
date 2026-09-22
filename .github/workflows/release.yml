@@ -23,8 +23,10 @@ jobs:
 
       # A versão publicada é sempre a commitada em pyproject.toml — o
       # empacotamento Python não a injeta a partir da tag. A tag só
-      # dispara a release e precisa bater com o que já foi commitado.
-      - name: Validar tag contra a versão do pyproject.toml
+      # dispara a release e precisa bater com o que já foi commitado,
+      # junto com o CHANGELOG e o badge do README, que também são
+      # atualizados à mão e por isso saem de sincronia em silêncio.
+      - name: Validar tag contra pyproject, CHANGELOG e README
         run: |
           TAG_VERSION="${GITHUB_REF_NAME#v}"
           # Só versão final MAJOR.MINOR.PATCH, sem sufixo de
@@ -37,6 +39,14 @@ jobs:
           PROJECT_VERSION="$(python -c 'import pathlib, tomllib; print(tomllib.loads(pathlib.Path("pyproject.toml").read_text(encoding="utf-8"))["project"]["version"])')"
           if [ "$TAG_VERSION" != "$PROJECT_VERSION" ]; then
             echo "::error::Tag ($GITHUB_REF_NAME) não bate com a versão do pyproject.toml ($PROJECT_VERSION)" >&2
+            exit 1
+          fi
+          if ! grep -q "^## \[${TAG_VERSION}\] - " CHANGELOG.md; then
+            echo "::error::CHANGELOG.md não tem a seção da versão $TAG_VERSION (formato: '## [$TAG_VERSION] - AAAA-MM-DD')." >&2
+            exit 1
+          fi
+          if ! grep -q "Version-${TAG_VERSION}-" README.md; then
+            echo "::error::O badge de versão do README.md não está em $TAG_VERSION." >&2
             exit 1
           fi
 
