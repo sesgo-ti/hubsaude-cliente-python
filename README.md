@@ -156,7 +156,7 @@ class SigningStrategy(Protocol):
 e retorna a assinatura digital em formato raw (não Base64).
 Implementações concretas sinalizam falhas com `SigningError`.
 
-Quatro fontes já têm factory pronta em `hubsaude_client.strategy_factory`,
+Cinco fontes já têm factory pronta em `hubsaude_client.strategy_factory`,
 além do contrato (`Protocol`) e de um fake para testes
 (`tests/fakes.py::FakeSigningStrategy`):
 
@@ -173,9 +173,13 @@ além do contrato (`Protocol`) e de um fake para testes
 Já implementado: `pem_loader.validate_minimum_key_size` rejeita chaves
 RSA com módulo menor que 2048 bits e chaves EC com curva menor que
 P-256 (NIST SP 800-57), com mensagem indicando a origem da chave.
-Aplicado automaticamente por `from_pem_file`/`from_pem_string`/
-`from_pkcs12` e por `load_pkcs12_key_and_certificate` (usada por
-`.client_key_store()`).
+Vale para todas as fontes de chave RSA/EC: as factories
+`from_pem_file`/`from_pem_string`/`from_pkcs12` e
+`load_pkcs12_key_and_certificate` (usada por `.client_key_store()`)
+validam diretamente, e `from_private_key` valida na construção de
+`PrivateKeySigningStrategy`. Chaves que não saem do hardware
+(PKCS#11) não passam por essa checagem — o tamanho é definido na
+geração dentro do token.
 
 ### PKCS#12 direto
 
@@ -401,18 +405,34 @@ efetivamente recebidas — incluindo `429` e `5xx` — não sofrem retry
 automático.
 
 A orquestração completa está implementada em `client.SmartTokenClient`:
-o laço de tentativas é limitado por `max_retries` (padrão 3,
-configurável via `.max_retries(n)` no builder) e, esgotadas as
-tentativas, o erro final preserva a causa original (`__cause__`). Uma
-falha por rejeição de certificado de cliente (mTLS) é detectada
-heuristicamente e falha imediatamente, sem retry
-(`error_classifier.is_likely_client_certificate_rejection`) — a
-heurística em si está testada, mas ainda não foi exercitada contra um
-handshake mTLS real (só com exceções `ssl.SSLError` simuladas), já que
-depende de um servidor real para reproduzir a rejeição. Ainda assim,
-combine qualquer chamada de rede feita pela sua aplicação com um
-*circuit breaker* externo na camada de orquestração — está fora do
-escopo do SDK por design.
+o laço é limitado por `max_retries` (padrão 3, configurável via
+`.max_retries(n)` no builder), que conta **tentativas no total** e não
+tentativas adicionais — com o padrão são 3 chamadas, separadas por
+esperas de 1s e 2s. Esgotadas as tentativas, o erro final preserva a
+causa original (`__cause__`).
+
+Uma falha por rejeição de certificado de cliente (mTLS) é detectada
+heuristicamente por
+`error_classifier.is_likely_client_certificate_rejection`, que
+distingue dois níveis de confiança:
+
+- **alerta TLS explícito** (`unknown_ca`, `certificate_revoked`,
+  `handshake_failure`, `bad_record_mac`...): rejeição confirmada, o
+  retry é interrompido imediatamente;
+- **conexão que cai sem alerta textual** (`ssl.SSLEOFError`, variante
+  que builds de OpenSSL produzem sob TLS 1.3): sinal ambíguo, já que o
+  mesmo texto também aparece em instabilidade de rede comum. Continua
+  sendo tratado como retriável — e, se as tentativas se esgotarem com
+  esse sinal na última falha, a mensagem final ganha uma dica sobre a
+  possibilidade de rejeição de certificado.
+
+A heurística é validada contra handshakes mTLS reais, em loopback, sob
+TLS 1.2 e TLS 1.3 (`tests/test_error_classifier_real_mtls.py`), além
+dos testes com exceções simuladas.
+
+Ainda assim, combine qualquer chamada de rede feita pela sua aplicação
+com um *circuit breaker* externo na camada de orquestração — está fora
+do escopo do SDK por design.
 
 ## Correlação e observabilidade (`traceparent`)
 
