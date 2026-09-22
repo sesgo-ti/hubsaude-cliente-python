@@ -7,6 +7,30 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ## [Unreleased]
 
+### Adicionado
+
+- `CHANGELOG.md` (este arquivo) e badge de versão no topo do README.
+
+### Alterado
+
+- O workflow de release passa a validar contra a tag, além da versão do
+  `pyproject.toml`, também a seção correspondente do `CHANGELOG.md` e o
+  badge do README — a release falha se qualquer um dos três divergir.
+
+### Corrigido
+
+- README: a descrição da detecção de rejeição de certificado de cliente
+  em mTLS, que afirmava não haver validação contra handshake real e
+  descrevia a rejeição como sempre não retriável — desatualizada desde
+  a divisão em dois níveis de confiança.
+- README: `max_retries` documentado como número **total** de tentativas,
+  não de tentativas adicionais.
+- README: contagem das fontes de chave com factory pronta (cinco, não
+  quatro) e a lista de onde o tamanho mínimo de chave é validado, que
+  omitia `from_private_key`.
+
+## [Released]
+
 ## [0.1.0] - 2026-09-21
 
 Primeira versão funcional do SDK. Ainda não publicada no PyPI (ver

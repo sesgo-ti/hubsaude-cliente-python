@@ -251,7 +251,7 @@ release falhando se qualquer um divergir. A ordem, portanto, é:
 # 1. num PR normal, preparar a versão nova:
 #    - pyproject.toml: [project].version
 #    - CHANGELOG.md: promover o conteúdo de [Unreleased] para uma seção
-#      "## [0.2.0] - AAAA-MM-DD" (formato Keep a Changelog)
+#      "## [0.2.0] - AAAA-MM-DD" logo abaixo de "## [Released]"
 #    - README.md: badge de versão no topo
 # 2. com o PR mergeado, na branch já com o bump:
 git tag v0.2.0
