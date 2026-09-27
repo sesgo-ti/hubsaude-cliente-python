@@ -114,7 +114,7 @@ jobs:
       # livre (tests/hubsaude_simulator_helper.py) — por isso a CLI entra
       # só como provisionadora e o JDK precisa estar no runner, diferente
       # do cliente TypeScript, que sobe o simulador pela própria CLI.
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '21'
