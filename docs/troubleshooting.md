@@ -1,6 +1,6 @@
 # Guia para Verificação e Resolução de Problemas de Confiança em Certificados SSL/TLS
 
-Este guia é direcionado ao desenvolvedor que está integrando um sistema
+Este guia é direcionado ao integrador que está integrando um sistema
 com o HubSaúde, em https://hub.saude.go.gov.br.
 
 > **Nota:** o host `hub.saude.go.gov.br` é **ilustrativo**; use o
