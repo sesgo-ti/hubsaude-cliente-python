@@ -562,7 +562,7 @@ workflow de release), que resolve a versão por um manifesto assinado e
 verifica o SHA-256 do download:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/kyriosdata/runner/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/sesgo-ti/hubsaude/main/install.sh | bash
 hubsaude update --component simulador   # baixa só o JAR, não sobe o serviço
 # → ~/.local/share/hubsaude/simulador/server/hubsaude-simulador-<versão>.jar
 ```

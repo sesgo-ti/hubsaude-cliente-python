@@ -139,7 +139,7 @@ origem usada pelo `release.yml` e pelo cliente TypeScript:
 
 ```bash
 # instala a CLI em ~/.local/bin (sem sudo)
-curl -fsSL https://raw.githubusercontent.com/kyriosdata/runner/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/sesgo-ti/hubsaude/main/install.sh | bash
 
 # baixa/atualiza só o JAR do simulador, sem subir o serviço
 hubsaude update --component simulador
