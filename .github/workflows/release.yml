@@ -93,7 +93,7 @@ jobs:
           HUBSAUDE_CLI_VERSION: "0.3.16"
           HUBSAUDE_CLI_SHA256: "34db814dc004efa44ff11fff60ed770cc7cbc721b6c8fbe164cd4b7d350beec3"
         run: |
-          url="https://github.com/kyriosdata/runner/releases/download/hubsaude-cli-v${HUBSAUDE_CLI_VERSION}/hubsaude-linux-amd64"
+          url="https://github.com/sesgo-ti/hubsaude/releases/download/hubsaude-cli-v${HUBSAUDE_CLI_VERSION}/hubsaude-linux-amd64"
           curl -fsSL -o "$RUNNER_TEMP/hubsaude" "$url"
           echo "$HUBSAUDE_CLI_SHA256  $RUNNER_TEMP/hubsaude" | sha256sum -c -
           install -D -m 0755 "$RUNNER_TEMP/hubsaude" "$HOME/.local/bin/hubsaude"
